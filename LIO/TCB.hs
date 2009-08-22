@@ -5,11 +5,17 @@ module LIO.TCB ( POrdering(..), POrd(..), o2po, Label(..)
                , LIO, getL, putL, discard
                , lputStr, lputStrLn
                -- Functions below are part of the TCB
-               , evalLIO, lio, getLS, putLS
+               , TCB(..), evalLIO, lio, getLS, putLS
                ) where
 
 import Control.Monad.State.Lazy hiding (put, get)
 import Data.Monoid
+
+--
+-- A data type only accessible to trusted code in the trusted computing base
+--
+
+data TCB = TCB
 
 --
 -- We need a partial order and a Label
@@ -31,20 +37,17 @@ class (Eq a) => POrd a where
                  | a `leq` b = PLT
                  | b `leq` a = PGT
                  | otherwise = PNE
-    leq a b | pcompare a b == PEQ = True
-            | pcompare a b == PLT = True
-            | otherwise = False
+    leq a b = case pcompare a b of
+                PEQ       -> True
+                PLT       -> True
+                otherwise -> False
 
 o2po EQ = PEQ; o2po LT = PLT; o2po GT = PGT
 -- instance (Ord a) => POrd a where pcompare = o2po . compare
 
 class (POrd a) => Label a where
-    lmin :: a
-    lmax :: a
     lpure :: a                  -- label for pure values
-    lpure = lmin
     lclear :: a                 -- default clearance
-    lclear = lmax
     lub :: a -> a -> a
     glb :: a -> a -> a
 
@@ -128,7 +131,7 @@ putLS ls = get >>= put . update
 newLIO :: Label l => s -> LIOstate l s
 newLIO s = LIOstate { labelState = s
                     , lioL = lpure
-                    , lioC = lmax
+                    , lioC = lclear
                     }
 
 evalLIO :: (Label l) => s -> LIO l s t -> IO (t, l)

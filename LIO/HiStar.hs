@@ -89,11 +89,10 @@ combineLabel fn (HSL m1 d1) (HSL m2 d2) =
       combiner v1 v2 = no_d $ withDefaults d1 d2 fn v1 v2
 
 instance Label HSLabel where 
-    lpure = HSL Map.empty L1
-    lmin  = HSL Map.empty L0
-    lmax  = HSL Map.empty L3
-    lub   = combineLabel max
-    glb   = combineLabel min
+    lpure  = HSL Map.empty L1
+    lclear = HSL Map.empty L3
+    lub    = combineLabel max
+    glb    = combineLabel min
 
 
 --
