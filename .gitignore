@@ -1,1 +1,6 @@
+*.hi
+*.o
 *~
+/*.d
+/.depend
+test
