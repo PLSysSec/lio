@@ -19,8 +19,8 @@ vs = HSC 104
 vl = lupdate lpure vs L3
 
 three, four :: Lref HSLabel Int
-three = lref ul 3
-four = lref vl 4
+three = lrefTCB ul 3
+four = lrefTCB vl 4
 
 privs = HSPrivs [us, vs]
 
@@ -38,7 +38,7 @@ a2 = do
 crap = do
   a <- openL three
   (p1, l1) <- newcat L2
-  five <- openL $ lref l1 5
+  five <- openL $ lrefTCB l1 5
   -- let five' = unlabel p1 (label l1 5)
   lputStrLn $ show five
 

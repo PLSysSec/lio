@@ -1,6 +1,11 @@
-{-# OPTIONS_GHC -XMultiParamTypeClasses -XGeneralizedNewtypeDeriving #-}
+{-# OPTIONS_GHC -XMultiParamTypeClasses #-}
+{-# OPTIONS_GHC -XGeneralizedNewtypeDeriving #-}
+{-# OPTIONS_GHC -XExistentialQuantification #-}
+{-# OPTIONS_GHC -XDeriveDataTypeable #-}
 
-module LIO.TCB ( POrdering(..), POrd(..), o2po, Label(..)
+
+module LIO.TCB ( 
+                 POrdering(..), POrd(..), o2po, Label(..)
                , Lref, Priv(..)
                , labelOf, taint, untaint, unlref
                , LIO
@@ -9,6 +14,7 @@ module LIO.TCB ( POrdering(..), POrd(..), o2po, Label(..)
                , taintio, guardio, untaintio
                , lowerio, unlowerio
                , openL, closeL, discardL
+               , throwL, catchL
                -- Start TCB exports
                , lrefTCB
                , PrivTCB
@@ -16,12 +22,30 @@ module LIO.TCB ( POrdering(..), POrd(..), o2po, Label(..)
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB, runTCB, evalTCB
                , ioTCB
+               , LabeledExceptionTCB(..)
+               , rethrowTCB
                -- End TCB exports
                ) where
 
+import Prelude hiding (catch)
 import Control.Monad.State.Lazy hiding (put, get)
+import Control.Exception
 import Data.Monoid
+import Data.Typeable
 
+{- Things to worry about:
+
+   - unsafe... functions must be blocked
+
+   - inlinePerformIO must be blocked
+
+   - Allowing untrusted code to define instances Typeable with bogus
+     typeOf functions could lead to unsafe casts.
+
+   - Some way of showing an Lref or even just the label, by putting it
+     into an exception.
+
+ -}
 
 --
 -- We need a partial order and a Label
@@ -51,7 +75,7 @@ class (Eq a) => POrd a where
 o2po EQ = PEQ; o2po LT = PLT; o2po GT = PGT
 -- instance (Ord a) => POrd a where pcompare = o2po . compare
 
-class (POrd a) => Label a where
+class (POrd a, Show a, Typeable a) => Label a where
     lpure :: a                  -- label for pure values
     lclear :: a                 -- default clearance
     lub :: a -> a -> a
@@ -65,7 +89,7 @@ class (POrd a) => Label a where
 
 data (Label l) => Lref l t = Lref l t
 
-showTCB            :: (Label l, Show l, Show t) => Lref l t -> String
+showTCB            :: (Label l, Show t) => Lref l t -> String
 showTCB (Lref l t) = shows t $ " {" ++ shows l "}"
 
 instance Label l => Functor (Lref l) where
@@ -218,3 +242,47 @@ mkLIO = LIO . StateT
 
 ioTCB :: (Label l) => IO a -> LIO l s a
 ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
+
+--
+-- Exception stuff
+--
+
+data LabeledExceptionTCB l =
+    forall a. Exception a => LabeledExceptionTCB l a deriving Typeable
+
+instance Label l => Show (LabeledExceptionTCB l) where
+    showsPrec _ (LabeledExceptionTCB l a) rest =
+        shows a $ (" {" ++) $ shows l $ "}" ++ rest
+
+instance (Label l) => Exception (LabeledExceptionTCB l)
+
+rethrowTCB                  :: Label l => LIO l s a -> LIO l s a
+rethrowTCB (LIO (StateT f)) = mkLIO $ \s -> catch (f s) (except s)
+    where
+      fixtype     :: LIOstate l s -> Maybe (LabeledExceptionTCB l)
+                  -> Maybe (LabeledExceptionTCB l)
+      fixtype _ e = e
+      except s e@(SomeException e')
+          = case fixtype s $ cast e' of
+              Nothing -> throw $ LabeledExceptionTCB (lioL s) e'
+              Just (LabeledExceptionTCB _ _) -> throw e
+
+throwL   :: (Exception e, Label l) => e -> LIO l s a
+throwL e = mkLIO $ \s -> throwIO $ LabeledExceptionTCB (lioL s) e
+
+-- XXX must still check labels
+catchL                    :: (Label l, Exception e) => LIO l s a
+                          -> (e -> LIO l s a) -> LIO l s a
+catchL (LIO (StateT f)) c = mkLIO $ \s -> f s `catch` doit s
+    where
+      fixtype                             :: (Exception e, Label l) =>
+                                             (e -> LIO l s a)
+                                          -> LabeledExceptionTCB l
+                                          -> Maybe (l, e)
+      fixtype _ (LabeledExceptionTCB l e) = cast (l, e)
+      doit s e =
+          let mle = fixtype c e in
+          case mle of
+            Just (l, e') | l `leq` lioL s -> unLIO (c e') s
+            Nothing -> throw e
+      unLIO (LIO (StateT f)) = f

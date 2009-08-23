@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -XMultiParamTypeClasses #-}
+{-# OPTIONS_GHC -XDeriveDataTypeable #-}
 
 --
 -- Disjunction Category labels
@@ -15,6 +16,7 @@ import Control.Applicative
 import Data.Monoid
 import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Typeable
 
 newtype Principal = Principal String deriving (Eq, Ord)
 
@@ -37,7 +39,7 @@ instance Read DCat where
 data DClabel = DClabel { elI :: Set DCat
                        , elS :: Set DCat
                        }
-             | Bottom | Top deriving (Eq)
+             | Bottom | Top deriving (Eq, Typeable)
 
 instance Show DClabel where
     showsPrec _ (DClabel i s) rest = "I=" ++ (shows (Set.toList i) $
@@ -85,7 +87,9 @@ instance Label DClabel where
     glb (DClabel i1 s1) (DClabel i2 s2) =
                  DClabel (Set.union i1 i2) (Set.intersection s1 s2)
 
-DCPrivs = DCPrivs (Set Principal) deriving (Eq, Read, Show)
+newtype DCPrivs = DCPrivs (Set Principal) deriving (Eq, Read, Show)
+
+instance PrivTCB DCPrivs
 
 instance Monoid DCPrivs where
     mempty = DCPrivs Set.empty

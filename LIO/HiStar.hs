@@ -1,4 +1,5 @@
 {-# OPTIONS_GHC -XMultiParamTypeClasses #-}
+{-# OPTIONS_GHC -XDeriveDataTypeable #-}
 
 module LIO.HiStar ( module LIO.HiStar
                   , module LIO.Base
@@ -11,6 +12,7 @@ import Data.Monoid
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Typeable
 
 --
 -- Some generic code
@@ -67,7 +69,7 @@ instance POrd HSLevel where
 -- Second component of HSLabel is the default level for categories not
 -- in the map.  Invariant:  Map must not contain any entries mapping
 -- categories to the default level.
-data HSLabel = HSL (Map HSCategory HSLevel) HSLevel deriving (Show)
+data HSLabel = HSL (Map HSCategory HSLevel) HSLevel deriving (Show, Typeable)
 
 instance Eq HSLabel where
     a == b = pcompare a b == PEQ
