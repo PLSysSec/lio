@@ -12,7 +12,7 @@ module LIO.Base (
                 ) where
 
 import LIO.TCB hiding ( 
-               , lrefTCB
+                 lrefTCB
                , PrivTCB
                , showTCB
                , unlrefTCB, untaintioTCB, unlowerioTCB
