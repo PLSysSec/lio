@@ -8,9 +8,9 @@ import LIO.HiStar
 -- Crap
 --
 
-lstdin = lupdate lpure (HSC 1) L3
-
-lgetLine = lio lstdin getLine
+lgetLine = ioTCB getLine
+lputStr x = ioTCB $ putStr x
+lputStrLn x = ioTCB $ putStrLn x
 
 us = HSC 99
 ul = lupdate lpure us L3
@@ -19,26 +19,26 @@ vs = HSC 104
 vl = lupdate lpure vs L3
 
 three, four :: Lref HSLabel Int
-three = label ul 3
-four = label vl 4
+three = lref ul 3
+four = lref vl 4
 
 privs = HSPrivs [us, vs]
 
 
 addem = do
-  a <- getL three
-  b <- getL four
+  a <- openL three
+  b <- openL four
   return $ a + b
 
 a2 = do
-  sum <- putL addem
-  lputStrLn $ show sum
+  sum <- closeL addem
+  lputStrLn $ showTCB sum
   
 
 crap = do
-  a <- getL three
+  a <- openL three
   (p1, l1) <- newcat L2
-  five <- getL $ label l1 5
+  five <- openL $ lref l1 5
   -- let five' = unlabel p1 (label l1 5)
   lputStrLn $ show five
 
@@ -47,6 +47,7 @@ foo = do
   y <- four
   return $ x + y
 
+getnum :: HS Int
 getnum = do
   lputStr "Enter a number: "
   s <- lgetLine

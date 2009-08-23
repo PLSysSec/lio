@@ -10,6 +10,7 @@ module LIO.TCB ( POrdering(..), POrd(..), o2po, Label(..)
                , openL, closeL, discardL
                -- Start TCB exports
                , PrivTCB
+               , showTCB
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB, runTCB, evalTCB
                , ioTCB
@@ -60,7 +61,10 @@ class (POrd a) => Label a where
 -- Downgrading privileges - Priv
 --
 
-data (Label l) => Lref l t = Lref l t deriving (Show)
+data (Label l) => Lref l t = Lref l t
+
+showTCB            :: (Label l, Show l, Show t) => Lref l t -> String
+showTCB (Lref l t) = shows t $ " {" ++ shows l "}"
 
 instance Label l => Functor (Lref l) where
     fmap f (Lref l t) = Lref (l `lub` lpure) (f t)
@@ -205,6 +209,3 @@ mkLIO = LIO . StateT
 
 ioTCB :: (Label l) => IO a -> LIO l s a
 ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
-
-lputStr x = ioTCB $ putStr x
-lputStrLn x = ioTCB $ putStrLn x
