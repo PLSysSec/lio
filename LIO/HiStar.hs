@@ -122,21 +122,21 @@ instance Monoid HSPrivs where
     mempty                          = HSPrivs []
     mappend (HSPrivs a) (HSPrivs b) = HSPrivs $ union a b
 
+instance PrivTCB HSPrivs
 instance Priv HSLabel HSPrivs where
-    lostar (HSPrivs p) l = lupdates l p L0
-    histar (HSPrivs p) l = lupdates l p L3
+    leqp (HSPrivs p) a b = lupdates a p L0 `leq` b
 
 newcat     :: HSLevel -> HS (HSPrivs, HSLabel)
-newcat lev = do ls <- getLS
+newcat lev = do ls <- getTCB
                 let cat = nextCat ls
                     HSC uncat = cat
                     lab = lcat lev cat
                     ncat = HSC $ uncat + 1
-                putLS ls { nextCat = ncat }
+                putTCB ls { nextCat = ncat }
                 return (HSPrivs [cat], lab)
 
 newHS = HSState { nextCat = HSC 100 }
 
-evalHS :: HS t -> IO (t, HSLabel)
-evalHS = evalLIO newHS
+evalHS   :: HS t -> IO (t, HSLabel)
+evalHS m = evalTCB m newHS
 

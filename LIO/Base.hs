@@ -1,9 +1,15 @@
+module LIO.Base ( POrdering(..), POrd(..), o2po, Label(..)
+                , Lref, Priv(..)
+                , lref, labelOf, taint, untaint, unlref
+                , LIO
+                , labelOfio, clearOfio
+                , taintio, guardio, untaintio
+                , lowerio, unlowerio
+                , openL, closeL, discardL
+                )
+    where
 
-module LIO.Base ( module LIO.TCB ) where
-
-import LIO.TCB ( POrdering(..), POrd(..), o2po, Label(..)
-               , Lref, taint, label, Priv(..)
-               , LIO, getL, putL, discard
-               , lputStr, lputStrLn
-               )
-                    
+import LIO.TCB hiding ( PrivTCB
+                      , unlrefTCB, untaintioTCB, unlowerioTCB
+                      , getTCB, putTCB, runTCB, evalTCB
+                      , ioTCB )
