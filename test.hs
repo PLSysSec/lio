@@ -1,8 +1,10 @@
 
-module Main where
+module Main (module LIO.TCB, module Main
+            , evalHS) where
 
 import LIO.TCB
 import LIO.HiStar
+import Control.Exception
 
 --
 -- Crap
@@ -24,6 +26,11 @@ four = lrefTCB vl 4
 
 privs = HSPrivs [us, vs]
 
+etest :: HS Int
+etest = do
+  a <- openL four
+  -- rethrowTCB $ throw $ AssertionFailed "etest"
+  rethrowTCB $ return $ (a `div` 0)
 
 addem = do
   a <- openL three

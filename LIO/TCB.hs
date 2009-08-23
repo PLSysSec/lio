@@ -130,10 +130,10 @@ unlrefTCB (Lref l a) = a
 -- Labeled IO
 --
 
-data LIOstate l s = LIOstate { labelState :: s
-                             , lioL :: l -- current label
-                             , lioC :: l -- current clearance
-                             }
+data Label l => LIOstate l s = LIOstate { labelState :: s
+                                        , lioL :: l -- current label
+                                        , lioC :: l -- current clearance
+                                        }
 
 newtype LIO l s a = LIO (StateT (LIOstate l s) IO a)
     deriving (Functor, Monad, MonadFix)
@@ -236,6 +236,8 @@ unLIO                  :: LIO l s a -> LIOstate l s -> IO (a, LIOstate l s)
 unLIO (LIO (StateT f)) = f
 
 runLIO     :: Label l => LIO l s a -> LIOstate l s -> IO (a, LIOstate l s)
+-- runLIO m s = unLIO m s
+-- runLIO m s = getresult m s
 runLIO m s = unLIO m s `catch` unlabelException
 
 runTCB     :: Label l => LIO l s a -> s -> IO (a, s)
@@ -264,16 +266,24 @@ instance (Label l) => Exception (LabeledExceptionTCB l)
 
 unlabelException :: (Label l) => LabeledExceptionTCB l
                  -> IO (a, LIOstate l s)
-unlabelException (LabeledExceptionTCB l e) = throw e
+unlabelException e'@(LabeledExceptionTCB l e) =
+    -- putStrLn ("unlabeling " ++ show e') >>
+    throw e
+
+getresult m s = do
+  (a, s') <- unLIO m s
+  a' <- evaluate a
+  return (a', s')
 
 rethrowTCB   :: Label l => LIO l s a -> LIO l s a
-rethrowTCB m = mkLIO $ \s -> unLIO m s `catch` except s
+rethrowTCB m = mkLIO $ \s -> getresult m s `catch` except s
     where
       fixtype     :: LIOstate l s -> Maybe (LabeledExceptionTCB l)
                   -> Maybe (LabeledExceptionTCB l)
       fixtype _ e = e
-      except s e@(SomeException e')
-          = case fixtype s $ cast e' of
+      except s e@(SomeException e') =
+          -- putStrLn "rethrowing..." >>
+          case fixtype s $ cast e' of
               Nothing -> throw $ LabeledExceptionTCB (lioL s) e'
               Just (LabeledExceptionTCB _ _) -> throw e
 
@@ -282,7 +292,7 @@ throwL e = mkLIO $ \s -> throwIO $ LabeledExceptionTCB (lioL s) e
 
 catchL     :: (Label l, Exception e) => LIO l s a
            -> (e -> LIO l s a) -> LIO l s a
-catchL m c = mkLIO $ \s -> unLIO m s `catch` doit s
+catchL m c = mkLIO $ \s -> getresult m s `catch` doit s
     where
       fixtype :: (Exception e, Label l) => (e -> LIO l s a)
               -> LabeledExceptionTCB l -> Maybe (l, e)
