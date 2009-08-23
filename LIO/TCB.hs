@@ -2,13 +2,15 @@
 
 module LIO.TCB ( POrdering(..), POrd(..), o2po, Label(..)
                , Lref, Priv(..)
-               , lref, labelOf, taint, untaint, unlref
+               , labelOf, taint, untaint, unlref
                , LIO
+               , lref
                , labelOfio, clearOfio
                , taintio, guardio, untaintio
                , lowerio, unlowerio
                , openL, closeL, discardL
                -- Start TCB exports
+               , lrefTCB
                , PrivTCB
                , showTCB
                , unlrefTCB, untaintioTCB, unlowerioTCB
@@ -81,8 +83,8 @@ class PrivTCB t where
 class (Label l, Monoid p, PrivTCB p) => Priv l p where
     leqp :: p -> l -> l -> Bool
 
-lref     :: Label l => l -> a -> Lref l a
-lref l a = Lref (lub l lpure) a
+lrefTCB     :: Label l => l -> a -> Lref l a
+lrefTCB l a = Lref l a
 
 labelOf            :: Label l => Lref l a -> l
 labelOf (Lref l a) = l
@@ -117,6 +119,12 @@ get = mkLIO $ \s -> return (s, s)
 
 put :: Label l => LIOstate l s -> LIO l s ()
 put s = mkLIO $ \_ -> return (() , s)
+
+lref     :: Label l => l -> a -> LIO l s (Lref l a)
+lref l a = get >>= doit
+    where doit s | not $ l `leq` lioC s = fail "lref exceeds clearance"
+                 | not $ lioL s `leq` l = fail "lref below label"
+                 | otherwise            = return $ Lref l a
 
 labelOfio :: Label l => LIO l s l
 labelOfio = get >>= return . lioL
@@ -175,12 +183,13 @@ openL (Lref la a) = do
     else
         return undefined
 
+-- Might have lowered clearance inside closeL, so just preserve it
 closeL   :: (Label l) => LIO l s a -> LIO l s (Lref l a)
 closeL m = do
-  LIOstate { lioL = l } <- get
+  LIOstate { lioL = l, lioC = c } <- get
   a <- m
   s <- get
-  put s { lioL = l }
+  put s { lioL = l, lioC = c }
   return $ Lref (lioL s) a
 
 discardL m = closeL m >> return ()
