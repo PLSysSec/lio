@@ -130,75 +130,76 @@ unlrefTCB (Lref l a) = a
 -- Labeled IO
 --
 
-data Label l => LIOstate l s = LIOstate { labelState :: s
-                                        , lioL :: l -- current label
-                                        , lioC :: l -- current clearance
-                                        }
+data (Label l, Typeable s) => LIOstate l s =
+    LIOstate { labelState :: s
+             , lioL :: l -- current label
+             , lioC :: l -- current clearance
+             }
 
-newtype LIO l s a = LIO (StateT (LIOstate l s) IO a)
+newtype (Label l, Typeable s) => LIO l s a = LIO (StateT (LIOstate l s) IO a)
     deriving (Functor, Monad, MonadFix)
 
-get :: Label l => LIO l s (LIOstate l s)
+get :: (Label l, Typeable s) => LIO l s (LIOstate l s)
 get = mkLIO $ \s -> return (s, s)
 
-put :: Label l => LIOstate l s -> LIO l s ()
+put :: (Label l, Typeable s) => LIOstate l s -> LIO l s ()
 put s = mkLIO $ \_ -> return (() , s)
 
-lref     :: Label l => l -> a -> LIO l s (Lref l a)
+lref     :: (Label l, Typeable s) => l -> a -> LIO l s (Lref l a)
 lref l a = get >>= doit
     where doit s | not $ l `leq` lioC s = fail "lref exceeds clearance"
                  | not $ lioL s `leq` l = fail "lref below label"
                  | otherwise            = return $ Lref l a
 
-labelOfio :: Label l => LIO l s l
+labelOfio :: (Label l, Typeable s) => LIO l s l
 labelOfio = get >>= return . lioL
 
-clearOfio :: Label l => LIO l s l
+clearOfio :: (Label l, Typeable s) => LIO l s l
 clearOfio = get >>= return . lioC
 
-taintio    :: Label l => l -> LIO l s ()
+taintio    :: (Label l, Typeable s) => l -> LIO l s ()
 taintio l' = do s <- get
                 let l = lioL s `lub` l'
                 if l `leq` lioC s
                   then put s { lioL = l }
                   else fail "Taint exceeds clearance"
 
-guardio :: Label l => l -> LIO l s ()
+guardio :: (Label l, Typeable s) => l -> LIO l s ()
 guardio max = do l <- labelOfio
                  if l `leq` max
                    then return ()
                    else fail "guardio failed"
 
-untaintio     :: Priv l p => p -> l -> LIO l s ()
+untaintio     :: (Priv l p, Typeable s) => p -> l -> LIO l s ()
 untaintio p l = do s <- get
                    if leqp p (lioL s) l
                      then put s { lioL = l }
                      else fail "Insufficient privilege for untaintio"
 
-untaintioTCB     :: Label l => l -> LIO l s ()
+untaintioTCB     :: (Label l, Typeable s) => l -> LIO l s ()
 untaintioTCB l = do s <- get
                     if l `leq` lioC s
                       then put s { lioL = l }
                       else fail "Untaintio exceeds clearance"
 
-lowerio   :: Label l => l -> LIO l s ()
+lowerio   :: (Label l, Typeable s) => l -> LIO l s ()
 lowerio l = get >>= doit
     where doit s | not $ l `leq` lioC s = fail "Cannot raise with lower"
                  | not $ lioL s `leq` l = fail "Cannot lower below label"
                  | otherwise            = put s { lioC = l }
 
-unlowerio   :: Priv l p => p -> l -> LIO l s ()
+unlowerio   :: (Priv l p, Typeable s) => p -> l -> LIO l s ()
 unlowerio p l = get >>= doit
     where doit s | not $ leqp p l $ lioC s = fail "Unlower denied"
                  | not $ lioL s `leq` l = fail "Cannot unlower below label"
                  | otherwise            = put s { lioC = l }
 
-unlowerioTCB   :: Label l => l -> LIO l s ()
+unlowerioTCB   :: (Label l, Typeable s) => l -> LIO l s ()
 unlowerioTCB l = get >>= doit
     where doit s | not $ lioL s `leq` l = fail "Cannot unlowerTCB below label"
                  | otherwise            = put s { lioC = l }
 
-openL             :: Label l => Lref l a -> LIO l s a
+openL             :: (Label l, Typeable s) => Lref l a -> LIO l s a
 openL (Lref la a) = do
   s <- get
   if la `leq` lioC s
@@ -208,7 +209,7 @@ openL (Lref la a) = do
         return undefined
 
 -- Might have lowered clearance inside closeL, so just preserve it
-closeL   :: (Label l) => LIO l s a -> LIO l s (Lref l a)
+closeL   :: (Label l, Typeable s) => LIO l s a -> LIO l s (Lref l a)
 closeL m = do
   LIOstate { lioL = l, lioC = c } <- get
   a <- m
@@ -219,38 +220,42 @@ closeL m = do
 discardL m = closeL m >> return ()
   
 
-getTCB :: Label l => LIO l s s
+getTCB :: (Label l, Typeable s) => LIO l s s
 getTCB = get >>= return . labelState
 
-putTCB    :: Label l => s -> LIO l s ()
+putTCB    :: (Label l, Typeable s) => s -> LIO l s ()
 putTCB ls = get >>= put . update
     where update s = s { labelState = ls }
 
-newstate   :: Label l => s -> LIOstate l s
+newstate   :: (Label l, Typeable s) => s -> LIOstate l s
 newstate s = LIOstate { labelState = s , lioL = lpure , lioC = lclear }
 
-mkLIO :: Label l => (LIOstate l s -> IO (a, LIOstate l s)) -> LIO l s a
+mkLIO :: (Label l, Typeable s) => (LIOstate l s -> IO (a, LIOstate l s))
+      -> LIO l s a
 mkLIO = LIO . StateT
 
-unLIO                  :: LIO l s a -> LIOstate l s -> IO (a, LIOstate l s)
+unLIO                  :: (Label l, Typeable s) => LIO l s a -> LIOstate l s
+                       -> IO (a, LIOstate l s)
 unLIO (LIO (StateT f)) = f
 
-runLIO     :: Label l => LIO l s a -> LIOstate l s -> IO (a, LIOstate l s)
-runLIO m s = unLIO m s -- `catch` unlabelException
+runLIO     :: (Label l, Typeable s) => LIO l s a -> LIOstate l s
+           -> IO (a, LIOstate l s)
+runLIO m s = unLIO m s `catch` unlabelException
 
-runTCB     :: Label l => LIO l s a -> s -> IO (a, s)
+runTCB     :: (Label l, Typeable s) => LIO l s a -> s -> IO (a, s)
 runTCB m s = do (a, ls) <- runLIO m (newstate s)
                 return (a, labelState ls)
 
-evalTCB     :: (Label l) => LIO l s a -> s -> IO (a, l)
+evalTCB     :: (Label l, Typeable s) => LIO l s a -> s -> IO (a, l)
 evalTCB m s = do (a, ls) <- runLIO m (newstate s)
                  return (a, lioL ls)
 
-ioTCB :: (Label l) => IO a -> LIO l s a
+ioTCB :: (Label l, Typeable s) => IO a -> LIO l s a
 ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
 
+
 --
--- Exception stuff
+-- Exceptions
 --
 
 data LabeledExceptionTCB l s =
@@ -262,10 +267,10 @@ instance Label l => Show (LabeledExceptionTCB l s) where
 
 instance (Label l, Typeable s) => Exception (LabeledExceptionTCB l s)
 
-unlabelException :: (Label l) => LabeledExceptionTCB l s
+unlabelException :: (Label l, Typeable s) => LabeledExceptionTCB l s
                  -> IO (a, LIOstate l s)
 unlabelException (LabeledExceptionTCB l s (SomeException e)) =
-    putStrLn ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") >>
+    putStrLn ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") >> -- XXX
     throw e
 
 throwL   :: (Exception e, Label l, Typeable s) => e -> LIO l s a
@@ -288,12 +293,10 @@ rethrowTCB m = mkLIO $ \s -> getresult m s
                   -> IO (a, LIOstate l s)
       doother s e = unLIO (throwL e) s
 
-
 catchL     :: (Label l, Typeable s, Exception e) => LIO l s a
            -> (e -> LIO l s a) -> LIO l s a
 catchL m c = mkLIO $ \s -> getresult m s `catch` doit s
-    where
-      doit s e@(LabeledExceptionTCB l ls se) =
-          case fromException se of
-            Just e' | l `leq` lioL s -> unLIO (c e') s { labelState = ls }
-            Nothing -> throw e
+    where doit s e@(LabeledExceptionTCB l ls se) =
+              case fromException se of
+                Just e' | l `leq` lioL s -> unLIO (c e') s { labelState = ls }
+                Nothing -> throw e

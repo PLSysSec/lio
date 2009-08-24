@@ -36,6 +36,7 @@ etest = do
   return (0,0)
   -- rethrowTCB $ return $ (a, a `div` 0)
 
+addem :: HS Int
 addem = do
   a <- openL three
   b <- openL four
