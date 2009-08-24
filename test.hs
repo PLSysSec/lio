@@ -26,11 +26,15 @@ four = lrefTCB vl 4
 
 privs = HSPrivs [us, vs]
 
-etest :: HS Int
+catche :: SomeException -> HS ()
+catche e = lputStrLn $ "catche --- " ++ show e
+
+etest :: HS (Int, Int)
 etest = do
   a <- openL four
-  -- rethrowTCB $ throw $ AssertionFailed "etest"
-  rethrowTCB $ return $ (a `div` 0)
+  catchL (throwL (AssertionFailed "etest")) catche
+  return (0,0)
+  -- rethrowTCB $ return $ (a, a `div` 0)
 
 addem = do
   a <- openL three

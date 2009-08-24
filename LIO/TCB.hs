@@ -236,9 +236,7 @@ unLIO                  :: LIO l s a -> LIOstate l s -> IO (a, LIOstate l s)
 unLIO (LIO (StateT f)) = f
 
 runLIO     :: Label l => LIO l s a -> LIOstate l s -> IO (a, LIOstate l s)
--- runLIO m s = unLIO m s
--- runLIO m s = getresult m s
-runLIO m s = unLIO m s `catch` unlabelException
+runLIO m s = unLIO m s -- `catch` unlabelException
 
 runTCB     :: Label l => LIO l s a -> s -> IO (a, s)
 runTCB m s = do (a, ls) <- runLIO m (newstate s)
@@ -256,19 +254,27 @@ ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
 --
 
 data LabeledExceptionTCB l =
-    forall a. Exception a => LabeledExceptionTCB l a deriving Typeable
+    LabeledExceptionTCB l SomeException deriving Typeable
 
 instance Label l => Show (LabeledExceptionTCB l) where
-    showsPrec _ (LabeledExceptionTCB l a) rest =
-        shows a $ (" {" ++) $ shows l $ "}" ++ rest
+    showsPrec _ (LabeledExceptionTCB l e) rest =
+        shows e $ (" {" ++) $ shows l $ "}" ++ rest
 
 instance (Label l) => Exception (LabeledExceptionTCB l)
 
 unlabelException :: (Label l) => LabeledExceptionTCB l
                  -> IO (a, LIOstate l s)
-unlabelException e'@(LabeledExceptionTCB l e) =
-    -- putStrLn ("unlabeling " ++ show e') >>
+unlabelException (LabeledExceptionTCB l (SomeException e)) =
+    putStrLn ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") >>
     throw e
+
+--
+-- XXX - The problem with throwL is that important labelstate
+--       may be lost
+--
+
+throwL   :: (Exception e, Label l) => e -> LIO l s a
+throwL e = mkLIO $ \s -> throwIO $ LabeledExceptionTCB (lioL s) (toException e)
 
 getresult m s = do
   (a, s') <- unLIO m s
@@ -276,29 +282,21 @@ getresult m s = do
   return (a', s')
 
 rethrowTCB   :: Label l => LIO l s a -> LIO l s a
-rethrowTCB m = mkLIO $ \s -> getresult m s `catch` except s
+rethrowTCB m = mkLIO $ \s -> getresult m s
+               `catches` [Handler $ dolabeled s, Handler $ doother s]
     where
-      fixtype     :: LIOstate l s -> Maybe (LabeledExceptionTCB l)
-                  -> Maybe (LabeledExceptionTCB l)
-      fixtype _ e = e
-      except s e@(SomeException e') =
-          -- putStrLn "rethrowing..." >>
-          case fixtype s $ cast e' of
-              Nothing -> throw $ LabeledExceptionTCB (lioL s) e'
-              Just (LabeledExceptionTCB _ _) -> throw e
+      dolabeled     :: Label l => LIOstate l s -> LabeledExceptionTCB l -> a
+      dolabeled _ e = throw e
+      doother     :: Label l => LIOstate l s -> SomeException
+                  -> IO (a, LIOstate l s)
+      doother s e = unLIO (throwL e) s
 
-throwL   :: (Exception e, Label l) => e -> LIO l s a
-throwL e = mkLIO $ \s -> throwIO $ LabeledExceptionTCB (lioL s) e
 
 catchL     :: (Label l, Exception e) => LIO l s a
            -> (e -> LIO l s a) -> LIO l s a
 catchL m c = mkLIO $ \s -> getresult m s `catch` doit s
     where
-      fixtype :: (Exception e, Label l) => (e -> LIO l s a)
-              -> LabeledExceptionTCB l -> Maybe (l, e)
-      fixtype _ (LabeledExceptionTCB l e) = cast (l, e)
-      doit s e =
-          let mle = fixtype c e in
-          case mle of
-            Just (l, e') | l `leq` lioL s -> unLIO (c e') s
+      doit s e@(LabeledExceptionTCB l se) =
+          case fromException se of
+            Just e' | l `leq` lioL s -> unLIO (c e') s
             Nothing -> throw e
