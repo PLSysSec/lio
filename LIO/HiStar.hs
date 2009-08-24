@@ -117,7 +117,7 @@ lcat L2 c = HSL (Map.singleton c L2) L0
 lcat L3 c = HSL (Map.singleton c L3) L0
 
 newtype HSPrivs = HSPrivs [HSCategory]
-data HSState = HSState { nextCat :: HSCategory }
+data HSState = HSState { nextCat :: HSCategory } deriving Typeable
 type HS a = LIO HSLabel HSState a
 
 instance Monoid HSPrivs where
