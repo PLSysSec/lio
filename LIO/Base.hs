@@ -1,14 +1,17 @@
 module LIO.Base (
                  POrdering(..), POrd(..), o2po, Label(..)
-               , Lref, Priv(..)
-               , labelOf, taint, untaint, unlref
-               , LIO
-               , lref
-               , labelOfio, clearOfio
-               , taintio, guardio, untaintio
-               , lowerio, unlowerio
-               , openL, closeL, discardL
-               , throwL, catchL
+                , Lref, Priv(..)
+                , labelOf, taint, untaint, unlref
+                , LIO
+                , lref
+                , labelOfio, clearOfio
+                , taintio, guardio, untaintio
+                , lowerio, unlowerio
+                , openL, closeL, discardL
+                , throwL, catchL
+
+                , LIORef, newLIORef, labelOfLIORef
+                , readLIORef, writeLIORef, atomicModifyLIORef
                 ) where
 
 import LIO.TCB hiding ( 
@@ -21,3 +24,7 @@ import LIO.TCB hiding (
                , LabeledExceptionTCB
                , rethrowTCB
                )
+
+import LIO.IOTCB
+                         
+                         
