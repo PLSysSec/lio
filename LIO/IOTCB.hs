@@ -1,9 +1,10 @@
 {-# OPTIONS_GHC -XExistentialQuantification -XDeriveDataTypeable #-}
 
-module LIO.IOTCB (
+module LIO.IOTCB {- (
                    LIORef, newLIORef, labelOfLIORef
                  , readLIORef, writeLIORef, atomicModifyLIORef
-                 ) where
+                 ) -}
+    where
 
 import LIO.TCB
 import Control.Exception
@@ -46,4 +47,13 @@ atomicModifyLIORef (LIORefTCB l r) f = do
   taintio l
   ioTCB $ atomicModifyIORef r f
 
+
+--
+-- Crap
+--
+
+lgetLine :: (Label l, Typeable s) => LIO l s String
+lgetLine = ioTCB getLine
+lputStr x = ioTCB $ putStr x
+lputStrLn x = ioTCB $ putStrLn x
 

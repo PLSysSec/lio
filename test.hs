@@ -4,15 +4,8 @@ module Main (module LIO.TCB, module Main
 
 import LIO.TCB
 import LIO.HiStar
+import LIO.IOTCB
 import Control.Exception
-
---
--- Crap
---
-
-lgetLine = ioTCB getLine
-lputStr x = ioTCB $ putStr x
-lputStrLn x = ioTCB $ putStrLn x
 
 us = HSC 99
 ul = lupdate lpure us L3
