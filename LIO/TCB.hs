@@ -14,7 +14,7 @@ module LIO.TCB (
                , taintio, guardio, cleario, untaintio
                , lowerio, unlowerio
                , openL, closeL, discardL
-               , throwL, catchL
+               , throwL, catchL, catchLp
                -- Start TCB exports
                , lrefTCB
                , PrivTCB
@@ -105,7 +105,25 @@ instance Label l => MonadFix (Lref l) where
 
 class PrivTCB t where
 class (Label l, Monoid p, PrivTCB p) => Priv l p where
+    -- (leqp p l1 l2) means that privileges p are sufficient to
+    -- downgrade data from l1 to l2.  Note that (leq l1 l2) implies
+    -- (leq p l1 l2) for all p, but for some labels an p leqp will
+    -- hold even if leq does not.
     leqp :: p -> l -> l -> Bool
+    leqp p a b = lostar p a b `leq` b
+
+    -- (lostar p source minimum) returns the lowest label to which one
+    -- can downgrade data labeled source given privileges p,
+    -- least-upper-bounded with minimum.  (Without minimum, the lowest
+    -- label might be exponential in p for some label formats.)  More
+    -- concretely, the result returned is the lowest lres such that:
+    -- (leqp p source lres) && (leq minimum lres)
+    --
+    -- This is useful if your label is originally l1, and you touch
+    -- some stuff labeled l2 but want to minimize the amount of taint
+    -- l2 causes you.  After raising your label to l2, you can use the
+    -- privileges in p to lower your label to lostar p l2 l1.
+    lostar :: p -> l -> l -> l
 
 lrefTCB     :: Label l => l -> a -> Lref l a
 lrefTCB l a = Lref l a
@@ -264,6 +282,14 @@ ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
 -- Exceptions
 --
 
+data LabelFault
+    = LerrClearance             -- Label would exceed clearance
+    | LerrLabel                 -- Requested label too low
+    | LerrPriv                  -- Insufficient privileges
+      deriving (Show, Typeable)
+
+instance Exception LabelFault
+
 data LabeledExceptionTCB l s =
     LabeledExceptionTCB l s SomeException deriving Typeable
 
@@ -299,8 +325,17 @@ rethrowTCB m = mkLIO $ \s -> getresult m s
                   -> IO (a, LIOstate l s)
       doother s e = unLIO (throwL e) s
 
-catchL     :: (Label l, Typeable s, Exception e) => LIO l s a
-           -> (e -> LIO l s a) -> LIO l s a
+catchLp       :: (Label l, Typeable s, Exception e, Priv l p) =>
+                 LIO l s a -> p -> (l -> e -> LIO l s a) -> LIO l s a
+catchLp m p c = mkLIO $ \s -> getresult m s `catch` doit s
+    where doit s e@(LabeledExceptionTCB l ls se) =
+              case fromException se of
+                Just e' | leqp p l $ lioL s
+                            -> unLIO (c l e') s { labelState = ls }
+                Nothing -> throw e
+
+catchL     :: (Label l, Typeable s, Exception e) =>
+              LIO l s a -> (e -> LIO l s a) -> LIO l s a
 catchL m c = mkLIO $ \s -> getresult m s `catch` doit s
     where doit s e@(LabeledExceptionTCB l ls se) =
               case fromException se of

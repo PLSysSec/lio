@@ -8,7 +8,7 @@ module LIO.Base (
                 , taintio, guardio, untaintio
                 , lowerio, unlowerio
                 , openL, closeL, discardL
-                , throwL, catchL
+                , throwL, catchL, catchLp
 
                 , LIORef, newLIORef, labelOfLIORef
                 , readLIORef, writeLIORef, atomicModifyLIORef

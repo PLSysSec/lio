@@ -126,6 +126,7 @@ instance Monoid HSPrivs where
 
 instance PrivTCB HSPrivs
 instance Priv HSLabel HSPrivs where
+    lostar (HSPrivs p) l min = lupdates l p L0 `lub` min
     leqp (HSPrivs p) a b = lupdates a p L0 `leq` b
 
 newcat     :: HSLevel -> HS (HSPrivs, HSLabel)
