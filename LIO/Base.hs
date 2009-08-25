@@ -22,10 +22,19 @@ import LIO.TCB hiding (
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB, runTCB, evalTCB
                , ioTCB
-               , LabeledExceptionTCB
                , rethrowTCB
                )
 
 import LIO.IOTCB
-                         
-                         
+import Control.Exception
+import Data.Typeable
+
+--
+-- Untrusted wrappers around TCB functions
+--
+
+onExceptionL         :: (Label l, Typeable s) =>
+                        LIO l s a -> LIO l s b -> LIO l s a
+onExceptionL io what = io `catchL` \e -> do what
+                                            throwL (e :: SomeException)
+

@@ -23,7 +23,6 @@ module LIO.TCB (
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB, runTCB, evalTCB
                , ioTCB
-               , LabeledExceptionTCB(..)
                , rethrowTCB
                -- End TCB exports
                ) where
@@ -78,6 +77,8 @@ o2po EQ = PEQ; o2po LT = PLT; o2po GT = PGT
 
 class (POrd a, Show a, Typeable a) => Label a where
     lpure :: a                  -- label for pure values
+    lsys :: a                   -- label for unlabeled system files
+    lsys = lpure
     lclear :: a                 -- default clearance
     lub :: a -> a -> a
     glb :: a -> a -> a
@@ -149,13 +150,13 @@ unlrefTCB (Lref l a) = a
 -- Labeled IO
 --
 
-data (Label l, Typeable s) => LIOstate l s =
+data (Label l) => LIOstate l s =
     LIOstate { labelState :: s
              , lioL :: l -- current label
              , lioC :: l -- current clearance
              }
 
-newtype (Label l, Typeable s) => LIO l s a = LIO (StateT (LIOstate l s) IO a)
+newtype (Label l) => LIO l s a = LIO (StateT (LIOstate l s) IO a)
     deriving (Functor, Monad, MonadFix)
 
 get :: (Label l, Typeable s) => LIO l s (LIOstate l s)
@@ -255,11 +256,10 @@ putTCB ls = get >>= put . update
 newstate   :: (Label l, Typeable s) => s -> LIOstate l s
 newstate s = LIOstate { labelState = s , lioL = lpure , lioC = lclear }
 
-mkLIO :: (Label l, Typeable s) => (LIOstate l s -> IO (a, LIOstate l s))
-      -> LIO l s a
+mkLIO :: (Label l) => (LIOstate l s -> IO (a, LIOstate l s)) -> LIO l s a
 mkLIO = LIO . StateT
 
-unLIO                  :: (Label l, Typeable s) => LIO l s a -> LIOstate l s
+unLIO                  :: (Label l) => LIO l s a -> LIOstate l s
                        -> IO (a, LIOstate l s)
 unLIO (LIO (StateT f)) = f
 
@@ -278,6 +278,17 @@ evalTCB m s = do (a, ls) <- runLIO m (newstate s)
 ioTCB :: (Label l, Typeable s) => IO a -> LIO l s a
 ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
 
+iotTCB     :: (Label l, Typeable s) =>
+              (IO (a, LIOstate l s) -> IO (a, LIOstate l s)) -> LIO l s a
+           -> LIO l s a
+iotTCB f m = mkLIO $ \s -> f (unLIO m s)
+
+blockL :: (Label l, Typeable s) => LIO l s a -> LIO l s a
+blockL m = mkLIO $ \s -> block (unLIO m s)
+
+unblockL :: (Label l, Typeable s) => LIO l s a -> LIO l s a
+unblockL m = mkLIO $ \s -> unblock (unLIO m s)
+
 
 --
 -- Exceptions
@@ -293,54 +304,46 @@ data LabelFault
 
 instance Exception LabelFault
 
-data LabeledExceptionTCB l s =
-    LabeledExceptionTCB l s SomeException deriving Typeable
+data LabeledExceptionTCB l =
+    LabeledExceptionTCB l SomeException deriving Typeable
 
-instance Label l => Show (LabeledExceptionTCB l s) where
-    showsPrec _ (LabeledExceptionTCB l s e) rest =
+instance Label l => Show (LabeledExceptionTCB l) where
+    showsPrec _ (LabeledExceptionTCB l e) rest =
         shows e $ (" {" ++) $ shows l $ "}" ++ rest
 
-instance (Label l, Typeable s) => Exception (LabeledExceptionTCB l s)
+instance (Label l) => Exception (LabeledExceptionTCB l)
 
-unlabelException :: (Label l, Typeable s) => LabeledExceptionTCB l s
-                 -> IO (a, LIOstate l s)
-unlabelException (LabeledExceptionTCB l s (SomeException e)) =
+unlabelException :: (Label l) => LabeledExceptionTCB l -> IO (a, LIOstate l s)
+unlabelException (LabeledExceptionTCB l (SomeException e)) =
     putStrLn ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") >> -- XXX
     throw e
 
-throwL   :: (Exception e, Label l, Typeable s) => e -> LIO l s a
+throwL   :: (Exception e, Label l) => e -> LIO l s a
 throwL e = mkLIO $ \s -> throwIO $
-           LabeledExceptionTCB (lioL s) (labelState s) (toException e)
+           LabeledExceptionTCB (lioL s) (toException e)
 
-getresult m s = do
-  (a, s') <- unLIO m s
-  a' <- evaluate a
-  return (a', s')
-
-rethrowTCB   :: (Label l, Typeable s) => LIO l s a -> LIO l s a
-rethrowTCB m = mkLIO $ \s -> getresult m s
-               `catches` [Handler $ dolabeled s, Handler $ doother s]
+rethrowTCB   :: (Label l) => LIO l s a -> LIO l s a
+rethrowTCB m = mkLIO $ \s -> mapfst s $ unLIO m s
     where
-      dolabeled     :: (Label l, Typeable s) =>
-                       LIOstate l s -> LabeledExceptionTCB l s -> a
-      dolabeled _ e = throw e
-      doother     :: (Label l, Typeable s) => LIOstate l s -> SomeException
-                  -> IO (a, LIOstate l s)
-      doother s e = unLIO (throwL e) s
-
-catchLp       :: (Label l, Typeable s, Exception e, Priv l p) =>
+      mapfst s = fmap $ \(a, b) -> (mapException (labelexception s) a, b)
+      labelexception s e =
+          case fromException (e :: SomeException) of
+            Just (LabeledExceptionTCB l e') ->
+                LabeledExceptionTCB (lioL s `lub` l) e'
+            Nothing -> LabeledExceptionTCB (lioL s) e
+               
+catchLp       :: (Label l, Exception e, Priv l p) =>
                  LIO l s a -> p -> (l -> e -> LIO l s a) -> LIO l s a
-catchLp m p c = mkLIO $ \s -> getresult m s `catch` doit s
-    where doit s e@(LabeledExceptionTCB l ls se) =
+catchLp m p c = mkLIO $ \s -> unLIO m s `catch` doit s
+    where doit s e@(LabeledExceptionTCB l se) =
               case fromException se of
-                Just e' | leqp p l $ lioL s
-                            -> unLIO (c l e') s { labelState = ls }
+                Just e' | leqp p l $ lioL s -> unLIO (c l e') s
                 Nothing -> throw e
 
-catchL     :: (Label l, Typeable s, Exception e) =>
+catchL     :: (Label l, Exception e) =>
               LIO l s a -> (e -> LIO l s a) -> LIO l s a
-catchL m c = mkLIO $ \s -> getresult m s `catch` doit s
-    where doit s e@(LabeledExceptionTCB l ls se) =
+catchL m c = mkLIO $ \s -> unLIO m s `catch` doit s
+    where doit s e@(LabeledExceptionTCB l se) =
               case fromException se of
-                Just e' | l `leq` lioL s -> unLIO (c e') s { labelState = ls }
+                Just e' | l `leq` lioL s -> unLIO (c e') s
                 Nothing -> throw e

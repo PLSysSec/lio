@@ -10,7 +10,13 @@ import LIO.TCB
 import Control.Exception
 import Data.IORef
 import Data.Typeable
+import System.Directory
 import System.IO
+
+--
+-- Misc wrappers
+--
+
 
 --
 -- LIOref -- labeled IOref
@@ -46,6 +52,16 @@ atomicModifyLIORef (LIORefTCB l r) f = do
   guardio l
   taintio l
   ioTCB $ atomicModifyIORef r f
+
+--
+-- File operations
+--
+
+data LHandle l = LHandleTCB l Handle
+
+hlabelOf                  :: (Label l) => LHandle l -> l
+hlabelOf (LHandleTCB l h) = l
+
 
 
 --

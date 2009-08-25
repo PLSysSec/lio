@@ -22,11 +22,13 @@ privs = HSPrivs [us, vs]
 catche :: SomeException -> HS ()
 catche e = lputStrLn $ "catche --- " ++ show e
 
-etest :: HS (Int, Int)
 etest = do
+  return () :: HS ()
   a <- openL four
   catchL (throwL (AssertionFailed "etest")) catche
-  return (0,0)
+  -- throwL (AssertionFailed "etest")
+  -- rethrowTCB $ ioTCB undefined
+  rethrowTCB $ return $ a `div` 0
   -- rethrowTCB $ return $ (a, a `div` 0)
 
 addem :: HS Int
