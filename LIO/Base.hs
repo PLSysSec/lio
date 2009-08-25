@@ -1,14 +1,15 @@
 module LIO.Base (
-                 POrdering(..), POrd(..), o2po, Label(..)
+                  POrdering(..), POrd(..), o2po, Label(..)
                 , Lref, Priv(..)
                 , labelOf, taint, untaint, unlref
                 , LIO
                 , lref
                 , labelOfio, clearOfio
-                , taintio, guardio, untaintio
+                , taintio, guardio, cleario, untaintio
                 , lowerio, unlowerio
                 , openL, closeL, discardL
                 , throwL, catchL, catchLp
+                , LabelFault(..)
 
                 , LIORef, newLIORef, labelOfLIORef
                 , readLIORef, writeLIORef, atomicModifyLIORef

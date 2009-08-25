@@ -15,6 +15,7 @@ module LIO.TCB (
                , lowerio, unlowerio
                , openL, closeL, discardL
                , throwL, catchL, catchLp
+               , LabelFault(..)
                -- Start TCB exports
                , lrefTCB
                , PrivTCB
@@ -165,8 +166,8 @@ put s = mkLIO $ \_ -> return (() , s)
 
 lref     :: (Label l, Typeable s) => l -> a -> LIO l s (Lref l a)
 lref l a = get >>= doit
-    where doit s | not $ l `leq` lioC s = fail "lref exceeds clearance"
-                 | not $ lioL s `leq` l = fail "lref below label"
+    where doit s | not $ l `leq` lioC s = throwL LerrClearance
+                 | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = return $ Lref l a
 
 labelOfio :: (Label l, Typeable s) => LIO l s l
@@ -180,47 +181,47 @@ taintio l' = do s <- get
                 let l = lioL s `lub` l'
                 if l `leq` lioC s
                   then put s { lioL = l }
-                  else fail "Taint exceeds clearance"
+                  else throwL LerrLow
 
 guardio :: (Label l, Typeable s) => l -> LIO l s ()
 guardio max = do l <- labelOfio
                  if l `leq` max
                    then return ()
-                   else fail "guardio failed"
+                   else throwL LerrHigh
 
 cleario :: (Label l, Typeable s) => l -> LIO l s ()
 cleario min = do c <- clearOfio
                  if min `leq` c
                    then return ()
-                   else fail "cleario failed"
+                   else throwL LerrClearance
 
 untaintio     :: (Priv l p, Typeable s) => p -> l -> LIO l s ()
 untaintio p l = do s <- get
                    if leqp p (lioL s) l
                      then put s { lioL = l }
-                     else fail "Insufficient privilege for untaintio"
+                     else throwL LerrPriv
 
 untaintioTCB     :: (Label l, Typeable s) => l -> LIO l s ()
 untaintioTCB l = do s <- get
                     if l `leq` lioC s
                       then put s { lioL = l }
-                      else fail "Untaintio exceeds clearance"
+                      else throwL LerrClearance
 
 lowerio   :: (Label l, Typeable s) => l -> LIO l s ()
 lowerio l = get >>= doit
-    where doit s | not $ l `leq` lioC s = fail "Cannot raise with lower"
-                 | not $ lioL s `leq` l = fail "Cannot lower below label"
+    where doit s | not $ l `leq` lioC s = throwL LerrClearance
+                 | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = put s { lioC = l }
 
 unlowerio   :: (Priv l p, Typeable s) => p -> l -> LIO l s ()
 unlowerio p l = get >>= doit
-    where doit s | not $ leqp p l $ lioC s = fail "Unlower denied"
-                 | not $ lioL s `leq` l = fail "Cannot unlower below label"
+    where doit s | not $ leqp p l $ lioC s = throwL LerrPriv
+                 | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = put s { lioC = l }
 
 unlowerioTCB   :: (Label l, Typeable s) => l -> LIO l s ()
 unlowerioTCB l = get >>= doit
-    where doit s | not $ lioL s `leq` l = fail "Cannot unlowerTCB below label"
+    where doit s | not $ lioL s `leq` l = throwL LerrInval
                  | otherwise            = put s { lioC = l }
 
 openL             :: (Label l, Typeable s) => Lref l a -> LIO l s a
@@ -283,9 +284,11 @@ ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
 --
 
 data LabelFault
-    = LerrClearance             -- Label would exceed clearance
-    | LerrLabel                 -- Requested label too low
+    = LerrLow                   -- Requested label too low
+    | LerrHigh                  -- Current label too high
+    | LerrClearance             -- Label would exceed clearance
     | LerrPriv                  -- Insufficient privileges
+    | LerrInval                 -- Invalid request
       deriving (Show, Typeable)
 
 instance Exception LabelFault
