@@ -96,6 +96,7 @@ instance Monoid DCPrivs where
     mappend (DCPrivs s1) (DCPrivs s2) = DCPrivs $ Set.union s1 s2
 
 overlap :: Ord a => Set a -> Set a -> Bool
+{-
 overlap a b = overlap' (Set.toAscList a) (Set.toAscList b)
     where
       overlap' [] []                  = True
@@ -104,7 +105,8 @@ overlap a b = overlap' (Set.toAscList a) (Set.toAscList b)
       overlap' (a:as) (b:bs) | a == b = True
       overlap' a@(a1:as) b@(b1:bs)    = 
           if a1 < b1 then overlap' as b else overlap' a bs
-
+-}
+overlap a b = not $ Set.null (Set.intersection a b)
 owns (DCPrivs p) (DCat c) = overlap p c
 
 instance Priv DCLabel DCPrivs where
