@@ -159,10 +159,10 @@ data (Label l) => LIOstate l s =
 newtype (Label l) => LIO l s a = LIO (StateT (LIOstate l s) IO a)
     deriving (Functor, Monad, MonadFix)
 
-get :: (Label l, Typeable s) => LIO l s (LIOstate l s)
+get :: (Label l) => LIO l s (LIOstate l s)
 get = mkLIO $ \s -> return (s, s)
 
-put :: (Label l, Typeable s) => LIOstate l s -> LIO l s ()
+put :: (Label l) => LIOstate l s -> LIO l s ()
 put s = mkLIO $ \_ -> return (() , s)
 
 lref     :: (Label l, Typeable s) => l -> a -> LIO l s (Lref l a)
@@ -171,7 +171,7 @@ lref l a = get >>= doit
                  | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = return $ Lref l a
 
-labelOfio :: (Label l, Typeable s) => LIO l s l
+labelOfio :: (Label l) => LIO l s l
 labelOfio = get >>= return . lioL
 
 clearOfio :: (Label l, Typeable s) => LIO l s l
@@ -323,15 +323,13 @@ throwL e = mkLIO $ \s -> throwIO $
            LabeledExceptionTCB (lioL s) (toException e)
 
 rethrowTCB   :: (Label l) => LIO l s a -> LIO l s a
-rethrowTCB m = mkLIO $ \s -> mapfst s $ unLIO m s
-    where
-      mapfst s = fmap $ \(a, b) -> (mapException (labelexception s) a, b)
-      labelexception s e =
-          case fromException (e :: SomeException) of
-            Just (LabeledExceptionTCB l e') ->
-                LabeledExceptionTCB (lioL s `lub` l) e'
-            Nothing -> LabeledExceptionTCB (lioL s) e
-               
+rethrowTCB m = do
+  l <- labelOfio
+  fmap (mapException $ labelit l) m
+      where
+        labelit     :: Label l => l -> SomeException -> LabeledExceptionTCB l
+        labelit l e = LabeledExceptionTCB l e
+
 catchLp       :: (Label l, Exception e, Priv l p) =>
                  LIO l s a -> p -> (l -> e -> LIO l s a) -> LIO l s a
 catchLp m p c = mkLIO $ \s -> unLIO m s `catch` doit s
