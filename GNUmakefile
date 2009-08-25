@@ -33,7 +33,7 @@ ignore:
 	mv -f .gitignore~ .gitignore
 
 clean:
-	rm -f depend $(PROGS)
+	rm -f .depend $(PROGS)
 	@find . \( -name '*~' -o -name '*.o' -o -name '*.hi' -o -name '*.d' \) \
 		-print0 > .clean~
 	@xargs -0 echo rm -f -- < .clean~
