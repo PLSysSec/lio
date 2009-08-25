@@ -8,8 +8,9 @@ module LIO.HiStar ( module LIO.HiStar
 import LIO.TCB
 import LIO.Base
 
-import Data.Monoid
+import Data.IORef
 import Data.List
+import Data.Monoid
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Typeable
@@ -53,6 +54,7 @@ mergeWith f m1 m2 = domerge Map.empty $ assocs2 m1 m2
 -- Now for the HSLabel Label
 --
 
+-- XXX Note HSC should be TCB as # of categories allocated leaks info
 newtype HSCategory = HSC Integer deriving (Eq, Ord, Show)
 
 {-
@@ -117,7 +119,7 @@ lcat L2 c = HSL (Map.singleton c L2) L0
 lcat L3 c = HSL (Map.singleton c L3) L0
 
 newtype HSPrivs = HSPrivs [HSCategory]
-data HSState = HSState { nextCat :: HSCategory } deriving Typeable
+data HSState = HSState { nextCat :: IORef HSCategory } deriving Typeable
 type HS a = LIO HSLabel HSState a
 
 instance Monoid HSPrivs where
@@ -131,15 +133,15 @@ instance Priv HSLabel HSPrivs where
 
 newcat     :: HSLevel -> HS (HSPrivs, HSLabel)
 newcat lev = do ls <- getTCB
-                let cat = nextCat ls
-                    HSC uncat = cat
-                    lab = lcat lev cat
-                    ncat = HSC $ uncat + 1
-                putTCB ls { nextCat = ncat }
-                return (HSPrivs [cat], lab)
+                cat <- ioTCB $ atomicModifyIORef (nextCat ls) bumpcat
+                return (HSPrivs [cat], lcat lev cat)
+    where
+      bumpcat (HSC c) = (HSC $ c + 1, HSC c)
 
-newHS = HSState { nextCat = HSC 100 }
+newHS = do
+  ref <- newIORef $ HSC 1000
+  return HSState { nextCat = ref }
 
 evalHS   :: HS t -> IO (t, HSLabel)
-evalHS m = evalTCB m newHS
+evalHS m = newHS >>= evalTCB m
 
