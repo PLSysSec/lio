@@ -2,6 +2,9 @@
 PROGS := $(patsubst %.hs,%, $(wildcard [a-z]*.hs))
 DEPS := $(patsubst %,%.d, $(PROGS))
 
+BIN = $(HOME)/.cabal/bin/
+DOC = $(wildcard [A-Z]*/*.hs)
+
 all: $(PROGS)
 .PHONY: all
 
@@ -23,9 +26,23 @@ $(PROGS): %: %.hs
 		mv -f $@.d~ $@.d;		\
 	fi
 
+doc: $(DOC)
+	rm -rf $@
+	mkdir -p $@/src
+	touch doc
+	$(BIN)HsColour -print-css -o$@/src/hscolour.css
+	for file in $(DOC); do \
+	    $(BIN)HsColour -css -anchor \
+		-o$@/src/`echo $$file|sed -e 's|/|.|g'`.html $$file; \
+	done
+	$(BIN)haddock -h -o$@ --source-base=src/ \
+	    --source-module=src/%M.hs.html \
+	    --source-entity=src/%M.hs.html#%N $(DOC)
+
 ignore:
 	rm -f .gitignore~
-	(echo '*.hi'; echo '*.o'; echo '*~'; echo '/*.d'; echo '/.depend') \
+	(echo '*.hi'; echo '*.o'; echo '*~'; echo '/*.d'; \
+			echo '/.depend'; echo '/doc') \
 		> .gitignore~
 	for prog in $(PROGS); do		\
 		echo $$prog >> .gitignore~;	\
@@ -33,6 +50,7 @@ ignore:
 	mv -f .gitignore~ .gitignore
 
 clean:
+	rm -rf doc
 	rm -f .depend $(PROGS)
 	@find . \( -name '*~' -o -name '*.o' -o -name '*.hi' -o -name '*.d' \) \
 		-print0 > .clean~

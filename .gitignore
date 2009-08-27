@@ -3,4 +3,5 @@
 *~
 /*.d
 /.depend
+/doc
 test
