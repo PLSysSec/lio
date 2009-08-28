@@ -5,18 +5,22 @@
 
 
 module LIO.TCB ( 
+                -- * Basic label functions
                  POrdering(..), POrd(..), o2po, Label(..)
                , Lref, Priv(..)
                , labelOf, taint, untaint, unlref
+               -- * Labeled IO Monad (LIO)
                , LIO
                , lref
                , labelOfio, clearOfio
                , taintio, guardio, cleario, untaintio
                , lowerio, unlowerio
                , openL, closeL, discardL
+               -- * Exceptions
                , throwL, catchL, catchLp
                , LabelFault(..)
                -- Start TCB exports
+               -- * Privileged operations
                , lrefTCB
                , PrivTCB
                , showTCB
@@ -107,24 +111,25 @@ instance Label l => MonadFix (Lref l) where
 
 class PrivTCB t where
 class (Label l, Monoid p, PrivTCB p) => Priv l p where
-    -- (leqp p l1 l2) means that privileges p are sufficient to
-    -- downgrade data from l1 to l2.  Note that (leq l1 l2) implies
-    -- (leq p l1 l2) for all p, but for some labels an p leqp will
-    -- hold even if leq does not.
+    -- |@leqp p l1 l2@ means that privileges @p@ are sufficient to
+    -- downgrade data from @l1@ to @l2@.  Note that @'leq' l1 l2@
+    -- implies @'leq' p l1 l2@ for all @p@, but for some labels and
+    -- @p@ values @leqp@ will hold even if @'leq'@ does not.
     leqp :: p -> l -> l -> Bool
     leqp p a b = lostar p a b `leq` b
 
-    -- (lostar p source minimum) returns the lowest label to which one
-    -- can downgrade data labeled source given privileges p,
-    -- least-upper-bounded with minimum.  (Without minimum, the lowest
-    -- label might be exponential in p for some label formats.)  More
-    -- concretely, the result returned is the lowest lres such that:
-    -- (leqp p source lres) && (leq minimum lres)
+    -- |@lostar p source minimum@ returns the lowest label to which
+    -- one can downgrade data labeled @source@ given privileges @p@,
+    -- least-upper-bounded with @minimum@.  (Without @minimum@, the
+    -- lowest label might be exponential in @p@ for some label
+    -- formats.)  More concretely, the result returned is the lowest
+    -- @lres@ such that:  @'leqp' p source lres && 'leq' minimum lres@
     --
-    -- This is useful if your label is originally l1, and you touch
-    -- some stuff labeled l2 but want to minimize the amount of taint
-    -- l2 causes you.  After raising your label to l2, you can use the
-    -- privileges in p to lower your label to lostar p l2 l1.
+    -- This is useful if your label is originally @l1@, and you touch
+    -- some stuff labeled @l2@ but want to minimize the amount of
+    -- taint @l2@ causes you.  After raising your label to @l2@, you
+    -- can use the privileges in @p@ to lower your label to @lostar p
+    -- l2 l1@.
     lostar :: p -> l -> l -> l
 
 lrefTCB     :: Label l => l -> a -> Lref l a
@@ -165,7 +170,7 @@ get = mkLIO $ \s -> return (s, s)
 put :: (Label l) => LIOstate l s -> LIO l s ()
 put s = mkLIO $ \_ -> return (() , s)
 
-lref     :: (Label l, Typeable s) => l -> a -> LIO l s (Lref l a)
+lref     :: (Label l) => l -> a -> LIO l s (Lref l a)
 lref l a = get >>= doit
     where doit s | not $ l `leq` lioC s = throwL LerrClearance
                  | not $ lioL s `leq` l = throwL LerrLow
@@ -174,58 +179,66 @@ lref l a = get >>= doit
 labelOfio :: (Label l) => LIO l s l
 labelOfio = get >>= return . lioL
 
-clearOfio :: (Label l, Typeable s) => LIO l s l
+clearOfio :: (Label l) => LIO l s l
 clearOfio = get >>= return . lioC
 
-taintio    :: (Label l, Typeable s) => l -> LIO l s ()
+-- |Use @taintio l@ in trusted code before observing an object labeled
+-- @l@.  This will raise the current label to a value @l'@ such that
+-- @l ``leq`` l'@, or throw @'LerrClearance'@ if @l'@ would have to be
+-- higher than the current clearance.
+taintio    :: (Label l) => l -> LIO l s ()
 taintio l' = do s <- get
                 let l = lioL s `lub` l'
                 if l `leq` lioC s
                   then put s { lioL = l }
-                  else throwL LerrLow
+                  else throwL LerrClearance
 
-guardio :: (Label l, Typeable s) => l -> LIO l s ()
-guardio max = do l <- labelOfio
-                 if l `leq` max
-                   then return ()
-                   else throwL LerrHigh
+-- |Use @guardio l@ in trusted code before modifying an object labeled
+-- @l@.  If @l'@ is the current label, then this function ensures that
+-- @l' ``leq`` l@ before doing the same thing as @'ltaintio' l@.
+-- Throws @'LerrHigh'@ if the current label @l'@ is too high.
+guardio :: (Label l) => l -> LIO l s ()
+guardio l = do l' <- labelOfio
+               if l' `leq` l
+                 then taintio l
+                 else throwL LerrHigh
 
-cleario :: (Label l, Typeable s) => l -> LIO l s ()
+cleario :: (Label l) => l -> LIO l s ()
 cleario min = do c <- clearOfio
                  if min `leq` c
                    then return ()
                    else throwL LerrClearance
 
-untaintio     :: (Priv l p, Typeable s) => p -> l -> LIO l s ()
+untaintio     :: (Priv l p) => p -> l -> LIO l s ()
 untaintio p l = do s <- get
                    if leqp p (lioL s) l
                      then put s { lioL = l }
                      else throwL LerrPriv
 
-untaintioTCB     :: (Label l, Typeable s) => l -> LIO l s ()
+untaintioTCB     :: (Label l) => l -> LIO l s ()
 untaintioTCB l = do s <- get
                     if l `leq` lioC s
                       then put s { lioL = l }
                       else throwL LerrClearance
 
-lowerio   :: (Label l, Typeable s) => l -> LIO l s ()
+lowerio   :: (Label l) => l -> LIO l s ()
 lowerio l = get >>= doit
     where doit s | not $ l `leq` lioC s = throwL LerrClearance
                  | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = put s { lioC = l }
 
-unlowerio   :: (Priv l p, Typeable s) => p -> l -> LIO l s ()
+unlowerio   :: (Priv l p) => p -> l -> LIO l s ()
 unlowerio p l = get >>= doit
     where doit s | not $ leqp p l $ lioC s = throwL LerrPriv
                  | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = put s { lioC = l }
 
-unlowerioTCB   :: (Label l, Typeable s) => l -> LIO l s ()
+unlowerioTCB   :: (Label l) => l -> LIO l s ()
 unlowerioTCB l = get >>= doit
     where doit s | not $ lioL s `leq` l = throwL LerrInval
                  | otherwise            = put s { lioC = l }
 
-openL             :: (Label l, Typeable s) => Lref l a -> LIO l s a
+openL             :: (Label l) => Lref l a -> LIO l s a
 openL (Lref la a) = do
   s <- get
   if la `leq` lioC s
@@ -235,7 +248,7 @@ openL (Lref la a) = do
         return undefined
 
 -- Might have lowered clearance inside closeL, so just preserve it
-closeL   :: (Label l, Typeable s) => LIO l s a -> LIO l s (Lref l a)
+closeL   :: (Label l) => LIO l s a -> LIO l s (Lref l a)
 closeL m = do
   LIOstate { lioL = l, lioC = c } <- get
   a <- m
@@ -246,14 +259,14 @@ closeL m = do
 discardL m = closeL m >> return ()
   
 
-getTCB :: (Label l, Typeable s) => LIO l s s
+getTCB :: (Label l) => LIO l s s
 getTCB = get >>= return . labelState
 
-putTCB    :: (Label l, Typeable s) => s -> LIO l s ()
+putTCB    :: (Label l) => s -> LIO l s ()
 putTCB ls = get >>= put . update
     where update s = s { labelState = ls }
 
-newstate   :: (Label l, Typeable s) => s -> LIOstate l s
+newstate   :: (Label l) => s -> LIOstate l s
 newstate s = LIOstate { labelState = s , lioL = lpure , lioC = lclear }
 
 mkLIO :: (Label l) => (LIOstate l s -> IO (a, LIOstate l s)) -> LIO l s a
@@ -263,30 +276,30 @@ unLIO                  :: (Label l) => LIO l s a -> LIOstate l s
                        -> IO (a, LIOstate l s)
 unLIO (LIO (StateT f)) = f
 
-runLIO     :: (Label l, Typeable s) => LIO l s a -> LIOstate l s
+runLIO     :: (Label l) => LIO l s a -> LIOstate l s
            -> IO (a, LIOstate l s)
 runLIO m s = unLIO m s `catch` unlabelException
 
-runTCB     :: (Label l, Typeable s) => LIO l s a -> s -> IO (a, s)
+runTCB     :: (Label l) => LIO l s a -> s -> IO (a, s)
 runTCB m s = do (a, ls) <- runLIO m (newstate s)
                 return (a, labelState ls)
 
-evalTCB     :: (Label l, Typeable s) => LIO l s a -> s -> IO (a, l)
+evalTCB     :: (Label l) => LIO l s a -> s -> IO (a, l)
 evalTCB m s = do (a, ls) <- runLIO m (newstate s)
                  return (a, lioL ls)
 
-ioTCB :: (Label l, Typeable s) => IO a -> LIO l s a
+ioTCB :: (Label l) => IO a -> LIO l s a
 ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
 
-iotTCB     :: (Label l, Typeable s) =>
+iotTCB     :: (Label l) =>
               (IO (a, LIOstate l s) -> IO (a, LIOstate l s)) -> LIO l s a
            -> LIO l s a
 iotTCB f m = mkLIO $ \s -> f (unLIO m s)
 
-blockL :: (Label l, Typeable s) => LIO l s a -> LIO l s a
+blockL :: (Label l) => LIO l s a -> LIO l s a
 blockL m = mkLIO $ \s -> block (unLIO m s)
 
-unblockL :: (Label l, Typeable s) => LIO l s a -> LIO l s a
+unblockL :: (Label l) => LIO l s a -> LIO l s a
 unblockL m = mkLIO $ \s -> unblock (unLIO m s)
 
 
@@ -295,11 +308,11 @@ unblockL m = mkLIO $ \s -> unblock (unLIO m s)
 --
 
 data LabelFault
-    = LerrLow                   -- Requested label too low
-    | LerrHigh                  -- Current label too high
-    | LerrClearance             -- Label would exceed clearance
-    | LerrPriv                  -- Insufficient privileges
-    | LerrInval                 -- Invalid request
+    = LerrLow                   -- ^Requested label too low
+    | LerrHigh                  -- ^Current label too high
+    | LerrClearance             -- ^Label would exceed clearance
+    | LerrPriv                  -- ^Insufficient privileges
+    | LerrInval                 -- ^Invalid request
       deriving (Show, Typeable)
 
 instance Exception LabelFault
