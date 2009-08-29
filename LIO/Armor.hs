@@ -5,8 +5,6 @@ import Control.Monad
 import Data.Array.IArray
 import Data.Array.Unboxed
 import Data.Bits
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Char

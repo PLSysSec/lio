@@ -64,4 +64,4 @@ mft ~(a, b) = do
   a' <- getnum 
   return (a', a+1)
 
-main = return ()
+main = evalHS $ lsinitTCB ul

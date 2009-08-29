@@ -17,6 +17,7 @@ import LIO.TCB
 import Prelude hiding (catch)
 import Control.Exception
 import Control.Monad
+import Data.Bits
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as L
@@ -25,10 +26,13 @@ import Data.IORef
 import Data.Typeable
 import Data.Word
 import System.Directory
+import System.FilePath
 import System.IO (IOMode(..), FilePath(..), stderr)
 import qualified System.IO as IO
-import System.FilePath
 import qualified System.IO.Error as IO
+import System.Posix.Directory
+import System.Posix.Files
+import System.Time
 
 import Data.Digest.Pure.SHA
 import qualified System.IO.Cautious as CIO
@@ -114,6 +118,29 @@ instance (Label l, IsHandleOpen h IO)
 hlabelOf                  :: (Label l) => LHandle l h -> l
 hlabelOf (LHandleTCB l h) = l
 
+--
+-- Temporary file name based on time
+--
+
+serializele :: Int -> Integer -> [Word8]
+serializele n i | n <= 0 && i <= 0 = []
+serializele n i = (fromInteger i):serializele (n - 1) (i `shiftR` 8)
+
+unserializele       :: [Word8] -> Integer
+unserializele []    = 0
+unserializele (c:s) = (fromIntegral c) .|. (unserializele s `shiftL` 8)
+
+tmpnam :: IO String
+tmpnam = do
+  (TOD sec psec) <- getClockTime
+  return $ armor32 $ L.pack $
+         serializele 3 (psec `shiftR` 16) ++ serializele 4 sec
+
+nextmpnam :: String -> String
+nextmpnam s =
+    let val = unserializele $ L.unpack $ dearmor32 s
+    in armor32 $ L.pack $ serializele 7 (1 + val)
+
 
 --
 -- Labeled storage
@@ -135,36 +162,40 @@ strictReadFile f = IO.withFile f ReadMode readit
             size <- IO.hFileSize h
             LC.hGet h $ fromInteger size
 
+labelfname = ".label"
 mkLabelDir   :: Label l => l -> IO String
 mkLabelDir l =
     let label = show l
         path = labelStr2Path label
-        file = path </> ".label"
+        file = path </> labelfname
         correct = LC.pack $ label
         checkfile = do
           contents <- strictReadFile file
           unless (contents == correct) $
                  throwIO (LioCorruptLabel file $ LC.unpack correct)
         nosuch e = if IO.isDoesNotExistError e
-                   then do createDirectoryIfMissing True path
-                           putStrLn $ "creating " ++ file
-                           CIO.writeFileL file correct
+                   then do let tpath = path ++ "~"
+                               tfile = tpath </> labelfname
+                           createDirectoryIfMissing True tpath
+                           putStrLn $ "creating " ++ tfile
+                           CIO.writeFileL tfile correct
+                           rename tpath path
                    else throwIO e
     in do checkfile `catch` nosuch
           return path
 
 
-{-
-ls = "LabeledStorage"
-init   :: (Label l) => l -> LIO l s ()
-init l = rethrowTCB $ ioTCB $ do
-           createDirectory ls
-           changeWorkingDirectory ls
-           let root = label2path l
-           createDirectoryIfMissing True root
-           createSymbolicLink root "root" 
--}
-         
+ls = "labeledStorage"
+lsinitTCB   :: (Label l) => l -> LIO l s ()
+lsinitTCB l = rtioTCB $ changeWorkingDirectory ls `catch` setup
+    where
+      setup :: SomeException -> IO ()
+      setup e = do
+        createDirectoryIfMissing True ls
+        changeWorkingDirectory ls
+        root <- mkLabelDir l
+        createSymbolicLink root "root" 
+
 
 --
 -- Crap
