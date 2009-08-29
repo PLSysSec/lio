@@ -15,32 +15,26 @@ import LIO.Armor
 import LIO.TCB
 
 import Prelude hiding (catch)
-import Control.Exception
-import Control.Monad
-import Data.Bits
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as BC
+import Control.Exception (throwIO, catch, Exception(..), IOException(..))
+import Control.Monad (when, unless)
+import Data.Bits (shiftL, shiftR, (.|.), (.&.))
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.IORef
-import Data.Typeable
-import Data.Word
-import System.Directory
-import System.FilePath
+import Data.Typeable (Typeable)
+import Data.Word (Word8)
+import System.Directory (createDirectory, createDirectoryIfMissing)
+import System.FilePath (FilePath(..), (</>))
 import System.IO (IOMode(..), FilePath(..), stderr)
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
 import System.Posix.Directory
 import System.Posix.Files
-import System.Time
+import System.Posix.IO
+import System.Time (ClockTime(..), getClockTime)
 
 import Data.Digest.Pure.SHA
 import qualified System.IO.Cautious as CIO
-
-
---
--- Misc wrappers
---
 
 
 --
@@ -90,14 +84,14 @@ instance IsHandleOpen IO.Handle IO where
 class (IsHandleOpen h m) => IsHandle h b m where
     hGet :: h -> Int -> m b
     hGetNonBlocking :: h -> Int -> m b
-    hPutStr :: h -> b -> m ()
+    hPut :: h -> b -> m ()
     hPutStrLn :: h -> b -> m ()
 
-instance IsHandle IO.Handle B.ByteString IO where
-    hGet = B.hGet
-    hGetNonBlocking = B.hGetNonBlocking
-    hPutStr = B.hPutStr
-    hPutStrLn = B.hPutStrLn
+instance IsHandle IO.Handle L.ByteString IO where
+    hGet = L.hGet
+    hGetNonBlocking = L.hGetNonBlocking
+    hPut = L.hPut
+    hPutStrLn h s = L.hPut h $ L.append s $ L.singleton 0xa
 
 data LHandle l h = LHandleTCB l h
 
@@ -106,8 +100,8 @@ instance (Label l, IsHandleOpen (LHandle l h) (LIO l s), IsHandle h b IO)
     hGet (LHandleTCB l h) n = guardio l >> rtioTCB (hGet h n)
     hGetNonBlocking (LHandleTCB l h) n =
         guardio l >> rtioTCB (hGetNonBlocking h n)
-    hPutStr (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStr h s)
-    hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStr h s)
+    hPut (LHandleTCB l h) s = guardio l >> rtioTCB (hPut h s)
+    hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStrLn h s)
 
 instance (Label l, IsHandleOpen h IO)
     => IsHandleOpen (LHandle l h) (LIO l s) where
@@ -141,6 +135,14 @@ nextmpnam s =
     let val = unserializele $ L.unpack $ dearmor32 s
     in armor32 $ L.pack $ serializele 7 (1 + val)
 
+mktmp       :: (FilePath -> IO a) -> FilePath -> IO (a, FilePath)
+mktmp f dir = tmpnam >>= loop
+    where
+      ff n = case dir </> n of path -> do a <- f path; return (a, path)
+      loop name = ff name `catch` reloop name
+      reloop name e = if IO.isAlreadyExistsError e
+                      then loop $ nextmpnam name
+                      else throwIO e
 
 --
 -- Labeled storage
@@ -189,7 +191,7 @@ ls = "labeledStorage"
 lsinitTCB   :: (Label l) => l -> LIO l s ()
 lsinitTCB l = rtioTCB $ changeWorkingDirectory ls `catch` setup
     where
-      setup :: SomeException -> IO ()
+      setup :: IOException -> IO ()
       setup e = do
         createDirectoryIfMissing True ls
         changeWorkingDirectory ls
