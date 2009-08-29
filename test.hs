@@ -1,5 +1,5 @@
 
-module Main (module LIO.TCB, module Main
+module Main (module LIO.TCB, module LIO.IOTCB, module Main
             , evalHS) where
 
 import LIO.TCB
