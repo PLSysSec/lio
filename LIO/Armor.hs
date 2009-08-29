@@ -62,7 +62,7 @@ pack s = LC.pack s
 --
 -- These functions support a simple base-32 encoding of binary data,
 -- in which 5 bytes of binary data are mapped onto 8 characters from
--- the set {a, ..., k, m, n, p, ...z, 2, ..., 9} (that is to say all
+-- the set {a, ..., k, m, n, p, ..., z, 2, ..., 9} (that is to say all
 -- lower-case letters and digits except for l, o, 0, and 9.
 --
 -- The @armor32@ function encodes binary using this base-32 encoding,
