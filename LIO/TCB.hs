@@ -26,7 +26,7 @@ module LIO.TCB (
                , showTCB
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB, runTCB, evalTCB
-               , ioTCB
+               , ioTCB, rtioTCB
                , rethrowTCB
                -- End TCB exports
                ) where
@@ -290,6 +290,9 @@ evalTCB m s = do (a, ls) <- runLIO m (newstate s)
 
 ioTCB :: (Label l) => IO a -> LIO l s a
 ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
+
+rtioTCB :: (Label l) => IO a -> LIO l s a
+rtioTCB a = rethrowTCB $ mkLIO $ \s -> do r <- a; return (r, s)
 
 iotTCB     :: (Label l) =>
               (IO (a, LIOstate l s) -> IO (a, LIOstate l s)) -> LIO l s a

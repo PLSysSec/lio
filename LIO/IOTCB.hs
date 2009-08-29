@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -XMultiParamTypeClasses #-}
 {-# OPTIONS_GHC -XFlexibleInstances #-}
 {-# OPTIONS_GHC -XFlexibleContexts #-}
+{-# OPTIONS_GHC -XDeriveDataTypeable #-}
 -- {-# OPTIONS_GHC -fglasgow-exts #-}
 
 module LIO.IOTCB {- (
@@ -13,7 +14,9 @@ module LIO.IOTCB {- (
 import LIO.Armor
 import LIO.TCB
 
+import Prelude hiding (catch)
 import Control.Exception
+import Control.Monad
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as BC
 import qualified Data.ByteString.Lazy as L
@@ -22,13 +25,13 @@ import Data.IORef
 import Data.Typeable
 import Data.Word
 import System.Directory
-import System.IO (IOMode, FilePath, stderr)
+import System.IO (IOMode(..), FilePath(..), stderr)
 import qualified System.IO as IO
 import System.FilePath
-
-import Text.Printf
+import qualified System.IO.Error as IO
 
 import Data.Digest.Pure.SHA
+import qualified System.IO.Cautious as CIO
 
 
 --
@@ -96,16 +99,16 @@ data LHandle l h = LHandleTCB l h
 
 instance (Label l, IsHandleOpen (LHandle l h) (LIO l s), IsHandle h b IO)
     => IsHandle (LHandle l h) b (LIO l s) where
-    hGet (LHandleTCB l h) n = guardio l >> ioTCB (hGet h n)
+    hGet (LHandleTCB l h) n = guardio l >> rtioTCB (hGet h n)
     hGetNonBlocking (LHandleTCB l h) n =
-        guardio l >> ioTCB (hGetNonBlocking h n)
-    hPutStr (LHandleTCB l h) s = guardio l >> ioTCB (hPutStr h s)
-    hPutStrLn (LHandleTCB l h) s = guardio l >> ioTCB (hPutStr h s)
+        guardio l >> rtioTCB (hGetNonBlocking h n)
+    hPutStr (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStr h s)
+    hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStr h s)
 
 instance (Label l, IsHandleOpen h IO)
     => IsHandleOpen (LHandle l h) (LIO l s) where
     openBinaryFile = undefined
-    hClose (LHandleTCB l h) = guardio l >> ioTCB (hClose h)
+    hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
 
 
 hlabelOf                  :: (Label l) => LHandle l h -> l
@@ -116,21 +119,39 @@ hlabelOf (LHandleTCB l h) = l
 -- Labeled storage
 --
 
+data LIOerr
+    = LioCorruptLabel String String -- ^File Containing Label is Corrupt
+      deriving (Show, Typeable)
+instance Exception LIOerr
+            
+
 labelStr2Path   :: String -> FilePath
 labelStr2Path l = case armor32 $ bytestringDigest $ sha224 $ LC.pack $ l of
                  c1:c2:c3:rest -> ((c1:[]) </> (c2:c3:[]) </> rest)
 
+strictReadFile   :: FilePath -> IO LC.ByteString
+strictReadFile f = IO.withFile f ReadMode readit
+    where readit h = do
+            size <- IO.hFileSize h
+            LC.hGet h $ fromInteger size
+
 mkLabelDir   :: Label l => l -> IO String
-mkLabelDir l = do
-  let label = show l
-      dir = labelStr2Path label
-      labelfile = (dir </> ".label")
-  label' <- readFile labelfile
-  if label' == label
-    then return dir
-    else IO.hPutStrLn stderr ("file " ++ labelfile
-                           ++ " should contain:\n" ++ label) >>
-               error "fs corruption"
+mkLabelDir l =
+    let label = show l
+        path = labelStr2Path label
+        file = path </> ".label"
+        correct = LC.pack $ label
+        checkfile = do
+          contents <- strictReadFile file
+          unless (contents == correct) $
+                 throwIO (LioCorruptLabel file $ LC.unpack correct)
+        nosuch e = if IO.isDoesNotExistError e
+                   then do createDirectoryIfMissing True path
+                           putStrLn $ "creating " ++ file
+                           CIO.writeFileL file correct
+                   else throwIO e
+    in do checkfile `catch` nosuch
+          return path
 
 
 {-

@@ -67,3 +67,5 @@ pack s = LC.pack s
 --
 -- The @armor32@ function encodes binary using this base-32 encoding,
 -- while @dearmor32@ reverses the encoding.
+--
+-- Binary data is assumed to come from the 'Data.ByteString.Lazy' type.

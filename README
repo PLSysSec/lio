@@ -1,6 +1,7 @@
 
 * Pre-requisites:
 
-	cabal install xattr
+	cabal install SHA
+	cabal install cautious-file
 
 
