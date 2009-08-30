@@ -77,11 +77,13 @@ atomicModifyLIORef (LIORefTCB l r) f = do
 
 class IsHandleOpen h m where
     getDirectoryContents :: FilePath -> m [FilePath]
+    createDirectory      :: FilePath -> m ()
     openFile             :: FilePath -> IOMode -> m h
     hClose               :: h -> m ()
 
 instance IsHandleOpen IO.Handle IO where
     getDirectoryContents = IO.getDirectoryContents
+    createDirectory      = IO.createDirectory
     openFile             = IO.openBinaryFile
     hClose               = IO.hClose
 
@@ -110,6 +112,7 @@ instance (Label l, IsHandleOpen (LHandle l h) (LIO l s), IsHandle h b IO)
 instance (Label l, IsHandleOpen h IO) =>
     IsHandleOpen (LHandle l h) (LIO l s) where
         getDirectoryContents    = undefined
+        createDirectory         = undefined
         openFile                = undefined
         hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
 
@@ -179,9 +182,14 @@ lmknod l f = do
   if not exists
     then return (a, p')
     else do
+      IO.hPutStrLn stderr $ "lmknod: file " ++ p' ++ " already exists." -- XXX
       IO.removeFile p `catchIO` (IO.removeDirectory p `catchIO` return ())
       lmknod l f
 
+lmkdir1 l name = do
+  ((), p) <- lmknod l mkTmpDir
+  createSymbolicLink p name
+  rename (p ++ "~") p
 
 ls = "labeledStorage"
 lsinitTCB   :: (Label l) => l -> LIO l s ()
@@ -191,8 +199,7 @@ lsinitTCB l = rtioTCB $ changeWorkingDirectory ls `catch` setup
       setup e = do
         IO.createDirectoryIfMissing True ls
         changeWorkingDirectory ls
-        root <- getLabelDir l
-        createSymbolicLink root "root" 
+        lmkdir1 l "root"
 
 
 --
