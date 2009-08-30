@@ -4,6 +4,7 @@
 module LIO.TmpFile (-- * The high level interface
                     mkTmpFile
                    , mkTmpDir
+                   , mkTmpDir'
                    -- * Some lower-level helper functions
                    , mkTmp, openFileExclusive
                    -- * Functions for generating unique names
@@ -77,32 +78,45 @@ openFileExclusive m p = do
 -- does not throw AlreadyExistsError.  For example, 'mkTmpFile' is
 -- defined as:
 --
--- > mkTmpFile m = mkTmp (openFileExclusive m)
+-- > mkTmpFile m d s = mkTmp (openFileExclusive m) d s
 --
-mkTmp       :: (FilePath -> IO a) -- ^ The function to execute (@f@)
-            -> FilePath           -- ^ Directory to prepend to temp file names
-            -> IO (a, FilePath)   -- ^ The result of @f@ and the
+mkTmp       :: (FilePath -> IO a) -- ^The function to execute (@f@)
+            -> FilePath           -- ^Directory to prepend to temp file names
+            -> FilePath           -- ^Suffix for new file name
+            -> IO (a, FilePath)   -- ^The result of @f@ and the
                                   -- FilePath on which it finally
                                   -- succeeded.
-mkTmp f dir = tmpName >>= loop
+mkTmp f dir suffix = tmpName >>= loop
     where
       ff n = case dir </> n of path -> do a <- f path; return (a, path)
-      loop name = ff name `catch` reloop name
+      loop name = ff (name ++ suffix) `catch` reloop name
       reloop name e = if IO.isAlreadyExistsError e
                       then loop $ nextTmpName name
                       else throwIO e
+
 
 -- | Creates a new file with a unique name in a particular directory
 mkTmpFile :: IO.IOMode          -- ^@WriteMode@, @AppendMode@, or
                                 -- @ReadWriteMode@ (It is an error to
                                 -- use @ReadMode@.)
           -> FilePath           -- ^Directory in which to create file
+          -> FilePath           -- ^Suffix for new file name
           -> IO (IO.Handle, FilePath) -- ^Returns open handle to new
                                       -- file, along with pathname of
                                       -- new file
-mkTmpFile m = mkTmp (openFileExclusive m)
+mkTmpFile m d s = mkTmp (openFileExclusive m) d s
 
--- | Creates a new subdirectory with uniqe file name
-mkTmpDir :: FilePath            -- ^Directory in which to create subdirectory
-         -> IO FilePath         -- ^Returns full path to new directory
-mkTmpDir = fmap snd . mkTmp createDirectory
+-- | Creates a new subdirectory with uniqe file name.  Returns the
+-- pathname of the new directory as the second element of a pair, just
+-- for consistency with the interface to 'mkTmpFile'.  See
+-- `mkTmpDir'` if you don't want this behavior.
+mkTmpDir     :: FilePath -- ^Directory in which to create subdirectory
+             -> FilePath -- ^Suffix to append to new directory name
+             -> IO ((), FilePath) -- ^Returns full path to new directory
+mkTmpDir d s = mkTmp createDirectory d s
+
+-- | Like 'mkTmpDir', but just returns the pathname of the new directory.
+mkTmpDir'     :: FilePath -- ^Directory in which to create subdirectory
+              -> FilePath -- ^Suffix to append to new directory name
+              -> IO FilePath    -- ^Returns full path to new directory
+mkTmpDir' d s = fmap snd $ mkTmpDir d s

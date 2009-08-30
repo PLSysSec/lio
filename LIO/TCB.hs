@@ -76,6 +76,7 @@ class (Eq a) => POrd a where
                 PLT       -> True
                 otherwise -> False
 
+o2po :: Ordering -> POrdering
 o2po EQ = PEQ; o2po LT = PLT; o2po GT = PGT
 -- instance (Ord a) => POrd a where pcompare = o2po . compare
 

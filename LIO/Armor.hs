@@ -1,5 +1,13 @@
-module LIO.Armor (-- $doc
-                  armor32, dearmor32) where
+-- | These functions support a simple base-32 encoding of binary data,
+-- in which 5 bytes of binary data are mapped onto 8 characters from
+-- the set {a, ..., k, m, n, p, ..., z, 2, ..., 9} (that is to say all
+-- lower-case letters and digits except for l, o, 0, and 9.
+--
+-- The 'armor32' function encodes binary using this base-32 encoding,
+-- while 'dearmor32' reverses the encoding.
+--
+-- Binary data is assumed to come from the @Data.ByteString.Lazy@ type.
+module LIO.Armor (armor32, dearmor32) where
 
 import Control.Monad
 import Data.Array.IArray
@@ -56,14 +64,3 @@ mask n = complement $ shift (fromInteger $ -1) n
 pack s = LC.pack s
 -}
 
--- $doc
---
--- These functions support a simple base-32 encoding of binary data,
--- in which 5 bytes of binary data are mapped onto 8 characters from
--- the set {a, ..., k, m, n, p, ..., z, 2, ..., 9} (that is to say all
--- lower-case letters and digits except for l, o, 0, and 9.
---
--- The @armor32@ function encodes binary using this base-32 encoding,
--- while @dearmor32@ reverses the encoding.
---
--- Binary data is assumed to come from the 'Data.ByteString.Lazy' type.

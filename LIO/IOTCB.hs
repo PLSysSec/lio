@@ -160,6 +160,9 @@ getLabelDir l =
     in do checkfile `catch` nosuch
           return path
 
+lmkdir     :: (Label l) => l -> FilePath -> IO ()
+lmkdir l p = do
+  return ()
 
 ls = "labeledStorage"
 lsinitTCB   :: (Label l) => l -> LIO l s ()
