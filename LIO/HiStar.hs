@@ -132,6 +132,8 @@ instance Priv HSLabel HSPrivs where
     lostar (HSPrivs p) l min = lupdates l p L0 `lub` min
     leqp (HSPrivs p) a b = lupdates a p L0 `leq` b
 
+noprivs = mempty :: HSPrivs
+
 newcat     :: HSLevel -> HS (HSPrivs, HSLabel)
 newcat lev = do ls <- getTCB
                 cat <- ioTCB $ atomicModifyIORef (nextCat ls) bumpcat

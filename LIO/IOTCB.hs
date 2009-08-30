@@ -28,7 +28,8 @@ import Data.Word (Word8)
 import qualified System.Directory as IO
 import System.FilePath (FilePath(..), (</>)
                        , isPathSeparator, replaceFileName
-                       , splitDirectories, joinPath, normalise)
+                       , splitDirectories, joinPath, normalise
+                       , isAbsolute, takeDirectory)
 import System.IO (IOMode(..), FilePath(..), stderr)
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
@@ -40,6 +41,8 @@ import System.Time (ClockTime(..), getClockTime)
 
 import Data.Digest.Pure.SHA
 import qualified System.IO.Cautious as CIO
+
+import Debug.Trace
 
 
 --
@@ -198,6 +201,7 @@ makeRelativeTo          :: FilePath -- ^Destination of symbolic link
                         -> FilePath -- ^Name of symbolic link
                         -> FilePath -- ^Returns contents to put in symbolic link
 makeRelativeTo dest src =
+    trace ("makeRelativeTo " ++ dest ++ " " ++ src)
     doit (splitDirectories dest) (init $ splitDirectories src)
     where
       doit [] []                      = "."
@@ -213,12 +217,14 @@ lmkdir1 l name = do
   ((), p) <- lmknod l mkTmpDir
   mklink p name
 
+{-
 lmkdir :: (Priv l p) => p -> l -> FilePath -> LIO l s ()
 lmkdir priv l path = do
   cleario l                     -- Don't use privs, make clearance explicit
   (dirl, dir, last) <- namei priv path
   pguardio priv dirl
   rtioTCB $ lmkdir1 l (dir </> last)
+-}
 
 lcreat1 :: (Label l) => l -> IOMode -> FilePath -> IO IO.Handle
 lcreat1 l m name = do
@@ -230,35 +236,60 @@ lcreat1 l m name = do
 stripdotdot ('.':'.':'/':s) = stripdotdot s
 stripdotdot s               = s
 
+-- |This function reads the contents of a symbolic link and returns
+-- the pathname of its destination, relative to the current working
+-- directory.  It elides ".." components at the begining of the
+-- symbolic link contents, so that if the link @foo\/bar -> ..\/baz@
+-- exists, @expandLink \"foo\/bar\"@ will return @\"foo\/baz\"@.
+--
+-- /Warning:/ This function assumes no itermediary components of the
+-- path to the symbolic link are also symbolic links.
+expandLink      :: FilePath -> IO FilePath
+expandLink path = do
+  suffix <- readSymbolicLink path `catchIO` return ""
+  return $ if (isAbsolute suffix)
+           then suffix
+           else domerge (takeDirectory path) suffix
+    where
+      domerge [] suffix = suffix
+      domerge path [] = path
+      domerge path ('.':'.':pathSeparator:suffix) =
+          domerge (takeDirectory path) suffix
+      domerge path suffix = path </> suffix
+
+-- |Returns the label of a file, which is assumed to be in a file
+-- called 'labelfname' in the same directory as the file.
+labelOfFile :: (Label l) => FilePath -> IO l
+labelOfFile path = getlabel `catch` corrupted
+    where
+      lpath = replaceFileName path labelfname
+      getlabel = do
+        labelstr <- readFile lpath
+        return $ read labelstr
+      corrupted (SomeException e) = throwIO $ LioCorruptLabel lpath "<unknown>"
+
+accessLink :: (Priv l p) => p -> Bool -> FilePath -> LIO l s FilePath
+accessLink privs write path = do
+  target <- rtioTCB $ expandLink path
+  label <- ioTCB $ labelOfFile path
+  if write then pguardio privs label else ptaintio privs label
+  return target
 
 namei :: forall l p s. (Priv l p) =>
-         p -> FilePath -> LIO l s (l, FilePath, FilePath)
+         p -> FilePath -> LIO l s (FilePath)
 namei priv path = do
-  lookup "root" "." (stripslash $ splitDirectories path)
+  lookup "root" (stripslash $ splitDirectories path)
     where
       stripslash (('/':_):t) = t
       stripslash t = t
 
-      lookup d p (cn1:[])  = do
-        nd <- fmap (`makeRelativeTo` p) $ rtioTCB $ readSymbolicLink d
-        l <- taintcn nd
-        return (l, nd, cn1)
-      lookup d p (cn1:cns) = do
-        nd <- fmap (`makeRelativeTo` p) $ rtioTCB $ readSymbolicLink d
-        taintcn nd
-        lookup (nd </> cn1) labeledNode2Root cns
+      -- This is crap
+      lookup d [] = accessLink priv False d
+      lookup d (".":rest) = lookup d rest
+      lookup d (cn:rest) = do
+                    nd <- accessLink priv False d
+                    lookup (d </> cn) rest
 
-      taintcn :: FilePath -> LIO l s l
-      taintcn path = do l <- label; ptaintio priv l; return l
-          where
-            lpath = replaceFileName path labelfname
-            getlabel = do
-              labelstr <- ioTCB $ readFile lpath
-              return (read labelstr :: l)
-            corrupted   :: SomeException -> LIO l s l
-            corrupted e = throwL $ LioCorruptLabel lpath "<unknown>"
-            label = getlabel `catchL` corrupted
-                                 
 
 ls = "labeledStorage"
 lsinitTCB   :: (Label l) => l -> LIO l s ()
