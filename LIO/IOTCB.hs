@@ -201,10 +201,9 @@ lcreat1 l m name = do
 
 ls = "labeledStorage"
 lsinitTCB   :: (Label l) => l -> LIO l s ()
-lsinitTCB l = rtioTCB $ changeWorkingDirectory ls `catch` setup
+lsinitTCB l = rtioTCB $ changeWorkingDirectory ls `catchIO` setup
     where
-      setup :: IOException -> IO ()
-      setup e = do
+      setup = do
         IO.createDirectoryIfMissing True ls
         changeWorkingDirectory ls
         lmkdir1 l "root"
