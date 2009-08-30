@@ -186,10 +186,18 @@ lmknod l f = do
       IO.removeFile p `catchIO` (IO.removeDirectory p `catchIO` return ())
       lmknod l f
 
+lmkdir1 :: (Label l) => l -> FilePath -> IO ()
 lmkdir1 l name = do
   ((), p) <- lmknod l mkTmpDir
   createSymbolicLink p name
   rename (p ++ "~") p
+
+lcreat1 :: (Label l) => l -> IOMode -> FilePath -> IO IO.Handle
+lcreat1 l m name = do
+  (h, p) <- lmknod l (mkTmpFile m)
+  createSymbolicLink p name
+  rename (p ++ "~") p
+  return h
 
 ls = "labeledStorage"
 lsinitTCB   :: (Label l) => l -> LIO l s ()
