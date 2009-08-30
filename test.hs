@@ -1,11 +1,17 @@
 
-module Main (module LIO.TCB, module LIO.IOTCB, module Main
+module Main (module LIO.TCB, module LIO.IOTCB
+            , module LIO.TmpFile, IOMode(..)
+            , module Main
             , evalHS) where
 
 import LIO.TCB
 import LIO.HiStar
 import LIO.IOTCB
+
+import LIO.TmpFile
+
 import Control.Exception
+import System.IO
 
 us = HSC 99
 ul = lupdate lpure us L3

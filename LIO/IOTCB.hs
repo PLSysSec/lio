@@ -13,11 +13,11 @@ module LIO.IOTCB {- (
 
 import LIO.Armor
 import LIO.TCB
+import LIO.TmpFile
 
 import Prelude hiding (catch)
 import Control.Exception (throwIO, catch, Exception(..), IOException(..))
 import Control.Monad (when, unless)
-import Data.Bits (shiftL, shiftR, (.|.), (.&.))
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.IORef
@@ -74,11 +74,11 @@ atomicModifyLIORef (LIORefTCB l r) f = do
 --
 
 class IsHandleOpen h m where
-    openBinaryFile :: FilePath -> IOMode -> m h
+    openFile :: FilePath -> IOMode -> m h
     hClose :: h -> m ()
 
 instance IsHandleOpen IO.Handle IO where
-    openBinaryFile = IO.openBinaryFile
+    openFile = IO.openBinaryFile
     hClose = IO.hClose
 
 class (IsHandleOpen h m) => IsHandle h b m where
@@ -105,44 +105,12 @@ instance (Label l, IsHandleOpen (LHandle l h) (LIO l s), IsHandle h b IO)
 
 instance (Label l, IsHandleOpen h IO)
     => IsHandleOpen (LHandle l h) (LIO l s) where
-    openBinaryFile = undefined
+    openFile = undefined
     hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
 
 
 hlabelOf                  :: (Label l) => LHandle l h -> l
 hlabelOf (LHandleTCB l h) = l
-
---
--- Temporary file name based on time
---
-
-serializele :: Int -> Integer -> [Word8]
-serializele n i | n <= 0 && i <= 0 = []
-serializele n i = (fromInteger i):serializele (n - 1) (i `shiftR` 8)
-
-unserializele       :: [Word8] -> Integer
-unserializele []    = 0
-unserializele (c:s) = (fromIntegral c) .|. (unserializele s `shiftL` 8)
-
-tmpnam :: IO String
-tmpnam = do
-  (TOD sec psec) <- getClockTime
-  return $ armor32 $ L.pack $
-         serializele 3 (psec `shiftR` 16) ++ serializele 4 sec
-
-nextmpnam :: String -> String
-nextmpnam s =
-    let val = unserializele $ L.unpack $ dearmor32 s
-    in armor32 $ L.pack $ serializele 7 (1 + val)
-
-mktmp       :: (FilePath -> IO a) -> FilePath -> IO (a, FilePath)
-mktmp f dir = tmpnam >>= loop
-    where
-      ff n = case dir </> n of path -> do a <- f path; return (a, path)
-      loop name = ff name `catch` reloop name
-      reloop name e = if IO.isAlreadyExistsError e
-                      then loop $ nextmpnam name
-                      else throwIO e
 
 --
 -- Labeled storage
