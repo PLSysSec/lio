@@ -14,6 +14,7 @@ module LIO.TCB (
                , lref
                , labelOfio, clearOfio
                , taintio, guardio, cleario, untaintio
+               , ptaintio, pguardio
                , lowerio, unlowerio
                , openL, closeL, discardL
                -- * Exceptions
@@ -80,7 +81,7 @@ o2po :: Ordering -> POrdering
 o2po EQ = PEQ; o2po LT = PLT; o2po GT = PGT
 -- instance (Ord a) => POrd a where pcompare = o2po . compare
 
-class (POrd a, Show a, Typeable a) => Label a where
+class (POrd a, Show a, Read a, Typeable a) => Label a where
     lpure :: a                  -- label for pure values
     lsys :: a                   -- label for unlabeled system files
     lsys = lpure
@@ -194,6 +195,18 @@ taintio l' = do s <- get
                   then put s { lioL = l }
                   else throwL LerrClearance
 
+-- |Like 'taintio', but use privileges to reduce the amount of taint
+-- |required.
+ptaintio      :: (Priv l p) =>
+                 p              -- ^Privileges to invoke
+              -> l              -- ^Label to taint to if no privileges
+              -> LIO l s ()
+ptaintio p l' = do s <- get
+                   let l = lostar p l' (lioL s)
+                   if l `leq` lioC s
+                     then put s { lioL = l }
+                     else throwL LerrClearance
+
 -- |Use @guardio l@ in trusted code before modifying an object labeled
 -- @l@.  If @l'@ is the current label, then this function ensures that
 -- @l' ``leq`` l@ before doing the same thing as @'ltaintio' l@.
@@ -204,6 +217,15 @@ guardio l = do l' <- labelOfio
                  then taintio l
                  else throwL LerrHigh
 
+-- |Like 'guardio', but takes privilege argument to be more permissive.
+pguardio     :: (Priv l p) => p -> l -> LIO l s ()
+pguardio p l = do l' <- labelOfio
+                  if leqp p l' l
+                    then ptaintio p l
+                    else throwL LerrHigh
+
+-- |Ensures the clearance is at least a certain level, or throw
+-- 'LerrClearance'.
 cleario :: (Label l) => l -> LIO l s ()
 cleario min = do c <- clearOfio
                  if min `leq` c

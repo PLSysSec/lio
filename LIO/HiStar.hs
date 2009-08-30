@@ -55,7 +55,7 @@ mergeWith f m1 m2 = domerge Map.empty $ assocs2 m1 m2
 --
 
 -- XXX Note HSC should be TCB as # of categories allocated leaks info
-newtype HSCategory = HSC Integer deriving (Eq, Ord, Show)
+newtype HSCategory = HSC Integer deriving (Eq, Ord, Read, Show)
 
 {-
 instance Enum HSCategory where
@@ -63,7 +63,7 @@ instance Enum HSCategory where
     fromEnum (HSC i) = i
 -}
 
-data HSLevel = L0 | L1 | L2 | L3 deriving (Eq, Ord, Enum, Show)
+data HSLevel = L0 | L1 | L2 | L3 deriving (Eq, Ord, Enum, Read, Show)
 
 instance POrd HSLevel where
     pcompare a b = o2po $ compare a b
@@ -71,7 +71,8 @@ instance POrd HSLevel where
 -- Second component of HSLabel is the default level for categories not
 -- in the map.  Invariant:  Map must not contain any entries mapping
 -- categories to the default level.
-data HSLabel = HSL (Map HSCategory HSLevel) HSLevel deriving (Show, Typeable)
+data HSLabel = HSL (Map HSCategory HSLevel) HSLevel
+               deriving (Read, Show, Typeable)
 
 instance Eq HSLabel where
     a == b = pcompare a b == PEQ

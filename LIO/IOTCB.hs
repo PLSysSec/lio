@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -XFlexibleInstances #-}
 {-# OPTIONS_GHC -XFlexibleContexts #-}
 {-# OPTIONS_GHC -XDeriveDataTypeable #-}
+{-# OPTIONS_GHC -XScopedTypeVariables #-}
 -- {-# OPTIONS_GHC -fglasgow-exts #-}
 
 module LIO.IOTCB {- (
@@ -16,7 +17,7 @@ import LIO.TCB
 import LIO.TmpFile
 
 import Prelude hiding (catch)
-import Control.Exception (throwIO, catch, try, tryJust
+import Control.Exception (throwIO, catch, SomeException(..)
                          , Exception(..), IOException(..))
 import Control.Monad (when, unless)
 import qualified Data.ByteString.Lazy as L
@@ -26,7 +27,7 @@ import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import qualified System.Directory as IO
 import System.FilePath (FilePath(..), (</>)
-                       , isPathSeparator
+                       , isPathSeparator, replaceFileName
                        , splitDirectories, joinPath, normalise)
 import System.IO (IOMode(..), FilePath(..), stderr)
 import qualified System.IO as IO
@@ -192,7 +193,9 @@ lmknod l f = do
 -- @dst@.  If both @src@ and @dst@ are relative to the current working
 -- directory, then the contents of the symbolic link cannot just be
 -- @dst@, instead it is @makeRelativeTo dst src@.
-makeRelativeTo          :: FilePath -> FilePath -> FilePath
+makeRelativeTo          :: FilePath -- ^Destination of symbolic link
+                        -> FilePath -- ^Name of symbolic link
+                        -> FilePath -- ^Returns contents to put in symbolic link
 makeRelativeTo dest src =
     doit (splitDirectories dest) (init $ splitDirectories src)
     where
@@ -214,6 +217,36 @@ lcreat1 l m name = do
   (h, p) <- lmknod l (mkTmpFile m)
   mklink p name
   return h
+
+stripdotdot ('.':'.':'/':s) = stripdotdot s
+stripdotdot s               = s
+
+namei :: forall l p s. (Priv l p) => p -> FilePath -> LIO l s (FilePath, FilePath)
+namei priv path =
+    lookup "root" (stripslash $ splitDirectories path)
+    where
+      stripslash (('/':_):t) = t
+      stripslash t = t
+
+      lookup d (cn1:[])  = do
+        nd <- ioTCB $ readSymbolicLink d
+        return (nd, cn1)
+      lookup d (cn1:cns) = do
+        nd <- ioTCB $ readSymbolicLink d
+        taintcn nd
+        lookup (nd </> cn1) cns
+
+      taintcn :: FilePath -> LIO l s ()
+      taintcn path = do l <- label; ptaintio priv l
+          where
+            lpath = replaceFileName path labelfname
+            getlabel = do
+              labelstr <- ioTCB $ readFile lpath
+              return (read labelstr :: l)
+            corrupted   :: SomeException -> LIO l s l
+            corrupted e = throwL $ LioCorruptLabel lpath "<unknown>"
+            label = getlabel `catchL` corrupted
+                                 
 
 ls = "labeledStorage"
 lsinitTCB   :: (Label l) => l -> LIO l s ()

@@ -82,7 +82,7 @@ openFileExclusive m p = do
 --
 mkTmp       :: (FilePath -> IO a) -- ^The function to execute (@f@)
             -> FilePath           -- ^Directory to prepend to temp file names
-            -> FilePath           -- ^Suffix for new file name
+            -> String             -- ^Suffix for new file name
             -> IO (a, FilePath)   -- ^The result of @f@ and the
                                   -- FilePath on which it finally
                                   -- succeeded.
@@ -100,7 +100,7 @@ mkTmpFile :: IO.IOMode          -- ^@WriteMode@, @AppendMode@, or
                                 -- @ReadWriteMode@ (It is an error to
                                 -- use @ReadMode@.)
           -> FilePath           -- ^Directory in which to create file
-          -> FilePath           -- ^Suffix for new file name
+          -> String             -- ^Suffix for new file name
           -> IO (IO.Handle, FilePath) -- ^Returns open handle to new
                                       -- file, along with pathname of
                                       -- new file
@@ -111,12 +111,12 @@ mkTmpFile m d s = mkTmp (openFileExclusive m) d s
 -- for consistency with the interface to 'mkTmpFile'.  See
 -- `mkTmpDir'` if you don't want this behavior.
 mkTmpDir     :: FilePath -- ^Directory in which to create subdirectory
-             -> FilePath -- ^Suffix to append to new directory name
+             -> String   -- ^Suffix to append to new directory name
              -> IO ((), FilePath) -- ^Returns full path to new directory
 mkTmpDir d s = mkTmp createDirectory d s
 
 -- | Like 'mkTmpDir', but just returns the pathname of the new directory.
 mkTmpDir'     :: FilePath -- ^Directory in which to create subdirectory
-              -> FilePath -- ^Suffix to append to new directory name
+              -> String   -- ^Suffix to append to new directory name
               -> IO FilePath    -- ^Returns full path to new directory
 mkTmpDir' d s = fmap snd $ mkTmpDir d s
