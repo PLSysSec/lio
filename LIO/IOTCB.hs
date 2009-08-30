@@ -16,22 +16,22 @@ import LIO.TCB
 import LIO.TmpFile
 
 import Prelude hiding (catch)
-import Control.Exception (throwIO, catch, Exception(..), IOException(..))
+import Control.Exception (throwIO, catch, try, tryJust
+                         , Exception(..), IOException(..))
 import Control.Monad (when, unless)
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.IORef
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
-import qualified System.Directory as IO (createDirectory
-                                        , createDirectoryIfMissing
-                                        , getDirectoryContents)
+import qualified System.Directory as IO
 import System.FilePath (FilePath(..), (</>))
 import System.IO (IOMode(..), FilePath(..), stderr)
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
 import System.Posix.Directory
-import System.Posix.Files (rename, createSymbolicLink, readSymbolicLink)
+import System.Posix.Files (rename, getFileStatus
+                          , createSymbolicLink, readSymbolicLink)
 import System.Posix.IO
 import System.Time (ClockTime(..), getClockTime)
 
@@ -160,9 +160,28 @@ getLabelDir l =
     in do checkfile `catch` nosuch
           return path
 
-lmkdir     :: (Label l) => l -> FilePath -> IO ()
-lmkdir l p = do
-  return ()
+catchIO     :: IO a -> IO a -> IO a
+catchIO a h = catch a ((const :: a -> IOException -> a) h)
+
+-- | Create file or directory in appropriate directory for a given
+-- label.  Node gets created with an extra ~ appended.
+lmknod     :: (Label l) => l
+           -- ^Label for the new node
+           -> (FilePath -> FilePath -> IO (a, FilePath))
+           -- ^Either 'mkTmpDir' or 'mkTmpFile' with curried 'IOMode'
+           -> IO (a, FilePath)
+           -- ^Returns file handle or () and destination path
+lmknod l f = do
+  d <- getLabelDir l
+  (a, p) <- f d "~"
+  let p' = init p
+  exists <- catchIO (getFileStatus p' >> return True) (return False)
+  if not exists
+    then return (a, p')
+    else do
+      IO.removeFile p `catchIO` (IO.removeDirectory p `catchIO` return ())
+      lmknod l f
+
 
 ls = "labeledStorage"
 lsinitTCB   :: (Label l) => l -> LIO l s ()
