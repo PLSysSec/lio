@@ -135,7 +135,8 @@ instance Exception LIOerr
 
 labelStr2Path   :: String -> FilePath
 labelStr2Path l = case armor32 $ bytestringDigest $ sha224 $ LC.pack $ l of
-                 c1:c2:c3:rest -> ((c1:[]) </> (c2:c3:[]) </> rest)
+                    c1:c2:c3:rest -> ((c1:[]) </> (c2:[]) </> (c3:[]) </> rest)
+labeledNode2Root = ".." </> ".." </> ".." </> "."
 
 strictReadFile   :: FilePath -> IO LC.ByteString
 strictReadFile f = IO.withFile f ReadMode readit
@@ -191,8 +192,8 @@ lmknod l f = do
 
 -- | Used when creating a symbolic link named @src@ that points to
 -- @dst@.  If both @src@ and @dst@ are relative to the current working
--- directory, then the contents of the symbolic link cannot just be
--- @dst@, instead it is @makeRelativeTo dst src@.
+-- directory and in subdirectories, then the contents of the symbolic
+-- link cannot just be @dst@, instead it is @makeRelativeTo dst src@.
 makeRelativeTo          :: FilePath -- ^Destination of symbolic link
                         -> FilePath -- ^Name of symbolic link
                         -> FilePath -- ^Returns contents to put in symbolic link
@@ -221,20 +222,23 @@ lcreat1 l m name = do
 stripdotdot ('.':'.':'/':s) = stripdotdot s
 stripdotdot s               = s
 
-namei :: forall l p s. (Priv l p) => p -> FilePath -> LIO l s (FilePath, FilePath)
-namei priv path =
-    lookup "root" (stripslash $ splitDirectories path)
+
+namei :: forall l p s. (Priv l p) =>
+         p -> FilePath -> LIO l s (FilePath, FilePath)
+namei priv path = do
+  lookup "root" "." (stripslash $ splitDirectories path)
     where
       stripslash (('/':_):t) = t
       stripslash t = t
 
-      lookup d (cn1:[])  = do
-        nd <- ioTCB $ readSymbolicLink d
-        return (nd, cn1)
-      lookup d (cn1:cns) = do
-        nd <- ioTCB $ readSymbolicLink d
+      lookup d p (cn1:[])  = do
+        nd <- fmap (`makeRelativeTo` p) $ rtioTCB $ readSymbolicLink d
         taintcn nd
-        lookup (nd </> cn1) cns
+        return (nd, cn1)
+      lookup d p (cn1:cns) = do
+        nd <- fmap (`makeRelativeTo` p) $ rtioTCB $ readSymbolicLink d
+        taintcn nd
+        lookup (nd </> cn1) labeledNode2Root cns
 
       taintcn :: FilePath -> LIO l s ()
       taintcn path = do l <- label; ptaintio priv l
