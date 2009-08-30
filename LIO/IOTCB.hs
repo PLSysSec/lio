@@ -23,13 +23,15 @@ import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.IORef
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
-import System.Directory (createDirectory, createDirectoryIfMissing)
+import qualified System.Directory as IO (createDirectory
+                                        , createDirectoryIfMissing
+                                        , getDirectoryContents)
 import System.FilePath (FilePath(..), (</>))
 import System.IO (IOMode(..), FilePath(..), stderr)
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
 import System.Posix.Directory
-import System.Posix.Files
+import System.Posix.Files (rename, createSymbolicLink, readSymbolicLink)
 import System.Posix.IO
 import System.Time (ClockTime(..), getClockTime)
 
@@ -74,39 +76,42 @@ atomicModifyLIORef (LIORefTCB l r) f = do
 --
 
 class IsHandleOpen h m where
-    openFile :: FilePath -> IOMode -> m h
-    hClose :: h -> m ()
+    getDirectoryContents :: FilePath -> m [FilePath]
+    openFile             :: FilePath -> IOMode -> m h
+    hClose               :: h -> m ()
 
 instance IsHandleOpen IO.Handle IO where
-    openFile = IO.openBinaryFile
-    hClose = IO.hClose
+    getDirectoryContents = IO.getDirectoryContents
+    openFile             = IO.openBinaryFile
+    hClose               = IO.hClose
 
 class (IsHandleOpen h m) => IsHandle h b m where
-    hGet :: h -> Int -> m b
+    hGet            :: h -> Int -> m b
     hGetNonBlocking :: h -> Int -> m b
-    hPut :: h -> b -> m ()
-    hPutStrLn :: h -> b -> m ()
+    hPut            :: h -> b -> m ()
+    hPutStrLn       :: h -> b -> m ()
 
 instance IsHandle IO.Handle L.ByteString IO where
-    hGet = L.hGet
+    hGet            = L.hGet
     hGetNonBlocking = L.hGetNonBlocking
-    hPut = L.hPut
-    hPutStrLn h s = L.hPut h $ L.append s $ L.singleton 0xa
+    hPut            = L.hPut
+    hPutStrLn h s   = L.hPut h $ L.append s $ L.singleton 0xa
 
 data LHandle l h = LHandleTCB l h
 
 instance (Label l, IsHandleOpen (LHandle l h) (LIO l s), IsHandle h b IO)
     => IsHandle (LHandle l h) b (LIO l s) where
-    hGet (LHandleTCB l h) n = guardio l >> rtioTCB (hGet h n)
+    hGet (LHandleTCB l h) n      = guardio l >> rtioTCB (hGet h n)
     hGetNonBlocking (LHandleTCB l h) n =
-        guardio l >> rtioTCB (hGetNonBlocking h n)
-    hPut (LHandleTCB l h) s = guardio l >> rtioTCB (hPut h s)
+                                 guardio l >> rtioTCB (hGetNonBlocking h n)
+    hPut (LHandleTCB l h) s      = guardio l >> rtioTCB (hPut h s)
     hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStrLn h s)
 
-instance (Label l, IsHandleOpen h IO)
-    => IsHandleOpen (LHandle l h) (LIO l s) where
-    openFile = undefined
-    hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
+instance (Label l, IsHandleOpen h IO) =>
+    IsHandleOpen (LHandle l h) (LIO l s) where
+        getDirectoryContents    = undefined
+        openFile                = undefined
+        hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
 
 
 hlabelOf                  :: (Label l) => LHandle l h -> l
@@ -133,20 +138,21 @@ strictReadFile f = IO.withFile f ReadMode readit
             LC.hGet h $ fromInteger size
 
 labelfname = ".label"
-mkLabelDir   :: Label l => l -> IO String
-mkLabelDir l =
+getLabelDir   :: Label l => l -> IO String
+getLabelDir l =
     let label = show l
         path = labelStr2Path label
         file = path </> labelfname
         correct = LC.pack $ label
         checkfile = do
           contents <- strictReadFile file
-          unless (contents == correct) $
+          unless (contents == correct) $ do
+                 IO.hPutStrLn stderr (file ++ " should contain:\n" ++ label)
                  throwIO (LioCorruptLabel file $ LC.unpack correct)
         nosuch e = if IO.isDoesNotExistError e
                    then do let tpath = path ++ "~"
                                tfile = tpath </> labelfname
-                           createDirectoryIfMissing True tpath
+                           IO.createDirectoryIfMissing True tpath
                            putStrLn $ "creating " ++ tfile
                            CIO.writeFileL tfile correct
                            rename tpath path
@@ -161,9 +167,9 @@ lsinitTCB l = rtioTCB $ changeWorkingDirectory ls `catch` setup
     where
       setup :: IOException -> IO ()
       setup e = do
-        createDirectoryIfMissing True ls
+        IO.createDirectoryIfMissing True ls
         changeWorkingDirectory ls
-        root <- mkLabelDir l
+        root <- getLabelDir l
         createSymbolicLink root "root" 
 
 
