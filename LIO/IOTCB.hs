@@ -25,7 +25,9 @@ import Data.IORef
 import Data.Typeable (Typeable)
 import Data.Word (Word8)
 import qualified System.Directory as IO
-import System.FilePath (FilePath(..), (</>))
+import System.FilePath (FilePath(..), (</>)
+                       , isPathSeparator
+                       , splitDirectories, joinPath, normalise)
 import System.IO (IOMode(..), FilePath(..), stderr)
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
@@ -186,17 +188,31 @@ lmknod l f = do
       IO.removeFile p `catchIO` (IO.removeDirectory p `catchIO` return ())
       lmknod l f
 
+-- | Used when creating a symbolic link named @src@ that points to
+-- @dst@.  If both @src@ and @dst@ are relative to the current working
+-- directory, then the contents of the symbolic link cannot just be
+-- @dst@, instead it is @makeRelativeTo dst src@.
+makeRelativeTo          :: FilePath -> FilePath -> FilePath
+makeRelativeTo dest src =
+    doit (splitDirectories dest) (init $ splitDirectories src)
+    where
+      doit [] []                      = "."
+      doit (d1:ds) (s1:ss) | d1 == s1 = doit ds ss
+      doit d s = joinPath (replicate (length s) "../" ++ d)
+
+mklink p name = do
+  createSymbolicLink (p `makeRelativeTo` name) name
+  rename (p ++ "~") p
+
 lmkdir1 :: (Label l) => l -> FilePath -> IO ()
 lmkdir1 l name = do
   ((), p) <- lmknod l mkTmpDir
-  createSymbolicLink p name
-  rename (p ++ "~") p
+  mklink p name
 
 lcreat1 :: (Label l) => l -> IOMode -> FilePath -> IO IO.Handle
 lcreat1 l m name = do
   (h, p) <- lmknod l (mkTmpFile m)
-  createSymbolicLink p name
-  rename (p ++ "~") p
+  mklink p name
   return h
 
 ls = "labeledStorage"
