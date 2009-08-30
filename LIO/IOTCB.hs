@@ -213,18 +213,26 @@ lmkdir1 l name = do
   ((), p) <- lmknod l mkTmpDir
   mklink p name
 
+lmkdir :: (Priv l p) => p -> l -> FilePath -> LIO l s ()
+lmkdir priv l path = do
+  cleario l                     -- Don't use privs, make clearance explicit
+  (dirl, dir, last) <- namei priv path
+  pguardio priv dirl
+  rtioTCB $ lmkdir1 l (dir </> last)
+
 lcreat1 :: (Label l) => l -> IOMode -> FilePath -> IO IO.Handle
 lcreat1 l m name = do
   (h, p) <- lmknod l (mkTmpFile m)
   mklink p name
   return h
 
+
 stripdotdot ('.':'.':'/':s) = stripdotdot s
 stripdotdot s               = s
 
 
 namei :: forall l p s. (Priv l p) =>
-         p -> FilePath -> LIO l s (FilePath, FilePath)
+         p -> FilePath -> LIO l s (l, FilePath, FilePath)
 namei priv path = do
   lookup "root" "." (stripslash $ splitDirectories path)
     where
@@ -233,15 +241,15 @@ namei priv path = do
 
       lookup d p (cn1:[])  = do
         nd <- fmap (`makeRelativeTo` p) $ rtioTCB $ readSymbolicLink d
-        taintcn nd
-        return (nd, cn1)
+        l <- taintcn nd
+        return (l, nd, cn1)
       lookup d p (cn1:cns) = do
         nd <- fmap (`makeRelativeTo` p) $ rtioTCB $ readSymbolicLink d
         taintcn nd
         lookup (nd </> cn1) labeledNode2Root cns
 
-      taintcn :: FilePath -> LIO l s ()
-      taintcn path = do l <- label; ptaintio priv l
+      taintcn :: FilePath -> LIO l s l
+      taintcn path = do l <- label; ptaintio priv l; return l
           where
             lpath = replaceFileName path labelfname
             getlabel = do
