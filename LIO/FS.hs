@@ -83,13 +83,16 @@ labelFile = "LABEL"
 -- must contain a file named 'labelFile').
 newtype LDir = LDir FilePath
 
-
 -- |Hash a label down to the directory storing all 'Node's with that
 -- label.
 lDirOfLabel   :: (Label l) => l -> LDir
 lDirOfLabel l =
     case armor32 $ bytestringDigest $ sha224 $ LC.pack $ show l of
       c1:c2:c3:rest -> LDir ((c1:[]) </> (c2:[]) </> (c3:[]) </> rest)
+
+-- |'LDir' that contains a 'Node'
+lDirOfNode          :: Node -> LDir
+lDirOfNode (Node n) = LDir $ takeDirectory n
 
 -- |Takes an LDir and returns the label stored in 'labelFile' in that
 -- directory.  May throw 'FSCorruptLabel'.
@@ -141,6 +144,8 @@ getLDir l = try (labelOfLDir ldir) >>= handle
 -- a file @LabalHash\/.label@ specifying the label of a @Node@.
 newtype Node = Node FilePath
 
+prefix = "labeledStorage/"
+
 -- |When a @Node@ is first created, it has a file name with a \'~\'
 -- character at the end.  This is so that in the case of a crash, a
 -- node that was not linked to can be easily recognized and deleted.
@@ -148,8 +153,14 @@ newtype Node = Node FilePath
 -- to.
 newtype NewNode = NewNode Node
 
+-- |String that gets appended to new file names.  After a crash these
+-- may need to be garbage collected.
 newNodeExt :: String
 newNodeExt = "~"
+
+-- |Label protecting the contents of a node.
+labelOfNode :: (Label l) => Node -> IO l
+labelOfNode = labelOfLDir . lDirOfNode
 
 -- | Create new Node in the appropriate directory for a given label.
 -- The node gets created with an extra ~ appended.
@@ -193,7 +204,9 @@ makeRelativeTo dest src =
       doit (d1:ds) (s1:ss) | d1 == s1 = doit ds ss
       doit d s = joinPath (replicate (length s) "../" ++ d)
 
--- |Assign a 'Name' to a 'NewNode', turning it into a 'Node'.
+-- |Assign a 'Name' to a 'NewNode', turning it into a 'Node'.  Note
+-- that unlike the Unix file system, only a single link may be created
+-- to each node.
 linkNode                                   :: NewNode -> Name -> IO Node
 linkNode (NewNode (Node path)) (Name name) = do
   createSymbolicLink (path `makeRelativeTo` name) name
@@ -201,9 +214,41 @@ linkNode (NewNode (Node path)) (Name name) = do
   return $ Node path
 
 
+--
+-- Name functions
+--
+
 -- |The @Name@ type represents user-chosen (non-opaque) filenames of
 -- symbolic links, either @\"root\"@ or pathnames of the form
 -- @LabelHash\/OpaqueName\/filename@.  Intermediary components of the
 -- file name must not be symbolic links.
 newtype Name = Name FilePath
 
+-- |Name of root directory.
+rootDir :: Name
+rootDir = Name "root"
+
+-- |This function reads the contents of a symbolic link and returns
+-- the pathname of its destination, relative to the current working
+-- directory.  It elides ".." components at the begining of the
+-- symbolic link contents, so that if the link @foo\/bar -> ..\/baz@
+-- exists, @expandLink \"foo\/bar\"@ will return @\"foo\/baz\"@.
+--
+-- /Warning:/ This function assumes no itermediary components of the
+-- path to the symbolic link are also symbolic links.
+expandLink      :: FilePath -> IO FilePath
+expandLink path = do
+  suffix <- readSymbolicLink path `catchIO` return ""
+  return $ if (isAbsolute suffix)
+           then suffix
+           else domerge (takeDirectory path) suffix
+    where
+      domerge [] suffix = suffix
+      domerge path [] = path
+      domerge path ('.':'.':pathSeparator:suffix) =
+          domerge (takeDirectory path) suffix
+      domerge path suffix = path </> suffix
+
+-- |'Node' that a 'Name' is pointing to.
+nodeOfName          :: Name -> IO Node
+nodeOfName (Name n) = liftM Node $ expandLink n
