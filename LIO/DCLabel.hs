@@ -1,9 +1,26 @@
 {-# OPTIONS_GHC -XMultiParamTypeClasses #-}
 {-# OPTIONS_GHC -XDeriveDataTypeable #-}
 
---
--- Disjunction Category labels
---
+{- |
+
+This module implements Disjunction Category labels.
+
+A label consists of two sets of categories, an integrity set, and a
+secrecy set.  @l1 ``leq`` l2@ if and only if @l1@ contains all of the
+integrity categories in @l2@ and @l2@ contains all of the integrity
+categories in @l1@.
+
+The categories themselves are Sets of Principals, where a 'Principal'
+is just a 'String' whose meaning is up to the application.  Privileges
+('DCPrivs') are also Principals (actually sets of Principals, but you
+can only 'mintTCB' one Pinripal at a time).  Owning a Principal
+(having it in a 'DCPrivs' object) confers the right to remote /any/
+secrecy category containing that Principal, and add /any/ integrity
+category containing that Principal.  Hence the name
+/disjunction categories/:  The category {P1, P2} can be downgraded by
+/either/ Principal P1 or P2.
+
+-}
 
 module LIO.DCLabel (
                    -- * The base label type
@@ -95,6 +112,9 @@ newtype DCPrivs = DCPrivs (Set Principal) deriving (Eq, Read, Show)
 
 instance PrivTCB DCPrivs
 
+instance MintTCB DCPrivs Principal where
+    mintTCB p = DCPrivs $ Set.singleton p
+
 instance Monoid DCPrivs where
     mempty = DCPrivs Set.empty
     mappend (DCPrivs s1) (DCPrivs s2) = DCPrivs $ Set.union s1 s2
@@ -119,8 +139,12 @@ instance Priv DCLabel DCPrivs where
           ics = Set.filter (\c -> owns p c || Set.member c li) mi
           scs = ms `Set.union` Set.filter (not . (owns p)) ls
 
-type DC a = LIO DCLabel () a
+-- |The base type for LIO computations using these labels.
+type DC = LIO DCLabel ()
 
+-- |Runs a computation in the LIO Monad, returning both its result,
+-- and the label of the result.
+evalDC :: LIO DCLabel () a -> IO (a, DCLabel)
 evalDC m = evalTCB m ()
 
 {-

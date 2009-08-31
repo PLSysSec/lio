@@ -23,7 +23,7 @@ module LIO.TCB (
                -- Start TCB exports
                -- * Privileged operations
                , lrefTCB
-               , PrivTCB
+               , PrivTCB, MintTCB(..)
                , showTCB
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB, runTCB, evalTCB
@@ -112,6 +112,9 @@ instance Label l => MonadFix (Lref l) where
         where g ~(Lref _ a) = f a
 
 class PrivTCB t where
+class (PrivTCB t) => MintTCB t i where
+    -- |The function that mints new privileges.
+    mintTCB :: i -> t
 class (Label l, Monoid p, PrivTCB p) => Priv l p where
     -- |@leqp p l1 l2@ means that privileges @p@ are sufficient to
     -- downgrade data from @l1@ to @l2@.  Note that @'leq' l1 l2@
