@@ -26,6 +26,7 @@ $(PROGS): %: %.hs
 		mv -f $@.d~ $@.d;		\
 	fi
 
+.PHONY: doc
 doc: $(DOC)
 	rm -rf $@
 	mkdir -p $@/src
