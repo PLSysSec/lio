@@ -59,8 +59,15 @@ strictReadFile f = withFile f ReadMode readit
 catchIO     :: IO a -> IO a -> IO a
 catchIO a h = catch a ((const :: a -> IOException -> a) h)
 
-ignore :: IO () -> IO ()
-ignore m = catch m ((\e -> return ()) :: SomeException -> IO ())
+ignoreErr :: IO () -> IO ()
+ignoreErr m = catch m ((\e -> return ()) :: SomeException -> IO ())
+
+-- |Delete a name whether it's a file or directory, by trying both.
+-- This is slow, but only used for error conditions when performance
+-- shouldn't matter.
+clean :: FilePath -> IO ()
+clean path =
+    removeFile path `catchIO` (removeDirectory path `catchIO` return ())
 
 --
 -- Exceptions thrown by this module
@@ -135,7 +142,7 @@ getLDir l = try (labelOfLDir ldir) >>= handle
         makelabel $ tdir </> labelFile
         rename tdir dir
         return ldir
-      dumplabel = ignore $ makelabel $ dir </> (labelFile ++ ".correct")
+      dumplabel = ignoreErr $ makelabel $ dir </> (labelFile ++ ".correct")
 
 --
 -- Node functions
@@ -180,7 +187,7 @@ mkNode l f = do
     then return (a, NewNode $ Node p')
     else do
       hPutStrLn stderr $ "mkNode: file " ++ p' ++ " already exists." -- XXX
-      removeFile p `catchIO` (removeDirectory p `catchIO` return ())
+      clean p
       mkNode l f
 
 -- |Wrapper around mkNode to create a directory.
@@ -203,14 +210,14 @@ makeRelativeTo dest src =
     where
       doit [] []                      = "."
       doit (d1:ds) (s1:ss) | d1 == s1 = doit ds ss
-      doit d s = joinPath (replicate (length s) "../" ++ d)
+      doit d s = joinPath (replicate (length s) ('.':'.':pathSeparator:[]) ++ d)
 
 -- |Assign a 'Name' to a 'NewNode', turning it into a 'Node'.  Note
 -- that unlike the Unix file system, only a single link may be created
 -- to each node.
 linkNode                                   :: NewNode -> Name -> IO Node
 linkNode (NewNode (Node path)) (Name name) = do
-  createSymbolicLink (path `makeRelativeTo` name) name
+  createSymbolicLink (path `makeRelativeTo` name) name `onException` clean name
   rename (path ++ newNodeExt) path `onException` removeLink path
   return $ Node path
 
@@ -270,15 +277,27 @@ nodeOfName (Name n) = liftM Node $ expandLink n
 nodeEntry                  :: Node -> FilePath -> Name
 nodeEntry (Node node) name = Name (node </> name)
 
-lookupName                 :: (Priv l p) =>
-                              p
-                           -> Name
-                           -> FilePath
+mkRoot l = do
+  let (Name root) = rootDir
+  exists <- doesDirectoryExist root
+  when exists $ throwIO $ mkIOError alreadyExistsErrorType
+           "root directory already exists" Nothing (Just root)
+  new <- mkNodeDir l
+  linkNode new rootDir
+
+--
+-- LIO Monad functions
+--
+
+lookupName                 :: (Label l) =>
+                              (l -> LIO l s ()) -- ^Taintio or (ptaintio p)
+                           -> Name              -- ^Start point (e.g., rootDir)
+                           -> FilePath          -- ^Name to look up
                            -> LIO l s Name
-lookupName priv start path = 
+lookupName taint start path = 
     dolookup start (stripslash $ splitDirectories path)
     where
-      stripslash (('/':_):t) = t
+      stripslash ((pathSeparator:_):t) = t
       stripslash t = t
       dolookup name [] = return name
       dolookup name (".":rest) = dolookup name rest
@@ -287,13 +306,6 @@ lookupName priv start path =
       dolookup name (cn:rest) = do
         node <- ioTCB $ nodeOfName name
         label <- rtioTCB $ labelOfNode node
-        ptaintio priv label
+        taint label
         dolookup (nodeEntry node cn) rest
 
-mkRoot l = do
-  let (Name root) = rootDir
-  exists <- doesDirectoryExist root
-  when exists $ throwIO $ mkIOError alreadyExistsErrorType
-           "root directory already exists" Nothing (Just root)
-  new <- mkNodeDir l
-  linkNode new rootDir
