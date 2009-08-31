@@ -37,7 +37,6 @@ import System.Posix.Directory
 import System.Posix.Files (rename, getFileStatus
                           , createSymbolicLink, readSymbolicLink)
 import System.Posix.IO
-import System.Time (ClockTime(..), getClockTime)
 
 import Data.Digest.Pure.SHA
 import qualified System.IO.Cautious as CIO

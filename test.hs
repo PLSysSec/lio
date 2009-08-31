@@ -1,12 +1,12 @@
 
-module Main (module LIO.TCB, module LIO.IOTCB
+module Main (module LIO.TCB, module LIO.FS
             , module LIO.TmpFile, IOMode(..)
             , module Main
             , evalHS) where
 
 import LIO.TCB
 import LIO.HiStar
-import LIO.IOTCB
+import LIO.FS
 
 import LIO.TmpFile
 
@@ -25,6 +25,7 @@ four = lrefTCB vl 4
 
 privs = HSPrivs [us, vs]
 
+{-
 catche :: SomeException -> HS ()
 catche e = lputStrLn $ "catche --- " ++ show e
 
@@ -71,3 +72,6 @@ mft ~(a, b) = do
   return (a', a+1)
 
 main = evalHS $ lsinitTCB ul
+-}
+
+main = return ()
