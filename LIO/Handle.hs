@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -XMultiParamTypeClasses #-}
 {-# OPTIONS_GHC -XFlexibleInstances #-}
 {-# OPTIONS_GHC -XFlexibleContexts #-}
+{-# OPTIONS_GHC -XFunctionalDependencies #-}
 
 module LIO.Handle (DirectoryOps(..)
                   , HandleOps (..)
@@ -17,7 +18,7 @@ import qualified System.Directory as IO
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
 
-class DirectoryOps h m where
+class DirectoryOps h m | m -> h where
     getDirectoryContents :: FilePath -> m [FilePath]
     createDirectory      :: FilePath -> m ()
     openFile             :: FilePath -> IO.IOMode -> m h
@@ -52,14 +53,14 @@ instance (Label l, DirectoryOps (LHandle l h) (LIO l s), HandleOps h b IO)
     hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStrLn h s)
 
 instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
-        getDirectoryContents    = undefined
-        createDirectory path    = do
-          l <- labelOfio
-          mkDir NoPrivs l rootDir path
-        openFile path mode      = do
-          l <- labelOfio
-          mkLHandle NoPrivs l rootDir path mode
-        hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
+    getDirectoryContents    = undefined
+    createDirectory path    = do
+      l <- labelOfio
+      mkDir NoPrivs l rootDir path
+    openFile path mode      = do
+      l <- labelOfio
+      mkLHandle NoPrivs l rootDir path mode
+    hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
 
 
 hlabelOf                  :: (Label l) => LHandle l h -> l
@@ -88,7 +89,7 @@ mkLHandle                        :: (Priv l p) =>
                                  -> l -- ^Label if new file is created
                                  -> Name -- ^Starting point of pathname
                                  -> FilePath -- ^Path of file relative to prev
-                                 -> IOMode   -- ^Mode of handle
+                                 -> IO.IOMode -- ^Mode of handle
                                  -> LIO l s (LHandle l IO.Handle)
 mkLHandle priv l start path mode = do
   cleario l

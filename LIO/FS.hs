@@ -25,6 +25,8 @@ module LIO.FS ( -- * The opaque name object
                 Name -- Do not Export constructor!  Names are TRUSTED
               , rootDir, lookupName
               , IOMode
+              -- * Initializing the file system
+              , mkRoot
               -- * Internal data structures
               , Node
               -- * Helper functions in the IO Monad
@@ -46,6 +48,7 @@ import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Typeable
+import qualified GHC.IOBase
 import System.Directory
 import System.FilePath
 import System.IO
@@ -71,13 +74,11 @@ strictReadFile f = withFile f ReadMode readit
 catchIO     :: IO a -> IO a -> IO a
 catchIO a h = catch a ((const :: a -> IOException -> a) h)
 
-{-
 catchPred          :: Exception e => (e -> Bool) -> IO a -> IO a -> IO a
 catchPred pred a h = catchJust test a runh
     where
       test e = if pred e then Just () else Nothing
       runh () = h
--}
 
 tryPred        :: Exception e => (e -> Bool) -> IO a -> IO (Either e a)
 tryPred pred a = tryJust test a
@@ -115,7 +116,7 @@ labelFile = "LABEL"
 
 -- |Type containing the pathname of a @LabelHash@ directory (which
 -- must contain a file named 'labelFile').
-newtype LDir = LDir FilePath
+newtype LDir = LDir FilePath deriving (Show)
 
 -- |Hash a label down to the directory storing all 'Node's with that
 -- label.
@@ -181,14 +182,14 @@ getLDir l = try (labelOfLDir ldir) >>= handle
 -- @LabelHash\/OpaqueName@.  These names must always point to regular
 -- files or directories (not symbolic links).  There must always exist
 -- a file @LabalHash\/.label@ specifying the label of a @Node@.
-newtype Node = Node FilePath
+newtype Node = Node FilePath deriving (Show)
 
 -- |When a @Node@ is first created, it has a file name with a \'~\'
 -- character at the end.  This is so that in the case of a crash, a
 -- node that was not linked to can be easily recognized and deleted.
 -- The @NewNode@ type wrapper represents a node that is not yet linked
 -- to.
-newtype NewNode = NewNode Node
+newtype NewNode = NewNode Node deriving (Show)
 
 -- |String that gets appended to new file names.  After a crash these
 -- may need to be garbage collected.
@@ -246,8 +247,9 @@ makeRelativeTo dest src =
 -- to each node.
 linkNode                                      :: NewNode -> Name -> IO Node
 linkNode (NewNode (Node path)) (NameTCB name) = do
-  createSymbolicLink (path `makeRelativeTo` name) name `onException` clean name
-  rename (path ++ newNodeExt) path `onException` removeLink path
+  let tpath = path ++ newNodeExt
+  createSymbolicLink (path `makeRelativeTo` name) name `onException` clean tpath
+  rename tpath path `onException` removeFile name
   return $ Node path
 
 openNode                  :: Node -> IOMode -> IO Handle
@@ -261,7 +263,7 @@ openNode (Node file) mode = openFile file mode
 -- symbolic links, either @\"root\"@ or pathnames of the form
 -- @LabelHash\/OpaqueName\/filename@.  Intermediary components of the
 -- file name must not be symbolic links.
-newtype Name = NameTCB FilePath
+newtype Name = NameTCB FilePath deriving (Show)
 
 -- |Name of root directory.
 rootDir :: Name
@@ -295,7 +297,8 @@ unlinkNameReg = unlinkName removeFile
 -- path to the symbolic link are also symbolic links.
 expandLink      :: FilePath -> IO FilePath
 expandLink path = do
-  suffix <- readSymbolicLink path `catchIO` return ""
+  suffix <- catchPred (\e -> ioeGetErrorType e == GHC.IOBase.InvalidArgument)
+            (readSymbolicLink path) (return "")
   return $ if (isAbsolute suffix)
            then suffix
            else domerge (takeDirectory path) suffix
@@ -314,6 +317,7 @@ nodeOfName (NameTCB n) = liftM Node $ expandLink n
 nodeEntry                  :: Node -> FilePath -> Name
 nodeEntry (Node node) name = NameTCB (node </> name)
 
+mkRoot   :: (Label l) => l -> IO ()
 mkRoot l = do
   let (NameTCB root) = rootDir
   exists <- doesDirectoryExist root
@@ -321,6 +325,7 @@ mkRoot l = do
            "root directory already exists" Nothing (Just root)
   new <- mkNodeDir l
   linkNode new rootDir
+  return ()
 
 --
 -- LIO Monad function
@@ -345,7 +350,7 @@ lookupName                 :: (Priv l p) =>
 lookupName priv start path = 
     dolookup start (stripslash $ splitDirectories path)
     where
-      stripslash ((pathSeparator:_):t) = t
+      stripslash ((c:_):t) | c == pathSeparator = t
       stripslash t = t
       dolookup name [] = return name
       dolookup name (".":rest) = dolookup name rest
@@ -356,3 +361,4 @@ lookupName priv start path =
         label <- rtioTCB $ labelOfNode node -- Can fail if no such file
         ptaintio priv label
         dolookup (nodeEntry node cn) rest
+

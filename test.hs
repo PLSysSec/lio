@@ -3,11 +3,14 @@ module Main (-- module LIO.LIO
              module LIO.TCB
             , module LIO.DCLabel
             , module LIO.FS
+            , module LIO.Handle
             , module Main
             ) where
 
 import LIO.LIO
 import LIO.TCB
+import LIO.Handle
+import qualified LIO.Handle as LH
 import LIO.DCLabel
 import LIO.FS
 
@@ -27,5 +30,7 @@ d = DCLabel (Set.fromList [cat1, cat2]) (Set.fromList [cat1, cat2])
 rl :: String -> [(DCLabel, String)]
 rl = reads
 
+md :: FilePath -> IO ()
+md p = LH.createDirectory p
 
 main = return ()

@@ -108,7 +108,7 @@ instance Label DCLabel where
     glb (DCLabel i1 s1) (DCLabel i2 s2) =
                  DCLabel (Set.union i1 i2) (Set.intersection s1 s2)
 
-newtype DCPrivs = DCPrivs (Set Principal) deriving (Eq, Read, Show)
+newtype DCPrivs = DCPrivs (Set Principal) deriving (Eq, Show)
 
 instance PrivTCB DCPrivs
 
