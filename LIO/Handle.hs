@@ -53,7 +53,9 @@ instance (Label l, DirectoryOps (LHandle l h) (LIO l s), HandleOps h b IO)
     hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStrLn h s)
 
 instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
-    getDirectoryContents    = undefined
+    getDirectoryContents d  = do
+      node <- lookupNode NoPrivs rootDir d False
+      rtioTCB $ getDirectoryContentsNode node
     createDirectory path    = do
       l <- labelOfio
       mkDir NoPrivs l rootDir path

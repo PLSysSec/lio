@@ -19,7 +19,22 @@
     There is also a symbolic link @root@, pointing to the root
     directory.  For efficiency, @LabelHash@ actually consists of
     multiple directories.
- -}
+
+    There are two externally-visible abstractions. The first is
+    'Name', which referse to a file name in a user directory, of the
+    form:
+
+    > LabelHash/OpaqueName/UserName
+
+    The second is 'Node', which refers to one of the @OpaqueName@s
+    that 'Name's point to.  Currently, all functions in the 'LIO'
+    monad operate on 'Name's.  This is important because in order to
+    use a file, someone must have the right to know know that the file
+    exists, and this requires read permission on the file's 'Name'.
+    It would be insecure if untrusted code could execute openNode in
+    the LIO Monad.
+
+-}
 
 module LIO.FS ( -- * The opaque name object
                 Name -- Do not Export constructor!  Names are TRUSTED
@@ -32,7 +47,7 @@ module LIO.FS ( -- * The opaque name object
               -- * Helper functions in the IO Monad
               , labelOfName, labelOfNode, nodeOfName
               , mkNodeDir, mkNodeReg, linkNode
-              , openNode
+              , lookupNode, openNode, getDirectoryContentsNode
               -- * Misc. utility functions
               , tryPred
               ) where
@@ -256,6 +271,9 @@ linkNode (NewNode (Node path)) (NameTCB name) = do
 openNode                  :: Node -> IOMode -> IO Handle
 openNode (Node file) mode = openFile file mode
 
+getDirectoryContentsNode             :: Node -> IO [FilePath]
+getDirectoryContentsNode (Node file) = getDirectoryContents file
+
 --
 -- Name functions
 --
@@ -358,8 +376,20 @@ lookupName priv start path =
       dolookup _ ("..":_) = throwL $ mkIOError doesNotExistErrorType
                             "illegal filename" Nothing (Just ".." )
       dolookup name (cn:rest) = do
-        node <- ioTCB $ nodeOfName name -- Shouldn't fail
-        label <- rtioTCB $ labelOfNode node -- Can fail if no such file
+        node <- rtioTCB $ nodeOfName name -- Could fail if name deleted
+        label <- ioTCB $ labelOfNode node -- Shouldn't fail
         ptaintio priv label
         dolookup (nodeEntry node cn) rest
 
+lookupNode                       :: (Priv l p) =>
+                                    p    -- ^Privileges to limit tainting
+                                 -> Name -- ^Start point (e.g., rootDir)
+                                 -> FilePath -- ^Name to look up
+                                 -> Bool     -- ^True if you want to write it
+                                 -> LIO l s Node
+lookupNode priv start path write = do
+  name <- lookupName priv start path
+  node <- rtioTCB $ nodeOfName name
+  label <- ioTCB $ labelOfNode node
+  if write then pguardio priv label else ptaintio priv label
+  return node
