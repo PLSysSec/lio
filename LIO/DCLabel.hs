@@ -5,12 +5,16 @@
 -- Disjunction Category labels
 --
 
-module LIO.DCLabel ( module LIO.DCLabel
-                   , module LIO.Base
+module LIO.DCLabel (
+                   -- * The base label type
+                   Principal(..), DCat(..), DCLabel(..)
+                   -- * Privileges
+                   , DCPrivs
+                   -- * Useful aliases for LIO Monad
+                   , DC, evalDC
                    ) where
 
 import LIO.TCB
-import LIO.Base
 
 import Control.Applicative
 import Data.Monoid
@@ -115,6 +119,11 @@ instance Priv DCLabel DCPrivs where
           ics = Set.filter (\c -> owns p c || Set.member c li) mi
           scs = ms `Set.union` Set.filter (not . (owns p)) ls
 
+type DC a = LIO DCLabel () a
+
+evalDC m = evalTCB m ()
+
+{-
 --
 -- Testing crap
 --
@@ -129,3 +138,4 @@ d = DCLabel (Set.fromList [cat1, cat2]) (Set.fromList [cat1, cat2])
 
 rl :: String -> [(DCLabel, String)]
 rl = reads
+-}
