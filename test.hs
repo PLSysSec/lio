@@ -1,17 +1,15 @@
 
-module Main (module LIO.TCB
-            , module LIO.FS
-            , module LIO.TmpFile
+module Main (-- module LIO.LIO
+             module LIO.TCB
             , module LIO.DCLabel
-            , IOMode(..)
+            , module LIO.FS
             , module Main
             ) where
 
+import LIO.LIO
 import LIO.TCB
 import LIO.DCLabel
 import LIO.FS
-
-import LIO.TmpFile
 
 import Control.Exception
 import Data.Set (Set)

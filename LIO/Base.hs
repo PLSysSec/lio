@@ -8,33 +8,16 @@ module LIO.Base (
                 , taintio, guardio, cleario, untaintio
                 , lowerio, unlowerio
                 , openL, closeL, discardL
-                , throwL, catchL, catchLp
+                , throwL, catchL, catchLp, onExceptionL
                 , LabelFault(..)
-
-                , LIORef, newLIORef, labelOfLIORef
-                , readLIORef, writeLIORef, atomicModifyLIORef
                 ) where
 
 import LIO.TCB hiding ( 
                  lrefTCB
-               , PrivTCB
+               , PrivTCB, MintTCB(..)
                , showTCB
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB, runTCB, evalTCB
-               , ioTCB
+               , ioTCB, rtioTCB
                , rethrowTCB
                )
-
-import LIO.IOTCB
-import Control.Exception
-import Data.Typeable
-
---
--- Untrusted wrappers around TCB functions
---
-
-onExceptionL         :: (Label l, Typeable s) =>
-                        LIO l s a -> LIO l s b -> LIO l s a
-onExceptionL io what = io `catchL` \e -> do what
-                                            throwL (e :: SomeException)
-

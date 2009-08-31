@@ -18,7 +18,7 @@ module LIO.TCB (
                , lowerio, unlowerio
                , openL, closeL, discardL
                -- * Exceptions
-               , throwL, catchL, catchLp
+               , throwL, catchL, catchLp, onExceptionL
                , LabelFault(..)
                -- Start TCB exports
                -- * Privileged operations
@@ -387,3 +387,8 @@ catchL m c = mkLIO $ \s -> unLIO m s `catch` doit s
               case fromException se of
                 Just e' | l `leq` lioL s -> unLIO (c e') s
                 Nothing -> throw e
+
+onExceptionL         :: (Label l, Typeable s) =>
+                        LIO l s a -> LIO l s b -> LIO l s a
+onExceptionL io what = io `catchL` \e -> do what
+                                            throwL (e :: SomeException)
