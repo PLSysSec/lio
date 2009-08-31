@@ -3,6 +3,13 @@
 {-# OPTIONS_GHC -XFlexibleContexts #-}
 {-# OPTIONS_GHC -XFunctionalDependencies #-}
 
+-- |This module abstracts the basic 'FileHandle' methods provided by
+-- the system library, and provides an 'LHandle' (Labeled Handle) type
+-- that can be manipulated from within the 'LIO' Monad.  Two lower
+-- level functions, 'mkDir' and 'mkLHandle' may be useful for
+-- functions that wish to open file names that are not relative to
+-- 'rootDir'.  (There is no notion of changeable current working
+-- directory in the 'LIO' Monad.)
 module LIO.Handle (DirectoryOps(..)
                   , HandleOps (..)
                   , LHandle
@@ -24,17 +31,17 @@ class DirectoryOps h m | m -> h where
     openFile             :: FilePath -> IO.IOMode -> m h
     hClose               :: h -> m ()
 
+class HandleOps h b m where
+    hGet            :: h -> Int -> m b
+    hGetNonBlocking :: h -> Int -> m b
+    hPut            :: h -> b -> m ()
+    hPutStrLn       :: h -> b -> m ()
+
 instance DirectoryOps IO.Handle IO where
     getDirectoryContents = IO.getDirectoryContents
     createDirectory      = IO.createDirectory
     openFile             = IO.openBinaryFile
     hClose               = IO.hClose
-
-class (DirectoryOps h m) => HandleOps h b m where
-    hGet            :: h -> Int -> m b
-    hGetNonBlocking :: h -> Int -> m b
-    hPut            :: h -> b -> m ()
-    hPutStrLn       :: h -> b -> m ()
 
 instance HandleOps IO.Handle L.ByteString IO where
     hGet            = L.hGet
@@ -43,14 +50,6 @@ instance HandleOps IO.Handle L.ByteString IO where
     hPutStrLn h s   = L.hPut h $ L.append s $ L.singleton 0xa
 
 data LHandle l h = LHandleTCB l h
-
-instance (Label l, DirectoryOps (LHandle l h) (LIO l s), HandleOps h b IO)
-    => HandleOps (LHandle l h) b (LIO l s) where
-    hGet (LHandleTCB l h) n      = guardio l >> rtioTCB (hGet h n)
-    hGetNonBlocking (LHandleTCB l h) n =
-                                 guardio l >> rtioTCB (hGetNonBlocking h n)
-    hPut (LHandleTCB l h) s      = guardio l >> rtioTCB (hPut h s)
-    hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStrLn h s)
 
 instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
     getDirectoryContents d  = do
@@ -63,6 +62,14 @@ instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
       l <- labelOfio
       mkLHandle NoPrivs l rootDir path mode
     hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
+
+instance (Label l, HandleOps h b IO)
+    => HandleOps (LHandle l h) b (LIO l s) where
+    hGet (LHandleTCB l h) n      = guardio l >> rtioTCB (hGet h n)
+    hGetNonBlocking (LHandleTCB l h) n =
+                                 guardio l >> rtioTCB (hGetNonBlocking h n)
+    hPut (LHandleTCB l h) s      = guardio l >> rtioTCB (hPut h s)
+    hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStrLn h s)
 
 
 hlabelOf                  :: (Label l) => LHandle l h -> l
