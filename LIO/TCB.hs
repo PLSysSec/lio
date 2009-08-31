@@ -1,8 +1,8 @@
-{-# OPTIONS_GHC -XMultiParamTypeClasses #-}
-{-# OPTIONS_GHC -XGeneralizedNewtypeDeriving #-}
-{-# OPTIONS_GHC -XExistentialQuantification #-}
-{-# OPTIONS_GHC -XDeriveDataTypeable #-}
-{-# OPTIONS_GHC -XFlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 -- |This module implements the core (Trusted Computing Base) of the
 -- Labeled IO library.  Untrusted code must be prevented from

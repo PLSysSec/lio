@@ -1,4 +1,4 @@
-{-# OPTIONS_GHC -XDeriveDataTypeable #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 {- |This module manages a file store in which a label is associated
     with every file and directory.  The file store is grouped into

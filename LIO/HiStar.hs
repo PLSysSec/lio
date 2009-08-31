@@ -1,5 +1,5 @@
-{-# OPTIONS_GHC -XMultiParamTypeClasses #-}
-{-# OPTIONS_GHC -XDeriveDataTypeable #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module LIO.HiStar ( module LIO.HiStar
                   , module LIO.Base

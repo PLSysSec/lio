@@ -1,7 +1,7 @@
-{-# OPTIONS_GHC -XMultiParamTypeClasses #-}
-{-# OPTIONS_GHC -XFlexibleInstances #-}
-{-# OPTIONS_GHC -XFlexibleContexts #-}
-{-# OPTIONS_GHC -XFunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 -- |This module abstracts the basic 'FileHandle' methods provided by
 -- the system library, and provides an 'LHandle' (Labeled Handle) type
