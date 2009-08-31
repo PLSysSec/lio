@@ -29,9 +29,11 @@ class DirectoryOps h m | m -> h where
     getDirectoryContents :: FilePath -> m [FilePath]
     createDirectory      :: FilePath -> m ()
     openFile             :: FilePath -> IO.IOMode -> m h
+
+class CloseOp h m where
     hClose               :: h -> m ()
 
-class HandleOps h b m where
+class (CloseOp h m) => HandleOps h b m where
     hGet            :: h -> Int -> m b
     hGetNonBlocking :: h -> Int -> m b
     hPut            :: h -> b -> m ()
@@ -41,6 +43,8 @@ instance DirectoryOps IO.Handle IO where
     getDirectoryContents = IO.getDirectoryContents
     createDirectory      = IO.createDirectory
     openFile             = IO.openBinaryFile
+
+instance CloseOp IO.Handle IO where
     hClose               = IO.hClose
 
 instance HandleOps IO.Handle L.ByteString IO where
@@ -61,9 +65,11 @@ instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
     openFile path mode      = do
       l <- labelOfio
       mkLHandle NoPrivs l rootDir path mode
+
+instance (Label l) => CloseOp (LHandle l IO.Handle) (LIO l s) where
     hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
 
-instance (Label l, HandleOps h b IO)
+instance (Label l, CloseOp (LHandle l h) (LIO l s), HandleOps h b IO)
     => HandleOps (LHandle l h) b (LIO l s) where
     hGet (LHandleTCB l h) n      = guardio l >> rtioTCB (hGet h n)
     hGetNonBlocking (LHandleTCB l h) n =
