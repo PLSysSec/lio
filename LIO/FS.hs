@@ -75,6 +75,8 @@ instance Exception FSErr
 -- LDir functions
 --
 
+prefix = "ls"
+
 -- |File name in which labels are stored in 'LDir's.
 labelFile :: FilePath
 labelFile = "LABEL"
@@ -88,7 +90,8 @@ newtype LDir = LDir FilePath
 lDirOfLabel   :: (Label l) => l -> LDir
 lDirOfLabel l =
     case armor32 $ bytestringDigest $ sha224 $ LC.pack $ show l of
-      c1:c2:c3:rest -> LDir ((c1:[]) </> (c2:[]) </> (c3:[]) </> rest)
+      c1:c2:c3:rest -> LDir (prefix </> (c1:[]) </> (c2:[])
+                                        </> (c3:[]) </> rest)
 
 -- |'LDir' that contains a 'Node'
 lDirOfNode          :: Node -> LDir
@@ -143,8 +146,6 @@ getLDir l = try (labelOfLDir ldir) >>= handle
 -- files or directories (not symbolic links).  There must always exist
 -- a file @LabalHash\/.label@ specifying the label of a @Node@.
 newtype Node = Node FilePath
-
-prefix = "labeledStorage/"
 
 -- |When a @Node@ is first created, it has a file name with a \'~\'
 -- character at the end.  This is so that in the case of a crash, a
@@ -226,8 +227,20 @@ newtype Name = Name FilePath
 
 -- |Name of root directory.
 rootDir :: Name
-rootDir = Name "root"
+rootDir = Name $ prefix </> "root"
 
+unlinkName :: (FilePath -> IO ()) -> Name -> IO ()
+unlinkName f (Name name) = do
+  (Node node) <- nodeOfName (Name name)
+  f node
+  removeFile name
+
+-- |Remove a directory by name.
+unlinkNameDir = unlinkName removeDirectory
+
+-- |Remove a regular file by name.
+unlinkNameReg = unlinkName removeFile
+  
 -- |This function reads the contents of a symbolic link and returns
 -- the pathname of its destination, relative to the current working
 -- directory.  It elides ".." components at the begining of the
@@ -252,3 +265,35 @@ expandLink path = do
 -- |'Node' that a 'Name' is pointing to.
 nodeOfName          :: Name -> IO Node
 nodeOfName (Name n) = liftM Node $ expandLink n
+
+-- |Gives the 'Name' of a directory entry in a directory 'Node'.
+nodeEntry                  :: Node -> FilePath -> Name
+nodeEntry (Node node) name = Name (node </> name)
+
+lookupName                 :: (Priv l p) =>
+                              p
+                           -> Name
+                           -> FilePath
+                           -> LIO l s Name
+lookupName priv start path = 
+    dolookup start (stripslash $ splitDirectories path)
+    where
+      stripslash (('/':_):t) = t
+      stripslash t = t
+      dolookup name [] = return name
+      dolookup name (".":rest) = dolookup name rest
+      dolookup _ ("..":_) = throwL $ mkIOError doesNotExistErrorType
+                            "illegal filename" Nothing (Just ".." )
+      dolookup name (cn:rest) = do
+        node <- ioTCB $ nodeOfName name
+        label <- rtioTCB $ labelOfNode node
+        ptaintio priv label
+        dolookup (nodeEntry node cn) rest
+
+mkRoot l = do
+  let (Name root) = rootDir
+  exists <- doesDirectoryExist root
+  when exists $ throwIO $ mkIOError alreadyExistsErrorType
+           "root directory already exists" Nothing (Just root)
+  new <- mkNodeDir l
+  linkNode new rootDir
