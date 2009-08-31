@@ -39,7 +39,7 @@ import System.FilePath
 import System.IO
 import System.IO.Error hiding (catch, try)
 import System.FilePath
-import System.Posix.Directory
+import System.Posix.Directory hiding (removeDirectory)
 import System.Posix.Files
 import System.Posix.IO
 
@@ -58,6 +58,9 @@ strictReadFile f = withFile f ReadMode readit
 
 catchIO     :: IO a -> IO a -> IO a
 catchIO a h = catch a ((const :: a -> IOException -> a) h)
+
+ignore :: IO () -> IO ()
+ignore m = catch m ((\e -> return ()) :: SomeException -> IO ())
 
 --
 -- Exceptions thrown by this module
@@ -121,13 +124,16 @@ getLDir l = try (labelOfLDir ldir) >>= handle
             _                                -> dumplabel >> throwIO e
       makelabel path = CIO.writeFile path $ shows l "\n"
       makedir = do
-        let tdir = dir ++ "~"
+        let tdir = dir ++ newNodeExt
         createDirectoryIfMissing True tdir
         makelabel $ tdir </> labelFile
         rename tdir dir
         return ldir
       dumplabel = ignore $ makelabel $ dir </> (labelFile ++ ".correct")
-      ignore m = catch m ((\e -> return ()) :: SomeException -> IO ())
+
+--
+-- Node functions
+--
 
 -- |The @Node@ type represents filenames of the form
 -- @LabelHash\/OpaqueName@.  These names must always point to regular
@@ -135,8 +141,69 @@ getLDir l = try (labelOfLDir ldir) >>= handle
 -- a file @LabalHash\/.label@ specifying the label of a @Node@.
 newtype Node = Node FilePath
 
+-- |When a @Node@ is first created, it has a file name with a \'~\'
+-- character at the end.  This is so that in the case of a crash, a
+-- node that was not linked to can be easily recognized and deleted.
+-- The @NewNode@ type wrapper represents a node that is not yet linked
+-- to.
+newtype NewNode = NewNode Node
+
+newNodeExt :: String
+newNodeExt = "~"
+
+-- | Create new Node in the appropriate directory for a given label.
+-- The node gets created with an extra ~ appended.
+mkNode     :: (Label l) => l
+           -- ^Label for the new node
+           -> (FilePath -> String -> IO (a, FilePath))
+           -- ^Either 'mkTmpDir' or 'mkTmpFile' with curried 'IOMode'
+           -> IO (a, NewNode)
+           -- ^Returns file handle or () and destination path
+mkNode l f = do
+  (LDir d) <- getLDir l
+  (a, p) <- f d newNodeExt
+  let p' = init p
+  exists <- catchIO (getFileStatus p' >> return True) (return False)
+  if not exists
+    then return (a, NewNode $ Node p')
+    else do
+      hPutStrLn stderr $ "mkNode: file " ++ p' ++ " already exists." -- XXX
+      removeFile p `catchIO` (removeDirectory p `catchIO` return ())
+      mkNode l f
+
+-- |Wrapper around mkNode to create a directory.
+mkNodeDir   :: (Label l) => l -> IO NewNode
+mkNodeDir l = liftM snd (mkNode l mkTmpDir)
+
+-- |Wrapper around mkNode to create a regular file.
+mkNodeReg     :: (Label l) => l -> IOMode -> IO (Handle, NewNode)
+mkNodeReg l m = mkNode l (mkTmpFile m)
+
+-- | Used when creating a symbolic link named @src@ that points to
+-- @dst@.  If both @src@ and @dst@ are relative to the current working
+-- directory and in subdirectories, then the contents of the symbolic
+-- link cannot just be @dst@, instead it is @makeRelativeTo dst src@.
+makeRelativeTo          :: FilePath -- ^Destination of symbolic link
+                        -> FilePath -- ^Name of symbolic link
+                        -> FilePath -- ^Returns contents to put in symbolic link
+makeRelativeTo dest src =
+    doit (splitDirectories dest) (init $ splitDirectories src)
+    where
+      doit [] []                      = "."
+      doit (d1:ds) (s1:ss) | d1 == s1 = doit ds ss
+      doit d s = joinPath (replicate (length s) "../" ++ d)
+
+-- |Assign a 'Name' to a 'NewNode', turning it into a 'Node'.
+linkNode                                   :: NewNode -> Name -> IO Node
+linkNode (NewNode (Node path)) (Name name) = do
+  createSymbolicLink (path `makeRelativeTo` name) name
+  rename (path ++ newNodeExt) path `onException` removeLink path
+  return $ Node path
+
+
 -- |The @Name@ type represents user-chosen (non-opaque) filenames of
 -- symbolic links, either @\"root\"@ or pathnames of the form
 -- @LabelHash\/OpaqueName\/filename@.  Intermediary components of the
 -- file name must not be symbolic links.
 newtype Name = Name FilePath
+
