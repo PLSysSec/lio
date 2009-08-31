@@ -21,7 +21,8 @@
     multiple directories.
  -}
 
-module LIO.FS where
+module LIO.FS (module LIO.FS
+              , IOMode) where
 
 import LIO.Armor
 import LIO.TCB
@@ -58,6 +59,17 @@ strictReadFile f = withFile f ReadMode readit
 
 catchIO     :: IO a -> IO a -> IO a
 catchIO a h = catch a ((const :: a -> IOException -> a) h)
+
+catchPred          :: Exception e => (e -> Bool) -> IO a -> IO a -> IO a
+catchPred pred a h = catchJust test a runh
+    where
+      test e = if pred e then Just () else Nothing
+      runh () = h
+
+tryPred        :: Exception e => (e -> Bool) -> IO a -> IO (Either e a)
+tryPred pred a = tryJust test a
+    where
+      test e = if pred e then Just e else Nothing
 
 ignoreErr :: IO () -> IO ()
 ignoreErr m = catch m ((\e -> return ()) :: SomeException -> IO ())
@@ -199,8 +211,8 @@ mkNodeDir   :: (Label l) => l -> IO NewNode
 mkNodeDir l = liftM snd (mkNode l mkTmpDir)
 
 -- |Wrapper around mkNode to create a regular file.
-mkNodeReg     :: (Label l) => l -> IOMode -> IO (Handle, NewNode)
-mkNodeReg l m = mkNode l (mkTmpFile m)
+mkNodeReg     :: (Label l) => IOMode -> l -> IO (Handle, NewNode)
+mkNodeReg m l = mkNode l (mkTmpFile m)
 
 -- | Used when creating a symbolic link named @src@ that points to
 -- @dst@.  If both @src@ and @dst@ are relative to the current working
@@ -326,7 +338,7 @@ lookupName priv start path =
 
 mkDir                   :: (Priv l p) =>
                            p        -- ^Privileges
-                        -> l        -- ^Label for the new file
+                        -> l        -- ^Label for the new directory
                         -> Name     -- ^Start point
                         -> FilePath -- ^Name to create
                         -> LIO l s () 
@@ -340,4 +352,31 @@ mkDir priv l start path = do
   rtioTCB $ linkNode new name
   return ()
 
--- mkHandle :: (Priv l p) => p -> l -> Name -> FilePath -> IOMode
+-- Note the slightly weird property that if this symbol is exposed,
+-- untrusted code can generate lots of handles that it can't close
+-- (since hClose is in the IO Monad).  That suggests these functions
+-- should be in "LIO.Handle".
+mkHandle                        :: (Priv l p) =>
+                                   p
+                                -> l
+                                -> Name
+                                -> FilePath
+                                -> IOMode
+                                -> LIO l s Handle
+mkHandle priv l start path mode = do
+  cleario l
+  name <- lookupName priv start path
+  dirlabel <- ioTCB $ labelOfName name
+  ptaintio priv dirlabel
+  mnode <- ioTCB $ tryPred isDoesNotExistError (nodeOfName name)
+  case (mnode, mode) of
+    (Right (Node node), _) -> rtioTCB $ openFile node mode
+    (Left e, ReadMode) -> throwL e
+    _ -> do guardio dirlabel
+            (h, new) <- rtioTCB $ mkNodeReg mode l
+            mn <- rtioTCB $ tryPred isAlreadyExistsError
+                  (linkNode new name `onException` hClose h)
+            case mn of
+              Right _ -> return h
+              Left _  -> mkHandle priv l name "" mode
+                        
