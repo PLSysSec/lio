@@ -1,5 +1,5 @@
 -- |This module implements labeled IORefs.  The interface is analogous
--- to 'Data.IORef', but the operations take place in the LIO monad.
+-- to "Data.IORef", but the operations take place in the LIO monad.
 -- Moreover, reading the LIORef calls taintio, while writing it calls
 -- guardio.
 module LIO.LIORef (LIORef

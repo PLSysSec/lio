@@ -2,12 +2,13 @@
 {-# OPTIONS_GHC -XGeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -XExistentialQuantification #-}
 {-# OPTIONS_GHC -XDeriveDataTypeable #-}
+{-# OPTIONS_GHC -XFlexibleInstances #-}
 
 
 module LIO.TCB ( 
                 -- * Basic label functions
                  POrdering(..), POrd(..), o2po, Label(..)
-               , Lref, Priv(..)
+               , Lref, Priv(..), NoPrivs(..)
                , labelOf, taint, untaint, unlref
                -- * Labeled IO Monad (LIO)
                , LIO
@@ -136,6 +137,15 @@ class (Label l, Monoid p, PrivTCB p) => Priv l p where
     -- can use the privileges in @p@ to lower your label to @lostar p
     -- l2 l1@.
     lostar :: p -> l -> l -> l
+
+data NoPrivs = NoPrivs
+instance PrivTCB NoPrivs
+instance Monoid NoPrivs where
+    mempty      = NoPrivs
+    mappend _ _ = NoPrivs
+instance (Label l) => Priv l NoPrivs where
+    leqp _ a b     = leq a b
+    lostar _ l min = lub l min
 
 lrefTCB     :: Label l => l -> a -> Lref l a
 lrefTCB l a = Lref l a
@@ -392,3 +402,4 @@ onExceptionL         :: (Label l, Typeable s) =>
                         LIO l s a -> LIO l s b -> LIO l s a
 onExceptionL io what = io `catchL` \e -> do what
                                             throwL (e :: SomeException)
+

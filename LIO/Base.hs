@@ -1,6 +1,6 @@
 module LIO.Base (
                   POrdering(..), POrd(..), o2po, Label(..)
-                , Lref, Priv(..)
+                , Lref, Priv(..), NoPrivs(..)
                 , labelOf, taint, untaint, unlref
                 , LIO
                 , lref
