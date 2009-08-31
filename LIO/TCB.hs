@@ -5,14 +5,29 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 -- |This module implements the core (Trusted Computing Base) of the
--- Labeled IO library.  Untrusted code must be prevented from
--- importing this module.  The exported symbols ending \"...@TCB@\"
--- can be used to violate label protections even from within pure code
--- or the LIO Monad.  A safe subset of these symbols is exported by
--- the "LIO.Base" module, which is how untrusted code should access
--- the core label functionality.
+-- Labeled IO library for information flow control in Haskell.  It
+-- provides a data structure 'Lref' (labeled reference), which
+-- protects access to pure values.  Without the appropriate
+-- privileges, one cannot produce a pure value that depends on a
+-- secret 'Lref', or conversely produce a high-integrity 'Lref' based
+-- on pure data.
+--
+-- The module also provides a monad, 'LIO', to allow untrusted code to
+-- perform IO actions.  The idea is that untrusted code can provide a
+-- computation in the 'LIO' monad, and trusted code can then safely
+-- execute this code via 'evalLIO', though usually a wrapper function
+-- is employed depending on the type of labels used by an application.
+-- For example, with "LIO.DCLabels", you would use 'evalDC' to execute
+-- an untrusted computation.
+--
+-- Untrusted code must be prevented from importing this module.  The
+-- exported symbols ending ...@TCB@ can be used to violate label
+-- protections even from within pure code or the LIO Monad.  A safe
+-- subset of these symbols is exported by the "LIO.Base" module, which
+-- is how untrusted code should access the core label functionality.
 module LIO.TCB ( 
                 -- * Basic label functions
+                -- $labels
                  POrdering(..), POrd(..), o2po, Label(..)
                , Lref, Priv(..), NoPrivs(..)
                , labelOf, taint, untaint, unlref
@@ -27,13 +42,14 @@ module LIO.TCB (
                -- * Exceptions
                , throwL, catchL, catchLp, onExceptionL
                , LabelFault(..)
+               , evalLIO
                -- Start TCB exports
                -- * Privileged operations
                , lrefTCB
                , PrivTCB, MintTCB(..)
                , showTCB
                , unlrefTCB, untaintioTCB, unlowerioTCB
-               , getTCB, putTCB, runTCB, evalTCB
+               , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB
                -- End TCB exports
@@ -46,6 +62,13 @@ import Data.Monoid
 import Data.Typeable
 
 {- Things to worry about:
+
+   - Because code can look at an Lref, it is possible to leak data in
+     Lclose.  For example, look at a secret bit, and if it is 1, then
+     taint yourself in a whole bunch more categories.
+
+   - Similar to above, but even without Lclose, just taint yourself
+     within the Lref.
 
    - unsafe... functions must be blocked
 
@@ -63,7 +86,31 @@ import Data.Typeable
 -- We need a partial order and a Label
 --
 
-data POrdering = PEQ | PLT | PGT | PNE deriving (Eq, Ord, Show)
+{- $labels
+
+Labels are a way of describing who can observe and modify data.  There
+is a partial order, generally pronounced \"can flow to\" on labels.
+The idea is that an object labeled L1 should affect one labeled L2
+only if L1 /can flow to/ L2.  This can flow to relation is expressed
+by the `leq` function (i.e., less then or equal to).  Note that higher
+labels are not more-or-less privileged.  As a general rule of thumb,
+the higher your label, the more things you can read, while the lower
+the label, the more things you can write.
+
+Privilege comes from a separate class, called 'Priv', representing the
+ability to bypass the protection of certain labeles.  Given
+privileges, one might be able to copy data from an object labeled L1
+to one labeled L2, but which specific pairs depends on the specific
+privileges.
+
+-}
+
+data POrdering = PEQ            -- ^Equal
+               | PLT            -- ^Less than
+               | PGT            -- ^Greater than
+               | PNE
+                 -- ^Incomparable (neither less than nor greater than)
+                 deriving (Eq, Ord, Show)
 
 instance Monoid POrdering where
     mempty          = PEQ
@@ -89,11 +136,13 @@ o2po EQ = PEQ; o2po LT = PLT; o2po GT = PGT
 -- instance (Ord a) => POrd a where pcompare = o2po . compare
 
 class (POrd a, Show a, Read a, Typeable a) => Label a where
-    lpure :: a                  -- label for pure values
-    lsys :: a                   -- label for unlabeled system files
-    lsys = lpure
-    lclear :: a                 -- default clearance
+    -- | label for pure values
+    lpure :: a
+    -- | default /clearance/ (highest value one can raise one's label to)
+    lclear :: a
+    -- | least upper bound (join) of two labels
     lub :: a -> a -> a
+    -- | greatest lower bound (meet) of two labels
     glb :: a -> a -> a
 
 
@@ -118,6 +167,12 @@ instance Label l => MonadFix (Lref l) where
     mfix f = fix g
         where g ~(Lref _ a) = f a
 
+-- |PrivTCB is a method-less class whose only purpose is to be
+-- unavailable to unprivileged code.  Since (PrivTCB t) => is in the
+-- context of class 'Priv', this ensures that, since unprivileged code
+-- cannot create new instances of the PrivTCB class, it won't be able
+-- to create new instances of the 'Priv' class either, even though the
+-- symbol 'Priv' is exported by "LIO.Base".
 class PrivTCB t where
 class (PrivTCB t) => MintTCB t i where
     -- |The function that mints new privileges.
@@ -144,6 +199,8 @@ class (Label l, Monoid p, PrivTCB p) => Priv l p where
     -- l2 l1@.
     lostar :: p -> l -> l -> l
 
+-- |A generic 'Priv' instance that works for all 'Label's and confers
+-- no downgrading privileges.
 data NoPrivs = NoPrivs
 instance PrivTCB NoPrivs
 instance Monoid NoPrivs where
@@ -215,7 +272,7 @@ taintio l' = do s <- get
                   else throwL LerrClearance
 
 -- |Like 'taintio', but use privileges to reduce the amount of taint
--- |required.
+-- required.
 ptaintio      :: (Priv l p) =>
                  p              -- ^Privileges to invoke
               -> l              -- ^Label to taint to if no privileges
@@ -244,7 +301,9 @@ pguardio p l = do l' <- labelOfio
                     else throwL LerrHigh
 
 -- |Ensures the label argument is between the current IO label and
--- current IO clearance.
+-- current IO clearance.  Use this function in code that allocates
+-- objects--you shouldn't be able to create an object labeled @l@
+-- unless @cleario l@ does not throw an exception.
 cleario :: (Label l) => l -> LIO l s ()
 cleario newl = do c <- clearOfio
                   l <- labelOfio
@@ -264,12 +323,16 @@ untaintioTCB l = do s <- get
                       then put s { lioL = l }
                       else throwL LerrClearance
 
+-- |Reduce the current clearance.  One cannot raise the current label
+-- or create object with labels higher than the current clearance.
 lowerio   :: (Label l) => l -> LIO l s ()
 lowerio l = get >>= doit
     where doit s | not $ l `leq` lioC s = throwL LerrClearance
                  | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = put s { lioC = l }
 
+-- |Raise the current clearance (undoing the effects of 'lowerio').
+-- This requires privileges.
 unlowerio   :: (Priv l p) => p -> l -> LIO l s ()
 unlowerio p l = get >>= doit
     where doit s | not $ leqp p l $ lioC s = throwL LerrPriv
@@ -281,6 +344,17 @@ unlowerioTCB l = get >>= doit
     where doit s | not $ lioL s `leq` l = throwL LerrInval
                  | otherwise            = put s { lioC = l }
 
+-- |Within the 'LIO' monad, this function takes an 'Lref' and returns
+-- the value.  Thus, in the 'LIO' monad one can say:
+--
+-- > x <- openL (xref :: Lref SomeLabelType Int)
+--
+-- And now it is possible to use the value of @x@, which is the pure
+-- value of what was stored in @xref@.  Of course, @openL@ also raises
+-- the current label.  If raising the label would exceed the current
+-- clearance, then the value of @x@ is undefined, which means the
+-- value of any computation that actually uses @x@ will also be
+-- undefined.
 openL             :: (Label l) => Lref l a -> LIO l s a
 openL (Lref la a) = do
   s <- get
@@ -291,6 +365,12 @@ openL (Lref la a) = do
         return undefined
 
 -- Might have lowered clearance inside closeL, so just preserve it
+-- |@closeL@ is the dual of @openL@.  It allows one to invoke
+-- computations that would raise the current label, but without
+-- actually raising the label.  Instead, the result of the computation
+-- is packaged into an 'Lref'.  Thus, to get at the result of the
+-- computation one will have to call 'openL' and raise the label, but
+-- this can be postponed, or done inside some other call to 'closeL'.
 closeL   :: (Label l) => LIO l s a -> LIO l s (Lref l a)
 closeL m = do
   LIOstate { lioL = l, lioC = c } <- get
@@ -299,6 +379,9 @@ closeL m = do
   put s { lioL = l, lioC = c }
   return $ Lref (lioL s) a
 
+-- |Executes a computation that would raise the current label, but
+-- discards the result so as to keep the label the same.
+discardL   :: (Label l) => LIO l s a -> LIO l s ()
 discardL m = closeL m >> return ()
   
 
@@ -323,12 +406,14 @@ runLIO     :: (Label l) => LIO l s a -> LIOstate l s
            -> IO (a, LIOstate l s)
 runLIO m s = unLIO m s `catch` unlabelException
 
-runTCB     :: (Label l) => LIO l s a -> s -> IO (a, s)
-runTCB m s = do (a, ls) <- runLIO m (newstate s)
+{-
+runLIO     :: (Label l) => LIO l s a -> s -> IO (a, s)
+runLIO m s = do (a, ls) <- runLIO m (newstate s)
                 return (a, labelState ls)
+-}
 
-evalTCB     :: (Label l) => LIO l s a -> s -> IO (a, l)
-evalTCB m s = do (a, ls) <- runLIO m (newstate s)
+evalLIO     :: (Label l) => LIO l s a -> s -> IO (a, l)
+evalLIO m s = do (a, ls) <- runLIO m (newstate s)
                  return (a, lioL ls)
 
 ioTCB :: (Label l) => IO a -> LIO l s a
@@ -377,10 +462,20 @@ unlabelException (LabeledExceptionTCB l (SomeException e)) =
     putStrLn ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") >> -- XXX
     throw e
 
+-- |It is not possible to catch pure exceptions from within the 'LIO'
+-- monad, but @throwL@ wraps up an exception with the current label,
+-- so that it can be caught with 'catchL'.
 throwL   :: (Exception e, Label l) => e -> LIO l s a
 throwL e = mkLIO $ \s -> throwIO $
            LabeledExceptionTCB (lioL s) (toException e)
 
+-- |Privileged code that does IO operations may cause exceptions that
+-- should be caught by untrusted code in the 'LIO' monad.  Such
+-- operations should be wrapped by @rethrowTCB@ (or 'rtioTCB', which
+-- uses @rethrowTCB@) to ensure the exception is labeled.  Note that
+-- it is very important that the computation executed inside
+-- @rethrowTCB@ not in any way change the label, as otherwise
+-- @rethrowTCB@ would put the wrong label on the exception.
 rethrowTCB   :: (Label l) => LIO l s a -> LIO l s a
 rethrowTCB m = do
   l <- labelOfio
@@ -389,14 +484,27 @@ rethrowTCB m = do
         labelit     :: Label l => l -> SomeException -> LabeledExceptionTCB l
         labelit l e = LabeledExceptionTCB l e
 
+-- | Catches an exception, so long as the label at the point where the
+-- exception was thrown can flow to the label at which catchLp is
+-- invoked, modulo the privileges specified.  Note that the handler
+-- receives an an extra first argument (before the exception), which
+-- is the label when the exception was thrown.
 catchLp       :: (Label l, Exception e, Priv l p) =>
-                 LIO l s a -> p -> (l -> e -> LIO l s a) -> LIO l s a
+                 LIO l s a      -- ^ Computation to run
+              -> p   -- ^ Privileges with which to downgrade exception
+              -> (l -> e -> LIO l s a) -- ^ Exception handler
+              -> LIO l s a             -- ^ Result of computation or handler
 catchLp m p c = mkLIO $ \s -> unLIO m s `catch` doit s
     where doit s e@(LabeledExceptionTCB l se) =
               case fromException se of
                 Just e' | leqp p l $ lioL s -> unLIO (c l e') s
                 Nothing -> throw e
 
+-- | Basic function for catching labeled exceptions.  (The fact that
+-- they are labeled is hidden from the handler.)
+--
+-- > catchL m c = catchLp m NoPrivs (\_ -> c)
+--
 catchL     :: (Label l, Exception e) =>
               LIO l s a -> (e -> LIO l s a) -> LIO l s a
 catchL m c = mkLIO $ \s -> unLIO m s `catch` doit s
@@ -405,8 +513,15 @@ catchL m c = mkLIO $ \s -> unLIO m s `catch` doit s
                 Just e' | l `leq` lioL s -> unLIO (c e') s
                 Nothing -> throw e
 
+-- | Analogous to 'onException', but for the 'LIO' monad.  Note,
+-- however, that the handler will not run if the label is raised.
 onExceptionL         :: (Label l, Typeable s) =>
                         LIO l s a -> LIO l s b -> LIO l s a
 onExceptionL io what = io `catchL` \e -> do what
                                             throwL (e :: SomeException)
+
+onExceptionLp         :: (Priv l p, Typeable s) =>
+                         LIO l s a -> p -> LIO l s b -> LIO l s a
+onExceptionLp io p what = catchLp io p
+                          (\l e -> what >> throwL (e :: SomeException))
 

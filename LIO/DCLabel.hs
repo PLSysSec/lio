@@ -145,7 +145,7 @@ type DC = LIO DCLabel ()
 -- |Runs a computation in the LIO Monad, returning both its result,
 -- and the label of the result.
 evalDC :: LIO DCLabel () a -> IO (a, DCLabel)
-evalDC m = evalTCB m ()
+evalDC m = evalLIO m ()
 
 {-
 --

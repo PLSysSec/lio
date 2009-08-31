@@ -146,5 +146,6 @@ newHS = do
   return HSState { nextCat = ref }
 
 evalHS   :: HS t -> IO (t, HSLabel)
-evalHS m = newHS >>= evalTCB m
+evalHS m = newHS >>= evalLIO m
+
 
