@@ -21,8 +21,19 @@
     multiple directories.
  -}
 
-module LIO.FS (module LIO.FS
-              , IOMode) where
+module LIO.FS ( -- * The opaque name object
+                Name -- Do not Export constructor!  Names are TRUSTED
+              , rootDir, lookupName
+              , IOMode
+              -- * Internal data structures
+              , Node
+              -- * Helper functions in the IO Monad
+              , labelOfName, labelOfNode, nodeOfName
+              , mkNodeDir, mkNodeReg, linkNode
+              , openNode
+              -- * Misc. utility functions
+              , tryPred
+              ) where
 
 import LIO.Armor
 import LIO.TCB
@@ -60,11 +71,13 @@ strictReadFile f = withFile f ReadMode readit
 catchIO     :: IO a -> IO a -> IO a
 catchIO a h = catch a ((const :: a -> IOException -> a) h)
 
+{-
 catchPred          :: Exception e => (e -> Bool) -> IO a -> IO a -> IO a
 catchPred pred a h = catchJust test a runh
     where
       test e = if pred e then Just () else Nothing
       runh () = h
+-}
 
 tryPred        :: Exception e => (e -> Bool) -> IO a -> IO (Either e a)
 tryPred pred a = tryJust test a
@@ -237,6 +250,8 @@ linkNode (NewNode (Node path)) (NameTCB name) = do
   rename (path ++ newNodeExt) path `onException` removeLink path
   return $ Node path
 
+openNode                  :: Node -> IOMode -> IO Handle
+openNode (Node file) mode = openFile file mode
 
 --
 -- Name functions
@@ -308,7 +323,7 @@ mkRoot l = do
   linkNode new rootDir
 
 --
--- LIO Monad functions
+-- LIO Monad function
 --
 
 -- |Looks up a FilePath, turning it into a 'Name', and raising to
@@ -316,6 +331,12 @@ mkRoot l = do
 -- only looks up a 'Name'; it does not ensure the 'Name' actually
 -- exists.  The intent is that you call lookupName before creating or
 -- opening files.
+--
+-- Note that this function will touch bad parts of the file system if
+-- it is supplied with a malicous 'Name'.  Thus, it is important to
+-- keep the constructur of 'Name' private, so that the only way for
+-- user code to generate names is to start with 'rootDir' and call
+-- @lookupName@.
 lookupName                 :: (Priv l p) =>
                               p    -- ^Privileges to limit tainting
                            -> Name -- ^Start point (e.g., rootDir)
@@ -335,48 +356,3 @@ lookupName priv start path =
         label <- rtioTCB $ labelOfNode node -- Can fail if no such file
         ptaintio priv label
         dolookup (nodeEntry node cn) rest
-
-mkDir                   :: (Priv l p) =>
-                           p        -- ^Privileges
-                        -> l        -- ^Label for the new directory
-                        -> Name     -- ^Start point
-                        -> FilePath -- ^Name to create
-                        -> LIO l s () 
-mkDir priv l start path = do
-  -- No privs when checking clearance, as we assume it was lowered for a reason
-  cleario l                     
-  name <- lookupName priv start path
-  dirlabel <- ioTCB $ labelOfName name
-  pguardio priv dirlabel
-  new <- ioTCB $ mkNodeDir l
-  rtioTCB $ linkNode new name
-  return ()
-
--- Note the slightly weird property that if this symbol is exposed,
--- untrusted code can generate lots of handles that it can't close
--- (since hClose is in the IO Monad).  That suggests these functions
--- should be in "LIO.Handle".
-mkHandle                        :: (Priv l p) =>
-                                   p
-                                -> l
-                                -> Name
-                                -> FilePath
-                                -> IOMode
-                                -> LIO l s Handle
-mkHandle priv l start path mode = do
-  cleario l
-  name <- lookupName priv start path
-  dirlabel <- ioTCB $ labelOfName name
-  ptaintio priv dirlabel
-  mnode <- ioTCB $ tryPred isDoesNotExistError (nodeOfName name)
-  case (mnode, mode) of
-    (Right (Node node), _) -> rtioTCB $ openFile node mode
-    (Left e, ReadMode) -> throwL e
-    _ -> do guardio dirlabel
-            (h, new) <- rtioTCB $ mkNodeReg mode l
-            mn <- rtioTCB $ tryPred isAlreadyExistsError
-                  (linkNode new name `onException` hClose h)
-            case mn of
-              Right _ -> return h
-              Left _  -> mkHandle priv l name "" mode
-                        

@@ -243,13 +243,14 @@ pguardio p l = do l' <- labelOfio
                     then ptaintio p l
                     else throwL LerrHigh
 
--- |Ensures the clearance is at least a certain level, or throw
--- 'LerrClearance'.
+-- |Ensures the label argument is between the current IO label and
+-- current IO clearance.
 cleario :: (Label l) => l -> LIO l s ()
-cleario min = do c <- clearOfio
-                 if min `leq` c
-                   then return ()
-                   else throwL LerrClearance
+cleario newl = do c <- clearOfio
+                  unless (leq newl c) $ throwL LerrClearance
+                  l <- labelOfio
+                  unless (leq l newl) $ throwL LerrLow
+                  return ()
 
 untaintio     :: (Priv l p) => p -> l -> LIO l s ()
 untaintio p l = do s <- get
