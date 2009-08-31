@@ -165,6 +165,7 @@ getLDir l = try (labelOfLDir ldir) >>= handle
           case fromException e of
             Just e' | isDoesNotExistError e' -> makedir
             _                                -> dumplabel >> throwIO e
+      -- XXX - CIO.writeFile somehow ignores the umask
       makelabel path = CIO.writeFile path $ shows l "\n"
       makedir = do
         let tdir = dir ++ newNodeExt

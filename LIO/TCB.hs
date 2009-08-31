@@ -247,8 +247,8 @@ pguardio p l = do l' <- labelOfio
 -- current IO clearance.
 cleario :: (Label l) => l -> LIO l s ()
 cleario newl = do c <- clearOfio
-                  unless (leq newl c) $ throwL LerrClearance
                   l <- labelOfio
+                  unless (leq newl c) $ throwL LerrClearance
                   unless (leq l newl) $ throwL LerrLow
                   return ()
 

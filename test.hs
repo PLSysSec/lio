@@ -26,11 +26,11 @@ cat2 = DCat (Set.fromList [Principal "my@example.com"
 
 e = DCLabel (Set.singleton cat1) (Set.fromList [cat1, cat2])
 d = DCLabel (Set.fromList [cat1, cat2]) (Set.fromList [cat1, cat2])
+h = DCLabel (Set.empty) (Set.fromList [cat1, cat2])
 
 rl :: String -> [(DCLabel, String)]
 rl = reads
 
-md :: FilePath -> IO ()
-md p = LH.createDirectory p
+md = evalDC $ mkDir NoPrivs h rootDir "high"
 
 main = return ()
