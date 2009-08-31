@@ -4,7 +4,13 @@
 {-# OPTIONS_GHC -XDeriveDataTypeable #-}
 {-# OPTIONS_GHC -XFlexibleInstances #-}
 
-
+-- |This module implements the core (Trusted Computing Base) of the
+-- Labeled IO library.  Untrusted code must be prevented from
+-- importing this module.  The exported symbols ending \"...@TCB@\"
+-- can be used to violate label protections even from within pure code
+-- or the LIO Monad.  A safe subset of these symbols is exported by
+-- the "LIO.Base" module, which is how untrusted code should access
+-- the core label functionality.
 module LIO.TCB ( 
                 -- * Basic label functions
                  POrdering(..), POrd(..), o2po, Label(..)

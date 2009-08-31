@@ -324,21 +324,20 @@ lookupName priv start path =
         ptaintio priv label
         dolookup (nodeEntry node cn) rest
 
--- |This function should NOT be exported from the module.
-mkNameTCB                         :: (Priv l p) =>
-                                     p        -- ^Privileges
-                                  -> l        -- ^Label for the new file
-                                  -> Name     -- ^Start point
-                                  -> FilePath -- ^Name to create
-                                  -> (l -> IO (a, NewNode))
-                                  -- ^Funciton to create node, WARNING: TRUSTED
-                                  -> LIO l s a 
-mkNameTCB priv l start path mknod = do
+mkDir                   :: (Priv l p) =>
+                           p        -- ^Privileges
+                        -> l        -- ^Label for the new file
+                        -> Name     -- ^Start point
+                        -> FilePath -- ^Name to create
+                        -> LIO l s () 
+mkDir priv l start path = do
   -- No privs when checking clearance, as we assume it was lowered for a reason
   cleario l                     
   name <- lookupName priv start path
   dirlabel <- ioTCB $ labelOfName name
   pguardio priv dirlabel
-  (ret, new) <- ioTCB $ mknod l
+  new <- ioTCB $ mkNodeDir l
   rtioTCB $ linkNode new name
-  return ret
+  return ()
+
+-- mkHandle :: (Priv l p) => p -> l -> Name -> FilePath -> IOMode
