@@ -5,6 +5,7 @@
 module LIO.Handle where
 
 import LIO.TCB
+import LIO.FS
 
 import qualified Data.ByteString.Lazy as L
 import qualified System.Directory as IO
@@ -44,11 +45,15 @@ instance (Label l, DirectoryOps (LHandle l h) (LIO l s), HandleOps h b IO)
     hPut (LHandleTCB l h) s      = guardio l >> rtioTCB (hPut h s)
     hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStrLn h s)
 
-instance (Label l, DirectoryOps h IO) =>
-    DirectoryOps (LHandle l h) (LIO l s) where
+instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
         getDirectoryContents    = undefined
-        createDirectory         = undefined
-        openFile                = undefined
+        createDirectory path    = do
+          l <- labelOfio
+          mkDir NoPrivs l rootDir path
+        openFile path mode      = do
+          l <- labelOfio
+          h <- mkHandle NoPrivs l rootDir path mode
+          return $ LHandleTCB l h
         hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
 
 
