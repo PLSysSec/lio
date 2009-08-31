@@ -26,13 +26,21 @@
 
     > LabelHash/OpaqueName/UserName
 
+    There is also a special 'Name', 'rootDir', which refers to the
+    root directory.  Untrusted user code has access to the 'rootDir'
+    'Name', and can walk the tree from there using the 'lookupName'
+    function.  The "LIO.Handle" module contains functions 'mkDir' and
+    'mkLHandle' which permit untrusted code to make new 'Name's as
+    well as to do handle-based IO on protected files.
+
     The second is 'Node', which refers to one of the @OpaqueName@s
-    that 'Name's point to.  Currently, all functions in the 'LIO'
-    monad operate on 'Name's.  This is important because in order to
-    use a file, someone must have the right to know know that the file
-    exists, and this requires read permission on the file's 'Name'.
-    It would be insecure if untrusted code could execute openNode in
-    the LIO Monad.
+    that 'Name's point to.  Currently, any functions that operate on
+    'Node's are in the IO Monad so as not to be executable by
+    untrusted code.  This is important because in order to use a file,
+    someone must have the right to know know that the file exists, and
+    this requires read permission on the file's 'Name'.  It would be
+    insecure if untrusted code could execute openNode in the LIO
+    Monad.
 
 -}
 
