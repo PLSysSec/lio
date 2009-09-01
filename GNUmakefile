@@ -36,7 +36,7 @@ doc: $(DOC)
 	    $(BIN)HsColour -css -anchor \
 		-o$@/src/`echo $$file|sed -e 's|/|.|g'`.html $$file; \
 	done
-	$(BIN)haddock -h -o$@ --source-base=src/ \
+	haddock -h -o$@ --source-base=src/ \
 	    --source-module=src/%M.hs.html \
 	    --source-entity=src/%M.hs.html#%N $(DOC)
 
