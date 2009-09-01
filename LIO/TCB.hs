@@ -51,7 +51,7 @@ module LIO.TCB (
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
-               , rethrowTCB
+               , rethrowTCB, bracketTCB
                -- End TCB exports
                ) where
 
@@ -460,7 +460,7 @@ instance (Label l) => Exception (LabeledExceptionTCB l)
 unlabelException :: (Label l) => LabeledExceptionTCB l -> IO (a, LIOstate l s)
 unlabelException (LabeledExceptionTCB l (SomeException e)) =
     putStrLn ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") >> -- XXX
-    throw e
+    throwIO e
 
 -- |It is not possible to catch pure exceptions from within the 'LIO'
 -- monad, but @throwL@ wraps up an exception with the current label,
@@ -477,12 +477,22 @@ throwL e = mkLIO $ \s -> throwIO $
 -- @rethrowTCB@ not in any way change the label, as otherwise
 -- @rethrowTCB@ would put the wrong label on the exception.
 rethrowTCB   :: (Label l) => LIO l s a -> LIO l s a
-rethrowTCB m = do
-  l <- labelOfio
-  fmap (mapException $ labelit l) m
-      where
-        labelit     :: Label l => l -> SomeException -> LabeledExceptionTCB l
-        labelit l e = LabeledExceptionTCB l e
+rethrowTCB m = mkLIO $ \s -> do
+                 let l = lioL s
+                 (a, s') <- unLIO m s `catch` (throwIO . labelit l)
+                 -- Note that we need mapException to catch
+                 -- asynchronous exceptions such as divide by zero in
+                 -- as-yet-unevaluated thunks.  However, since it is
+                 -- not possible to catch those exceptions safely
+                 -- outsize of IO code, and they are unlikely to occur
+                 -- within IO code, it actually doesn't seem necessary
+                 -- to call mapException here.
+                 return (a, s')
+                 -- return (mapException (labelit l) a, s')
+    where
+      labelit     :: Label l => l -> SomeException -> LabeledExceptionTCB l
+      labelit l e = -- trace ("labeling " ++ show e ++ " with " ++ show l)
+                    LabeledExceptionTCB l e
 
 -- | Catches an exception, so long as the label at the point where the
 -- exception was thrown can flow to the label at which catchLp is
@@ -525,9 +535,10 @@ onExceptionLp         :: (Priv l p, Typeable s) =>
 onExceptionLp io p what = catchLp io p
                           (\l e -> what >> throwL (e :: SomeException))
 
---
--- XXX - needs sanity check
---
+-- | For privileged code that needs to catch all exceptions.  Note:
+-- This function does not call 'rethrowTCB' to label the exceptions.
+-- Since bracketTCB is in the LIO monad, it is assumed that you will
+-- use 'rtioTCB' within the \"in-between\" computation.
 bracketTCB                    :: (Label l) =>
                                  LIO l s a        -- ^ Before
                               -> (a -> LIO l s b) -- ^ After
@@ -539,6 +550,6 @@ bracketTCB before after thing =
                     (c, s2) <- unblock (unLIO (thing a) s1)
                                `catch` \(SomeException e) -> do
                                  unLIO (after a) s1
-                                 throw e
+                                 throwIO e
                     (b, s3) <- unLIO (after a) s2
                     return (c, s3)

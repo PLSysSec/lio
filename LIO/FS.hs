@@ -51,7 +51,7 @@ module LIO.FS ( -- * The opaque name object
               -- * Initializing the file system
               , mkRoot
               -- * Internal data structures
-              , Node(..)
+              , Node
               -- * Helper functions in the IO Monad
               , labelOfName, labelOfNode, nodeOfName
               , mkNodeDir, mkNodeReg, linkNode

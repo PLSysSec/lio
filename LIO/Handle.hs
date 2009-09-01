@@ -12,10 +12,10 @@
 -- directory in the 'LIO' Monad.)
 module LIO.Handle (DirectoryOps(..)
                   , CloseOps (..)
-                  , ContentOps (..)
                   , HandleOps (..)
                   , LHandle
                   , mkDir, mkLHandle
+                  , readFile, writeFile
                   ) where
 
 import LIO.TCB
@@ -36,12 +36,10 @@ class DirectoryOps h m | m -> h where
 class CloseOps h m where
     hClose               :: h -> m ()
 
-class ContentOps b m where
-    readFile  :: FilePath -> m b
-
 class (CloseOps h m) => HandleOps h b m where
     hGet            :: h -> Int -> m b
     hGetNonBlocking :: h -> Int -> m b
+    hGetContents    :: h -> m b
     hPut            :: h -> b -> m ()
     hPutStrLn       :: h -> b -> m ()
 
@@ -53,12 +51,10 @@ instance DirectoryOps IO.Handle IO where
 instance CloseOps IO.Handle IO where
     hClose               = IO.hClose
 
-instance ContentOps L.ByteString IO where
-    readFile  = L.readFile
-
 instance HandleOps IO.Handle L.ByteString IO where
     hGet            = L.hGet
     hGetNonBlocking = L.hGetNonBlocking
+    hGetContents    = L.hGetContents
     hPut            = L.hPut
     hPutStrLn h s   = L.hPut h $ L.append s $ L.singleton 0xa
 
@@ -78,18 +74,14 @@ instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
 instance (Label l) => CloseOps (LHandle l IO.Handle) (LIO l s) where
     hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
 
-instance (Label l, ContentOps b IO) => ContentOps b (LIO l s) where
-    readFile f = do
-      (Node f') <- lookupNode NoPrivs rootDir f False
-      rtioTCB $ readFile f'
-
 instance (Label l, CloseOps (LHandle l h) (LIO l s), HandleOps h b IO)
     => HandleOps (LHandle l h) b (LIO l s) where
-    hGet (LHandleTCB l h) n      = guardio l >> rtioTCB (hGet h n)
+    hGet (LHandleTCB l h) n       = guardio l >> rtioTCB (hGet h n)
     hGetNonBlocking (LHandleTCB l h) n =
-                                 guardio l >> rtioTCB (hGetNonBlocking h n)
-    hPut (LHandleTCB l h) s      = guardio l >> rtioTCB (hPut h s)
-    hPutStrLn (LHandleTCB l h) s = guardio l >> rtioTCB (hPutStrLn h s)
+                                  guardio l >> rtioTCB (hGetNonBlocking h n)
+    hGetContents (LHandleTCB l h) = guardio l >> rtioTCB (hGetContents h)
+    hPut (LHandleTCB l h) s       = guardio l >> rtioTCB (hPut h s)
+    hPutStrLn (LHandleTCB l h) s  = guardio l >> rtioTCB (hPutStrLn h s)
 
 
 hlabelOf                  :: (Label l) => LHandle l h -> l
@@ -142,3 +134,14 @@ mkLHandle priv l start path mode = do
               Right _ -> return $ LHandleTCB l h
               Left _  -> mkLHandle priv l name "" mode
                         
+readFile      :: (Label l, HandleOps IO.Handle b IO) =>
+                 FilePath
+              -> LIO l s b
+readFile path = bracketTCB (openFile path IO.ReadMode) hClose hGetContents
+
+writeFile               :: (Label l, HandleOps IO.Handle b IO) =>
+                           FilePath
+                        -> b
+                        -> LIO l s ()
+writeFile path contents = bracketTCB (openFile path IO.WriteMode) hClose
+                          (\h -> hPut h contents)

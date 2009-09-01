@@ -10,14 +10,18 @@ module Main (-- module LIO.LIO
 import LIO.LIO
 import LIO.TCB
 import LIO.Handle
-import qualified LIO.Handle as LH
+-- import qualified LIO.Handle as LH
 import LIO.DCLabel
 import LIO.FS
 
+import Prelude hiding (readFile, writeFile)
 import Control.Exception
+import Control.Applicative
+import qualified Data.ByteString.Lazy as L
 import Data.Set (Set)
 import qualified Data.Set as Set
-import System.IO
+import System.IO hiding (readFile, writeFile)
+import System.IO.Error
 
 cat1 = DCat (Set.fromList [Principal "my@address.com"
                           , Principal "your@address.com"])
@@ -32,5 +36,16 @@ rl :: String -> [(DCLabel, String)]
 rl = reads
 
 md = evalDC $ mkDir NoPrivs h rootDir "high"
+
+maybeReadFile :: String -> DC (Maybe L.ByteString)
+maybeReadFile path =
+  catchL (Just <$> readFile path)
+         (\(SomeException e) -> return Nothing)
+
+{-
+         (\e -> if isDoesNotExistError e
+                then return Nothing
+                else throwL e)
+-}
 
 main = return ()
