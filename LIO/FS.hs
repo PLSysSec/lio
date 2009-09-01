@@ -344,15 +344,15 @@ nodeOfName (NameTCB n) = liftM Node $ expandLink n
 nodeEntry                  :: Node -> FilePath -> Name
 nodeEntry (Node node) name = NameTCB (node </> name)
 
+-- |First-time initialization function
 mkRoot   :: (Label l) => l -> IO ()
 mkRoot l = do
   let (NameTCB root) = rootDir
   exists <- doesDirectoryExist root
-  when exists $ throwIO $ mkIOError alreadyExistsErrorType
-           "root directory already exists" Nothing (Just root)
-  new <- mkNodeDir l
-  linkNode new rootDir
-  return ()
+  unless exists $ do
+             new <- mkNodeDir l
+             linkNode new rootDir
+             return ()
 
 --
 -- LIO Monad function
