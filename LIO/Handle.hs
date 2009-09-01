@@ -19,6 +19,7 @@ module LIO.Handle (DirectoryOps(..)
 import LIO.TCB
 import LIO.FS
 
+import Prelude hiding (readFile, writeFile)
 import Control.Exception
 import qualified Data.ByteString.Lazy as L
 import qualified System.Directory as IO
@@ -30,10 +31,13 @@ class DirectoryOps h m | m -> h where
     createDirectory      :: FilePath -> m ()
     openFile             :: FilePath -> IO.IOMode -> m h
 
-class CloseOp h m where
+class CloseOps h m where
     hClose               :: h -> m ()
 
-class (CloseOp h m) => HandleOps h b m where
+class ContentOps b m where
+    readFile  :: FilePath -> m b
+
+class (CloseOps h m) => HandleOps h b m where
     hGet            :: h -> Int -> m b
     hGetNonBlocking :: h -> Int -> m b
     hPut            :: h -> b -> m ()
@@ -44,8 +48,11 @@ instance DirectoryOps IO.Handle IO where
     createDirectory      = IO.createDirectory
     openFile             = IO.openBinaryFile
 
-instance CloseOp IO.Handle IO where
+instance CloseOps IO.Handle IO where
     hClose               = IO.hClose
+
+instance ContentOps L.ByteString IO where
+    readFile  = L.readFile
 
 instance HandleOps IO.Handle L.ByteString IO where
     hGet            = L.hGet
@@ -66,10 +73,15 @@ instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
       l <- labelOfio
       mkLHandle NoPrivs l rootDir path mode
 
-instance (Label l) => CloseOp (LHandle l IO.Handle) (LIO l s) where
+instance (Label l) => CloseOps (LHandle l IO.Handle) (LIO l s) where
     hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
 
-instance (Label l, CloseOp (LHandle l h) (LIO l s), HandleOps h b IO)
+instance (Label l, ContentOps b IO) => ContentOps b (LIO l s) where
+    readFile f = do
+      (Node f') <- lookupNode NoPrivs rootDir f False
+      rtioTCB $ readFile f'
+
+instance (Label l, CloseOps (LHandle l h) (LIO l s), HandleOps h b IO)
     => HandleOps (LHandle l h) b (LIO l s) where
     hGet (LHandleTCB l h) n      = guardio l >> rtioTCB (hGet h n)
     hGetNonBlocking (LHandleTCB l h) n =
