@@ -525,3 +525,20 @@ onExceptionLp         :: (Priv l p, Typeable s) =>
 onExceptionLp io p what = catchLp io p
                           (\l e -> what >> throwL (e :: SomeException))
 
+--
+-- XXX - needs sanity check
+--
+bracketTCB                    :: (Label l) =>
+                                 LIO l s a        -- ^ Before
+                              -> (a -> LIO l s b) -- ^ After
+                              -> (a -> LIO l s c) -- ^ In-between
+                              -> LIO l s c
+bracketTCB before after thing = 
+    mkLIO $ \s -> block $ do
+                    (a, s1) <- unLIO before s
+                    (c, s2) <- unblock (unLIO (thing a) s1)
+                               `catch` \(SomeException e) -> do
+                                 unLIO (after a) s1
+                                 throw e
+                    (b, s3) <- unLIO (after a) s2
+                    return (c, s3)
