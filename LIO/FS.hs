@@ -82,7 +82,6 @@ import System.Posix.Files
 import System.Posix.IO
 
 import Data.Digest.Pure.SHA
-import qualified System.IO.Cautious as CIO
 
 --
 -- Utility functions
@@ -188,8 +187,9 @@ getLDir l = try (labelOfLDir ldir) >>= handle
           case fromException e of
             Just e' | isDoesNotExistError e' -> makedir
             _                                -> dumplabel >> throwIO e
-      -- XXX - CIO.writeFile somehow ignores the umask
-      makelabel path = CIO.writeFile path $ shows l "\n"
+      makelabel path = withFile path WriteMode $ \h -> do
+        hPutStr h $ shows l "\n"
+        hSync h
       makedir = do
         let tdir = dir ++ newNodeExt
         createDirectoryIfMissing True tdir

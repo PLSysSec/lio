@@ -3,6 +3,5 @@
 
 	cabal install hscolour
 	cabal install SHA
-	cabal install cautious-file
 
 

@@ -11,6 +11,8 @@ module LIO.TmpFile (-- * The high level interface
                    , mkTmp, openFileExclusive
                    -- * Functions for generating unique names
                    , tmpName, nextTmpName, serializele, unserializele
+                   -- * For flushing temp files before rename
+                   , hSync
                    )where
 
 import LIO.Armor
