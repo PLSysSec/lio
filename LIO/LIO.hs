@@ -6,3 +6,4 @@ module LIO.LIO (module LIO.Base
 import LIO.Base
 import LIO.Handle
 import LIO.LIORef
+import LIO.MonadLIO
