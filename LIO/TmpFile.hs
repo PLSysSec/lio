@@ -1,3 +1,5 @@
+{-# LANGUAGE ForeignFunctionInterface #-}
+
 -- | This module creates new files and directories with unique names.
 -- Its functionality is similary to C's mkstemp() and mkdtemp()
 -- functions.
@@ -9,6 +11,8 @@ module LIO.TmpFile (-- * The high level interface
                    , mkTmp, openFileExclusive
                    -- * Functions for generating unique names
                    , tmpName, nextTmpName, serializele, unserializele
+                   -- * For flushing temp files before rename
+                   , hSync
                    )where
 
 import LIO.Armor
@@ -19,14 +23,19 @@ import qualified Control.Exception as IO
 import Data.Bits (shiftL, shiftR, (.|.), (.&.))
 import qualified Data.ByteString.Lazy as L
 import Data.Word (Word8)
+import Foreign.C.Error
+import Foreign.C.Types
 import System.Directory (createDirectory, createDirectoryIfMissing)
 import System.FilePath (FilePath(..), (</>))
 import System.Posix.IO (OpenMode(..), OpenFileFlags(..)
-                       , defaultFileFlags , openFd, fdToHandle)
-import System.Posix.Types (Fd, FileMode)
+                       , defaultFileFlags , openFd
+                       , fdToHandle, handleToFd)
+import System.Posix.Types (Fd(..), FileMode)
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
 import System.Time (ClockTime(..), getClockTime)
+
+foreign import ccall "unistd.h fsync" c_fsync :: CInt -> IO CInt
 
 --
 -- Temporary file name based on time in 1/16 of a microsecond, then
@@ -120,3 +129,10 @@ mkTmpDir'     :: FilePath -- ^Directory in which to create subdirectory
               -> String   -- ^Suffix to append to new directory name
               -> IO FilePath    -- ^Returns full path to new directory
 mkTmpDir' d s = fmap snd $ mkTmpDir d s
+
+-- | Flushes a Handle to disk with fsync()
+hSync   :: IO.Handle -> IO ()
+hSync h = do
+  IO.hFlush h
+  (Fd fd) <- handleToFd h
+  throwErrnoPathIfMinus1_ "fsync" (show h) (c_fsync fd)

@@ -11,6 +11,8 @@
 -- 'rootDir'.  (There is no notion of changeable current working
 -- directory in the 'LIO' Monad.)
 module LIO.Handle (DirectoryOps(..)
+                  , CloseOps (..)
+                  , ContentOps (..)
                   , HandleOps (..)
                   , LHandle
                   , mkDir, mkLHandle
