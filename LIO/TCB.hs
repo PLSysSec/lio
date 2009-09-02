@@ -42,6 +42,8 @@ module LIO.TCB (
                -- * Exceptions
                , throwL, catchL, catchLp, onExceptionL
                , LabelFault(..)
+               , MonadBlock(..)
+               -- * Executing computations
                , evalLIO
                -- Start TCB exports
                -- * Privileged operations
@@ -51,7 +53,7 @@ module LIO.TCB (
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
-               , rethrowTCB, onExceptionTCB, bracketTCB
+               , rethrowTCB, OnExceptionTCB(..)
                -- End TCB exports
                ) where
 
@@ -535,34 +537,46 @@ onExceptionLp         :: (Priv l p, Typeable s) =>
 onExceptionLp io p what = catchLp io p
                           (\l e -> what >> throwL (e :: SomeException))
 
--- | For privileged code that needs to catch all exceptions.  Note:
--- This function does not call 'rethrowTCB' to label the exceptions.
--- Since bracketTCB is in the LIO monad, it is assumed that you will
--- use 'rtioTCB' for IO within the computation.
-onExceptionTCB            :: (Label l) =>
-                             LIO l s a -- ^ Operation to perform
-                          -> LIO l s b -- ^ Cleanup to perform if exception
-                          -> LIO l s a
-onExceptionTCB io cleanup =
-    mkLIO $ \s -> unLIO io s
-    `catch` \e -> do unLIO cleanup s
-                     throwIO (e :: SomeException)
+-- | Map a function over the underlying IO computation within an LIO.
+-- Obviously this symbol should not be exported, as it is privileged.
+iomap     :: (Label l) =>
+             (IO (a, LIOstate l s) -> IO (a, LIOstate l s))
+          -> LIO l s a -> LIO l s a
+iomap f c = mkLIO $ \s -> f $ unLIO c s
 
--- | For privileged code that needs to catch all exceptions.  Note:
--- This function does not call 'rethrowTCB' to label the exceptions.
--- Since bracketTCB is in the LIO monad, it is assumed that you will
--- use 'rtioTCB' within the \"in-between\" computation.
-bracketTCB                    :: (Label l) =>
-                                 LIO l s a        -- ^ Before
-                              -> (a -> LIO l s b) -- ^ After
-                              -> (a -> LIO l s c) -- ^ In-between
-                              -> LIO l s c
-bracketTCB before after thing = 
-    mkLIO $ \s -> block $ do
-                    (a, s1) <- unLIO before s
-                    (c, s2) <- unblock (unLIO (thing a) s1)
-                               `catch` \(SomeException e) -> do
-                                 unLIO (after a) s1
-                                 throwIO e
-                    (b, s3) <- unLIO (after a) s2
-                    return (c, s3)
+-- | @MonadBlock@ is the class of monads that support the 'block' and
+-- 'unblock' functions for disabling and enabling asynchronous
+-- exceptions, respectively.  The generalized methods are named
+-- 'blockM' and 'unblockM'
+class (Monad m) => MonadBlock m where
+    blockM   :: m a -> m a
+    unblockM :: m a -> m a
+instance MonadBlock IO where
+    blockM   = block
+    unblockM = unblock
+instance (Label l) => MonadBlock (LIO l s) where
+    blockM   = iomap block
+    unblockM = iomap unblock
+
+-- | For privileged code that needs to catch all exceptions in come
+-- cleanup function.  Note that for the 'LIO' monad, this function
+-- does /not/ call 'rethrowTCB' to label the exceptions.  It is
+-- assumed that you will use 'rtioTCB' for IO within the computation.
+class (MonadBlock m) => OnExceptionTCB m where
+    onExceptionTCB :: m a -> m b -> m a
+    bracketTCB     :: m a -> (a -> m b) -> (a -> m c) -> m c
+    bracketTCB before after between =
+        blockM $ do
+          a <- before
+          b <- unblockM (between a) `onExceptionTCB` after a
+          after a
+          return b
+instance OnExceptionTCB IO where
+    onExceptionTCB = onException
+    bracketTCB     = bracket
+instance (Label l) => OnExceptionTCB (LIO l s) where
+    onExceptionTCB io cleanup = 
+        mkLIO $ \s -> unLIO io s
+                      `catch` \e -> do unLIO cleanup s
+                                       throwIO (e :: SomeException)
+
