@@ -54,6 +54,12 @@
     The function 'linkNode' renames the 'NewNode' to a name without
     @~@ after creating a 'Name' that points to it.
 
+    The code in this module assumes a file system that preserves the
+    order of metadata operations, and should mostly be okay under
+    those circumstances.  When running with BSD soft updates, however,
+    it may be necessary to remove @~@ files and dangling symbolic
+    links after a system crash.
+
 -}
 
 module LIO.FS ( -- * The opaque name object
@@ -92,6 +98,7 @@ import System.FilePath
 import System.Posix.Directory hiding (removeDirectory)
 import System.Posix.Files
 import System.Posix.IO
+import System.Posix.Process
 
 import Data.Digest.Pure.SHA
 
@@ -120,7 +127,7 @@ tryPred pred a = tryJust test a
       test e = if pred e then Just e else Nothing
 
 ignoreErr :: IO () -> IO ()
-ignoreErr m = catch m ((\e -> return ()) :: SomeException -> IO ())
+ignoreErr m = catch m ((\e -> return ()) :: IOException -> IO ())
 
 -- |Delete a name whether it's a file or directory, by trying both.
 -- This is slow, but only used for error conditions when performance
@@ -202,10 +209,24 @@ getLDir l = try (labelOfLDir ldir) >>= handle
       makelabel path = withFile path WriteMode $ \h -> do
         hPutStr h $ shows l "\n"
         hSync h
+      -- Mostly unnecessary paranoia here, but one thread could create
+      -- the label file, then another thread could overwrite it as the
+      -- first thread is renaming the LDir~ -> LDir.  If after that
+      -- there's a power failure, then the label file could be
+      -- corrupted.  This way we ensure that once the LABEL file is in
+      -- place, it never gets overwritten.
+      makesafelabel path = do
+        pid <- getProcessID
+        tmp <- tmpName
+        let tpath = path ++ "." ++ show pid ++ "." ++ tmp ++ newNodeExt
+        makelabel tpath
+        createLink tpath path `catch` \e ->
+            if isAlreadyExistsError e then return () else throwIO e
+        ignoreErr $ removeLink tpath
       makedir = do
         let tdir = dir ++ newNodeExt
         createDirectoryIfMissing True tdir
-        makelabel $ tdir </> labelFile
+        makesafelabel $ tdir </> labelFile
         rename tdir dir
         return ldir
       dumplabel = ignoreErr $ makelabel $ dir </> (labelFile ++ ".correct")
@@ -278,21 +299,43 @@ makeRelativeTo dest src =
       doit (d1:ds) (s1:ss) | d1 == s1 = doit ds ss
       doit d s = joinPath (replicate (length s) ('.':'.':pathSeparator:[]) ++ d)
 
--- |Assign a 'Name' to a 'NewNode', turning it into a 'Node'.  Note
+-- | Assign a 'Name' to a 'NewNode', turning it into a 'Node'.  Note
 -- that unlike the Unix file system, only a single link may be created
 -- to each node.
 linkNode                                      :: NewNode -> Name -> IO Node
 linkNode (NewNode (Node path)) (NameTCB name) = do
   let tpath = path ++ newNodeExt
   createSymbolicLink (path `makeRelativeTo` name) name `onException` clean tpath
-  rename tpath path `onException` removeFile name
+  ignoreErr $ rename tpath path `onException` removeFile name
   return $ Node path
 
-openNode                  :: Node -> IOMode -> IO Handle
-openNode (Node file) mode = openFile file mode
+-- | It's possible that either a program crashed before renaming a
+-- 'NewNode' into a 'Node', or that another thread is calling
+-- 'linkNode' and for some reason is being slow betweeen the
+-- 'createSymbolicLink' and 'rename' calls.  Either way it should be
+-- fine for us just to 'rename' the 'NewNode', because the 'Name'
+-- would not exist if the 'NewNode' were not ready to be renamed.
+fixNode                    :: Node -> (FilePath -> IO a) -> IO a
+fixNode (Node file) action = action file `catch` fixup
+    where
+      fixup e | isDoesNotExistError e = do
+        rename (file ++ newNodeExt) file
+                   `catch` \(SomeException _) -> throwIO e
+        action file
+      fixup e                         = throwIO e
 
-getDirectoryContentsNode             :: Node -> IO [FilePath]
-getDirectoryContentsNode (Node file) = getDirectoryContents file
+-- | Thie function just calls 'openFile' on the filename in a 'Node'.
+-- However, on the off chance that the file system is in an
+-- inconsistent state (e.g., because of a crash during a call to
+-- 'linkNode'), it tries to finish creating a partially created
+-- 'Node'.
+openNode           :: Node -> IOMode -> IO Handle
+openNode node mode = fixNode node $ flip openFile mode
+
+-- | Thie function is a wrapper around 'getDirectoryContents' that
+-- tries to fixup errors analogously to 'openNode'.
+getDirectoryContentsNode      :: Node -> IO [FilePath]
+getDirectoryContentsNode node = fixNode node getDirectoryContents
 
 --
 -- Name functions
@@ -398,6 +441,7 @@ lookupName priv start path =
       dolookup _ ("..":_) = throwL $ mkIOError doesNotExistErrorType
                             "illegal filename" Nothing (Just ".." )
       dolookup name (cn:rest) = do
+        -- XXX next thing should deal with partially created nodes
         node <- rtioTCB $ nodeOfName name -- Could fail if name deleted
         label <- ioTCB $ labelOfNode node -- Shouldn't fail
         ptaintio priv label
