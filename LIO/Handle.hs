@@ -138,21 +138,24 @@ mkLHandle priv l start path mode = do
 readFile      :: (DirectoryOps h m, HandleOps h b m) => FilePath -> m b
 readFile path = openFile path IO.ReadMode >>= hGetContents
 
-writeFile               :: (Label l, HandleOps IO.Handle b IO) =>
-                           FilePath
-                        -> b
-                        -> LIO l s ()
+writeFile               :: (DirectoryOps h m, HandleOps h b m,
+                            OnExceptionTCB m) => FilePath -> b -> m ()
 writeFile path contents = bracketTCB (openFile path IO.WriteMode) hClose
-                          (\h -> hPut h contents)
+                          (flip hPut contents)
 
+createDirectoryP            :: (Priv l p) => p -> FilePath -> LIO l s ()
 createDirectoryP privs path = do
   l <- labelOfio
   mkDir privs l rootDir path
 
+writeFileP  :: (Priv l p, HandleOps IO.Handle b IO) =>
+               p -> FilePath -> b -> LIO l s ()
 writeFileP privs path contents =
   bracketTCB (openFileP privs path IO.WriteMode) hClose
              (\h -> hPut h contents)
 
+openFileP :: (Priv l p) =>
+             p -> FilePath -> IOMode -> LIO l s (LHandle l IO.Handle)
 openFileP privs path mode = do
   l <- labelOfio
   mkLHandle privs l rootDir path mode
