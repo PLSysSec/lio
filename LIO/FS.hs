@@ -319,8 +319,7 @@ fixNode                    :: Node -> (FilePath -> IO a) -> IO a
 fixNode (Node file) action = action file `catch` fixup
     where
       fixup e | isDoesNotExistError e = do
-        rename (file ++ newNodeExt) file
-                   `catch` \(SomeException _) -> throwIO e
+        ignoreErr $ rename (file ++ newNodeExt) file
         action file
       fixup e                         = throwIO e
 
