@@ -27,17 +27,17 @@
 -- subset of these symbols is exported by the "LIO.Base" module, which
 -- is how untrusted code should access the core label functionality.
 module LIO.TCB (
-                -- * Basic label functions
-                -- $labels
-                 POrdering(..), POrd(..), o2po, Label(..)
+               -- * Basic label functions
+               -- $labels
+               POrdering(..), POrd(..), o2po, Label(..)
                , Lref, Priv(..), NoPrivs(..)
                , taintR, setLabelRP, unlrefP
                -- * Labeled IO Monad (LIO)
                , LIO
                , lref
                , currentLabel, currentClearance
-               , taint, taintP, lguard, lguardP
-               , cleario, setLabelP
+               , taint, taintP, wguard, wguardP
+               , aguard, setLabelP
                , setClearance, setClearanceP
                , openL, closeL, discardL
                -- * Exceptions
@@ -297,19 +297,19 @@ taintP p l' = do s <- get
                    then put s { lioL = l }
                    else throwL LerrClearance
 
--- |Use @lguard l@ in trusted code before modifying an object labeled
+-- |Use @wguard l@ in trusted code before modifying an object labeled
 -- @l@.  If @l'@ is the current label, then this function ensures that
 -- @l' ``leq`` l@ before doing the same thing as @'ltaintio' l@.
 -- Throws @'LerrHigh'@ if the current label @l'@ is too high.
-lguard :: (Label l) => l -> LIO l s ()
-lguard l = do l' <- currentLabel
+wguard :: (Label l) => l -> LIO l s ()
+wguard l = do l' <- currentLabel
               if l' `leq` l
                then taint l
                else throwL LerrHigh
 
--- |Like 'lguard', but takes privilege argument to be more permissive.
-lguardP     :: (Priv l p) => p -> l -> LIO l s ()
-lguardP p l = do l' <- currentLabel
+-- |Like 'wguard', but takes privilege argument to be more permissive.
+wguardP     :: (Priv l p) => p -> l -> LIO l s ()
+wguardP p l = do l' <- currentLabel
                  if leqp p l' l
                   then taintP p l
                   else throwL LerrHigh
@@ -317,13 +317,13 @@ lguardP p l = do l' <- currentLabel
 -- |Ensures the label argument is between the current IO label and
 -- current IO clearance.  Use this function in code that allocates
 -- objects--you shouldn't be able to create an object labeled @l@
--- unless @cleario l@ does not throw an exception.
-cleario :: (Label l) => l -> LIO l s ()
-cleario newl = do c <- currentClearance
-                  l <- currentLabel
-                  unless (leq newl c) $ throwL LerrClearance
-                  unless (leq l newl) $ throwL LerrLow
-                  return ()
+-- unless @aguard l@ does not throw an exception.
+aguard :: (Label l) => l -> LIO l s ()
+aguard newl = do c <- currentClearance
+                 l <- currentLabel
+                 unless (leq newl c) $ throwL LerrClearance
+                 unless (leq l newl) $ throwL LerrLow
+                 return ()
 
 setLabelP     :: (Priv l p) => p -> l -> LIO l s ()
 setLabelP p l = do s <- get

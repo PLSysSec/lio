@@ -1,7 +1,7 @@
 -- |This module implements labeled IORefs.  The interface is analogous
 -- to "Data.IORef", but the operations take place in the LIO monad.
 -- Moreover, reading the LIORef calls taint, while writing it calls
--- lguard.
+-- wguard.
 module LIO.LIORef (LIORef
                   , newLIORef, labelOfLIORef
                   , readLIORef, writeLIORef, atomicModifyLIORef
@@ -15,7 +15,7 @@ data LIORef l a = LIORefTCB l (IORef a)
 
 newLIORef :: (Label l) => l -> a -> LIO l s (LIORef l a)
 newLIORef l a = do
-  lguard l
+  wguard l
   ior <- ioTCB $ newIORef a
   return $ LIORefTCB l ior
 
@@ -30,12 +30,12 @@ readLIORef (LIORefTCB l r) = do
 
 writeLIORef :: (Label l) => LIORef l a -> a -> LIO l s ()
 writeLIORef (LIORefTCB l r) a = do
-  lguard l
+  wguard l
   ioTCB $ writeIORef r a
 
 atomicModifyLIORef :: (Label l) =>
                       LIORef l a -> (a -> (a, b)) -> LIO l s b
 atomicModifyLIORef (LIORefTCB l r) f = do
-  lguard l
+  wguard l
   ioTCB $ atomicModifyIORef r f
 

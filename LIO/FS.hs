@@ -456,5 +456,5 @@ lookupNode priv start path write = do
   name <- lookupName priv start path
   node <- rtioTCB $ nodeOfName name
   label <- ioTCB $ labelOfNode node
-  if write then lguardP priv label else taintP priv label
+  if write then wguardP priv label else taintP priv label
   return node
