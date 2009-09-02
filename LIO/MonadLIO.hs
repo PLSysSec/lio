@@ -1,6 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -XUndecidableInstances #-}
 
 -- |This module provides a function 'liftLIO' for executing 'LIO'
@@ -46,3 +47,7 @@ instance (MonadLIO m l s) => MonadLIO (StateT s' m) l s where
     liftLIO = lift . liftLIO
 instance (Monoid w, MonadLIO m l s) => MonadLIO (WriterT w m) l s where
     liftLIO = lift . liftLIO
+
+instance (Label l) => MonadError IOError (LIO l s) where
+    throwError = throwL
+    catchError = catchL
