@@ -3,6 +3,7 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- |This module implements the core (Trusted Computing Base) of the
 -- Labeled IO library for information flow control in Haskell.  It
@@ -57,6 +58,7 @@ module LIO.TCB (
 
 import Prelude hiding (catch)
 import Control.Monad.State.Lazy hiding (put, get)
+import Control.Monad.Error
 import Control.Exception
 import Data.Monoid
 import Data.Typeable
@@ -509,6 +511,10 @@ catchLp m p c = mkLIO $ \s -> unLIO m s `catch` doit s
               case fromException se of
                 Just e' | leqp p l $ lioL s -> unLIO (c l e') s
                 Nothing -> throw e
+
+instance (Exception e, Label l) => MonadError e (LIO l s) where
+  throwError = throwL
+  catchError = catchL
 
 -- | Basic function for catching labeled exceptions.  (The fact that
 -- they are labeled is hidden from the handler.)
