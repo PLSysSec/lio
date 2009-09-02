@@ -72,7 +72,7 @@ module LIO.FS ( -- * The opaque name object
               , Node
               -- * Helper functions in the IO Monad
               , labelOfName, labelOfNode, nodeOfName
-              , mkNodeDir, mkNodeReg, linkNode
+              , mkNode, mkNodeDir, mkNodeReg, linkNode
               , lookupNode, openNode, getDirectoryContentsNode
               -- * Misc. utility functions
               , tryPred

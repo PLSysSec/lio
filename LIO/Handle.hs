@@ -118,16 +118,20 @@ mkLHandle priv l start path mode = do
   name <- lookupName priv start path
   dirlabel <- ioTCB $ labelOfName name
   ptaintio priv dirlabel
+  newl <- labelOfio
   mnode <- ioTCB $ tryPred IO.isDoesNotExistError (nodeOfName name)
   case (mnode, mode) of
     (Right node, _) ->
-        do nl <- ioTCB $ labelOfNode node
-           cleario nl
-           let hl = if mode == IO.ReadMode && leq nl l then l else nl
+        do nodel <- ioTCB $ labelOfNode node
+           let hl = if mode == IO.ReadMode
+                    then l `lub` newl `lub` nodel
+                    else nodel
+           cleario hl
            h <- rtioTCB $ openNode node mode
            return $ LHandleTCB hl h
     (Left e, IO.ReadMode) -> throwL e
-    _ -> do guardio dirlabel
+    _ -> do pguardio priv dirlabel
+            cleario l           -- lookupName may have changed label
             (h, new) <- rtioTCB $ mkNodeReg mode l
             mn <- rtioTCB $ tryPred IO.isAlreadyExistsError
                   (linkNode new name `onException` hClose h)
