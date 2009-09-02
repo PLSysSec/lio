@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- |This module implements the core (Trusted Computing Base) of the
 -- Labeled IO library for information flow control in Haskell.  It
@@ -26,7 +27,7 @@
 -- protections even from within pure code or the LIO Monad.  A safe
 -- subset of these symbols is exported by the "LIO.Base" module, which
 -- is how untrusted code should access the core label functionality.
-module LIO.TCB ( 
+module LIO.TCB (
                 -- * Basic label functions
                 -- $labels
                  POrdering(..), POrd(..), o2po, Label(..)
@@ -60,7 +61,6 @@ module LIO.TCB (
 
 import Prelude hiding (catch)
 import Control.Monad.State.Lazy hiding (put, get)
-import Control.Monad.Error
 import Control.Exception
 import Data.Monoid
 import Data.Typeable
@@ -406,15 +406,12 @@ unLIO                  :: (Label l) => LIO l s a -> LIOstate l s
                        -> IO (a, LIOstate l s)
 unLIO (LIO (StateT f)) = f
 
-runLIO     :: (Label l) => LIO l s a -> LIOstate l s
+runLIO     :: forall l s a. (Label l) => LIO l s a -> LIOstate l s
            -> IO (a, LIOstate l s)
-runLIO m s = unLIO m s `catch` unlabelException
-
-{-
-runLIO     :: (Label l) => LIO l s a -> s -> IO (a, s)
-runLIO m s = do (a, ls) <- runLIO m (newstate s)
-                return (a, labelState ls)
--}
+runLIO m s = unLIO m s `catch` (throw . delabel)
+    where delabel :: LabeledExceptionTCB l -> SomeException
+          delabel (LabeledExceptionTCB l e) = e
+           -- trace ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") e
 
 evalLIO     :: (Label l) => LIO l s a -> s -> IO (a, l)
 evalLIO m s = do (a, ls) <- runLIO m (newstate s)
@@ -443,11 +440,11 @@ unblockL m = mkLIO $ \s -> unblock (unLIO m s)
 --
 
 data LabelFault
-    = LerrLow                   -- ^Requested label too low
-    | LerrHigh                  -- ^Current label too high
-    | LerrClearance             -- ^Label would exceed clearance
-    | LerrPriv                  -- ^Insufficient privileges
-    | LerrInval                 -- ^Invalid request
+    = LerrLow                   -- ^ Requested label too low
+    | LerrHigh                  -- ^ Current label too high
+    | LerrClearance             -- ^ Label would exceed clearance
+    | LerrPriv                  -- ^ Insufficient privileges
+    | LerrInval                 -- ^ Invalid request
       deriving (Show, Typeable)
 
 instance Exception LabelFault
@@ -473,6 +470,19 @@ throwL   :: (Exception e, Label l) => e -> LIO l s a
 throwL e = mkLIO $ \s -> throwIO $
            LabeledExceptionTCB (lioL s) (toException e)
 
+-- | Map a function over the underlying IO computation within an LIO.
+-- Obviously this symbol should not be exported, as it is privileged.
+iomaps     :: (Label l) =>
+              ((LIOstate l s) -> IO (a, LIOstate l s) -> IO (a, LIOstate l s))
+           -> LIO l s a -> LIO l s a
+iomaps f c = mkLIO $ \s -> (f s $ unLIO c s)
+
+-- | Like 'iomaps' if you don't need the state.
+iomap   :: (Label l) =>
+           (IO (a, LIOstate l s) -> IO (a, LIOstate l s))
+        -> LIO l s a -> LIO l s a
+iomap f = iomaps $ \_ -> f
+
 -- |Privileged code that does IO operations may cause exceptions that
 -- should be caught by untrusted code in the 'LIO' monad.  Such
 -- operations should be wrapped by @rethrowTCB@ (or 'rtioTCB', which
@@ -480,23 +490,8 @@ throwL e = mkLIO $ \s -> throwIO $
 -- it is very important that the computation executed inside
 -- @rethrowTCB@ not in any way change the label, as otherwise
 -- @rethrowTCB@ would put the wrong label on the exception.
-rethrowTCB   :: (Label l) => LIO l s a -> LIO l s a
-rethrowTCB m = mkLIO $ \s -> do
-                 let l = lioL s
-                 (a, s') <- unLIO m s `catch` (throwIO . labelit l)
-                 -- Note that we need mapException to catch
-                 -- asynchronous exceptions such as divide by zero in
-                 -- as-yet-unevaluated thunks.  However, since it is
-                 -- not possible to catch those exceptions safely
-                 -- outsize of IO code, and they are unlikely to occur
-                 -- within IO code, it actually doesn't seem necessary
-                 -- to call mapException here.
-                 return (a, s')
-                 -- return (mapException (labelit l) a, s')
-    where
-      labelit     :: Label l => l -> SomeException -> LabeledExceptionTCB l
-      labelit l e = -- trace ("labeling " ++ show e ++ " with " ++ show l)
-                    LabeledExceptionTCB l e
+rethrowTCB :: (Label l) => LIO l s a -> LIO l s a
+rethrowTCB = iomaps $ \s c -> mapException (LabeledExceptionTCB $ lioL s) c
 
 -- | Catches an exception, so long as the label at the point where the
 -- exception was thrown can flow to the label at which catchLp is
@@ -504,19 +499,15 @@ rethrowTCB m = mkLIO $ \s -> do
 -- receives an an extra first argument (before the exception), which
 -- is the label when the exception was thrown.
 catchLp       :: (Label l, Exception e, Priv l p) =>
-                 LIO l s a      -- ^ Computation to run
+                 LIO l s a             -- ^ Computation to run
               -> p   -- ^ Privileges with which to downgrade exception
               -> (l -> e -> LIO l s a) -- ^ Exception handler
               -> LIO l s a             -- ^ Result of computation or handler
-catchLp m p c = mkLIO $ \s -> unLIO m s `catch` doit s
+catchLp m p c = iomaps (\s m' -> m' `catch` doit s) m
     where doit s e@(LabeledExceptionTCB l se) =
               case fromException se of
                 Just e' | leqp p l $ lioL s -> unLIO (c l e') s
                 Nothing -> throw e
-
-instance (Exception e, Label l) => MonadError e (LIO l s) where
-  throwError = throwL
-  catchError = catchL
 
 -- | Basic function for catching labeled exceptions.  (The fact that
 -- they are labeled is hidden from the handler.)
@@ -525,7 +516,7 @@ instance (Exception e, Label l) => MonadError e (LIO l s) where
 --
 catchL     :: (Label l, Exception e) =>
               LIO l s a -> (e -> LIO l s a) -> LIO l s a
-catchL m c = mkLIO $ \s -> unLIO m s `catch` doit s
+catchL m c = iomaps (\s m' -> m' `catch` doit s) m
     where doit s e@(LabeledExceptionTCB l se) =
               case fromException se of
                 Just e' | l `leq` lioL s -> unLIO (c e') s
@@ -533,22 +524,15 @@ catchL m c = mkLIO $ \s -> unLIO m s `catch` doit s
 
 -- | Analogous to 'onException', but for the 'LIO' monad.  Note,
 -- however, that the handler will not run if the label is raised.
-onExceptionL         :: (Label l, Typeable s) =>
+onExceptionL         :: (Label l) =>
                         LIO l s a -> LIO l s b -> LIO l s a
 onExceptionL io what = io `catchL` \e -> do what
                                             throwL (e :: SomeException)
 
-onExceptionLp         :: (Priv l p, Typeable s) =>
-                         LIO l s a -> p -> LIO l s b -> LIO l s a
+onExceptionLp           :: (Priv l p) =>
+                           LIO l s a -> p -> LIO l s b -> LIO l s a
 onExceptionLp io p what = catchLp io p
                           (\l e -> what >> throwL (e :: SomeException))
-
--- | Map a function over the underlying IO computation within an LIO.
--- Obviously this symbol should not be exported, as it is privileged.
-iomap     :: (Label l) =>
-             (IO (a, LIOstate l s) -> IO (a, LIOstate l s))
-          -> LIO l s a -> LIO l s a
-iomap f c = mkLIO $ \s -> f $ unLIO c s
 
 -- | @MonadBlock@ is the class of monads that support the 'block' and
 -- 'unblock' functions for disabling and enabling asynchronous
@@ -564,7 +548,7 @@ instance (Label l) => MonadBlock (LIO l s) where
     blockM   = iomap block
     unblockM = iomap unblock
 
--- | For privileged code that needs to catch all exceptions in come
+-- | For privileged code that needs to catch all exceptions in some
 -- cleanup function.  Note that for the 'LIO' monad, this function
 -- does /not/ call 'rethrowTCB' to label the exceptions.  It is
 -- assumed that you will use 'rtioTCB' for IO within the computation.

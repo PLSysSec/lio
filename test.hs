@@ -40,12 +40,11 @@ md = evalDC $ mkDir NoPrivs h rootDir "high"
 maybeReadFile :: String -> DC (Maybe L.ByteString)
 maybeReadFile path =
   catchL (Just <$> readFile path)
-         (\(SomeException e) -> return Nothing)
-
-{-
          (\e -> if isDoesNotExistError e
                 then return Nothing
                 else throwL e)
--}
+
+doReadFile :: String -> DC L.ByteString
+doReadFile path = readFile path
 
 main = return ()
