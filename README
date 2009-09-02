@@ -1,6 +1,7 @@
 
 * Pre-requisites:
 
+	cabal update
 	cabal install hscolour
 	cabal install SHA
 
