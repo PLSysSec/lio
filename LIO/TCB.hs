@@ -490,7 +490,8 @@ iomap f = iomaps $ \_ -> f
 -- @rethrowTCB@ not in any way change the label, as otherwise
 -- @rethrowTCB@ would put the wrong label on the exception.
 rethrowTCB :: (Label l) => LIO l s a -> LIO l s a
-rethrowTCB = iomaps $ \s c -> mapException (LabeledExceptionTCB $ lioL s) c
+rethrowTCB = iomaps $ \s -> handle (throwIO . (LabeledExceptionTCB $ lioL s))
+ -- mapException (LabeledExceptionTCB $ lioL s) c
 
 -- | Catches an exception, so long as the label at the point where the
 -- exception was thrown can flow to the label at which catchLp is
