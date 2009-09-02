@@ -52,7 +52,7 @@ dearmor32 s = doit 0 0 s
              then L.empty
              else let needbits = 8 - carrySize
                       nextCarrySize = 5 - needbits
-                      b = carryVal .|. (shift (b2a ! c1) (negate nextCarrySize))
+                      b = carryVal .|. (shift v (negate nextCarrySize))
                       nextCarry = shift v (8 - nextCarrySize)
                   in if nextCarrySize < 0
                      then doit b (nextCarrySize + 8) s
