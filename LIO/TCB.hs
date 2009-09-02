@@ -35,7 +35,7 @@ module LIO.TCB (
                -- * Labeled IO Monad (LIO)
                , LIO
                , lref
-               , labelOfio, clearOfio
+               , currentLabel, currentClearance
                , taintio, guardio, cleario, untaintio
                , ptaintio, pguardio
                , lowerio, unlowerio
@@ -230,7 +230,7 @@ taintR l' (Lref l a) = Lref (lub l l') a
 
 guardR :: (Label l) => l -> Lref l a -> LIO l s ()
 guardR l' (Lref l a) = do
-  cur <- labelOfio
+  cur <- currentLabel
   unless (l `leq` l' && l `leq` cur) $ throwL LerrHigh
 
 setLabelRP                   :: Priv l p => p -> l -> Lref l a -> Lref l a
@@ -268,11 +268,11 @@ lref l a = get >>= doit
                  | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = return $ Lref l a
 
-labelOfio :: (Label l) => LIO l s l
-labelOfio = get >>= return . lioL
+currentLabel :: (Label l) => LIO l s l
+currentLabel = get >>= return . lioL
 
-clearOfio :: (Label l) => LIO l s l
-clearOfio = get >>= return . lioC
+currentClearance :: (Label l) => LIO l s l
+currentClearance = get >>= return . lioC
 
 -- |Use @taintio l@ in trusted code before observing an object labeled
 -- @l@.  This will raise the current label to a value @l'@ such that
@@ -302,14 +302,14 @@ ptaintio p l' = do s <- get
 -- @l' ``leq`` l@ before doing the same thing as @'ltaintio' l@.
 -- Throws @'LerrHigh'@ if the current label @l'@ is too high.
 guardio :: (Label l) => l -> LIO l s ()
-guardio l = do l' <- labelOfio
+guardio l = do l' <- currentLabel
                if l' `leq` l
                  then taintio l
                  else throwL LerrHigh
 
 -- |Like 'guardio', but takes privilege argument to be more permissive.
 pguardio     :: (Priv l p) => p -> l -> LIO l s ()
-pguardio p l = do l' <- labelOfio
+pguardio p l = do l' <- currentLabel
                   if leqp p l' l
                     then ptaintio p l
                     else throwL LerrHigh
@@ -319,8 +319,8 @@ pguardio p l = do l' <- labelOfio
 -- objects--you shouldn't be able to create an object labeled @l@
 -- unless @cleario l@ does not throw an exception.
 cleario :: (Label l) => l -> LIO l s ()
-cleario newl = do c <- clearOfio
-                  l <- labelOfio
+cleario newl = do c <- currentClearance
+                  l <- currentLabel
                   unless (leq newl c) $ throwL LerrClearance
                   unless (leq l newl) $ throwL LerrLow
                   return ()

@@ -66,10 +66,10 @@ instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
       node <- lookupNode NoPrivs rootDir d False
       rtioTCB $ getDirectoryContentsNode node
     createDirectory path    = do
-      l <- labelOfio
+      l <- currentLabel
       mkDir NoPrivs l rootDir path
     openFile path mode      = do
-      l <- labelOfio
+      l <- currentLabel
       mkLHandle NoPrivs l rootDir path mode
 
 instance (Label l) => CloseOps (LHandle l IO.Handle) (LIO l s) where
@@ -118,7 +118,7 @@ mkLHandle priv l start path mode = do
   name <- lookupName priv start path
   dirlabel <- ioTCB $ labelOfName name
   ptaintio priv dirlabel
-  newl <- labelOfio
+  newl <- currentLabel
   mnode <- ioTCB $ tryPred IO.isDoesNotExistError (nodeOfName name)
   case (mnode, mode) of
     (Right node, _) ->
@@ -149,7 +149,7 @@ writeFile path contents = bracketTCB (openFile path IO.WriteMode) hClose
 
 createDirectoryP            :: (Priv l p) => p -> FilePath -> LIO l s ()
 createDirectoryP privs path = do
-  l <- labelOfio
+  l <- currentLabel
   mkDir privs l rootDir path
 
 writeFileP  :: (Priv l p, HandleOps IO.Handle b IO) =>
@@ -161,6 +161,6 @@ writeFileP privs path contents =
 openFileP :: (Priv l p) =>
              p -> FilePath -> IOMode -> LIO l s (LHandle l IO.Handle)
 openFileP privs path mode = do
-  l <- labelOfio
+  l <- currentLabel
   mkLHandle privs l rootDir path mode
 
