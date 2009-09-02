@@ -42,6 +42,18 @@
     insecure if untrusted code could execute openNode in the LIO
     Monad.
 
+    Note that if a machine crashes, the code in the module could leave
+    the filesystem in an inconsistent state.  However, the code tries
+    to maitain the invariant that any inconsistencies will either be
+    temporary files or directories whose names end with the \"@~@\"
+    character, or else dangling symbolic links.  Both of these can be
+    checked and cleaned up locally.  Put another way, if a 'Node'
+    whose file name doesn't end @~@ exists, then there should be a
+    symbolic link to it somewhere.  This is why the code uses a
+    separate 'NewNode' type to represent a 'Node' whose name ends @~@.
+    The function 'linkNode' renames the 'NewNode' to a name without
+    @~@ after creating a 'Name' that points to it.
+
 -}
 
 module LIO.FS ( -- * The opaque name object
@@ -205,7 +217,7 @@ getLDir l = try (labelOfLDir ldir) >>= handle
 -- |The @Node@ type represents filenames of the form
 -- @LabelHash\/OpaqueName@.  These names must always point to regular
 -- files or directories (not symbolic links).  There must always exist
--- a file @LabalHash\/.label@ specifying the label of a @Node@.
+-- a file @LabalHash\/LABEL@ specifying the label of a @Node@.
 newtype Node = Node FilePath deriving (Show)
 
 -- |When a @Node@ is first created, it has a file name with a \'~\'
@@ -314,7 +326,7 @@ unlinkNameDir = unlinkName removeDirectory
 -- |Remove a regular file by name.
 unlinkNameReg = unlinkName removeFile
   
--- |This function reads the contents of a symbolic link and returns
+-- | This function reads the contents of a symbolic link and returns
 -- the pathname of its destination, relative to the current working
 -- directory.  It elides ".." components at the begining of the
 -- symbolic link contents, so that if the link @foo\/bar -> ..\/baz@
@@ -336,15 +348,17 @@ expandLink path = do
           domerge (takeDirectory path) suffix
       domerge path suffix = path </> suffix
 
--- |'Node' that a 'Name' is pointing to.
+-- | 'Node' that a 'Name' is pointing to.
 nodeOfName             :: Name -> IO Node
 nodeOfName (NameTCB n) = liftM Node $ expandLink n
 
--- |Gives the 'Name' of a directory entry in a directory 'Node'.
+-- | Gives the 'Name' of a directory entry in a directory 'Node'.
 nodeEntry                  :: Node -> FilePath -> Name
 nodeEntry (Node node) name = NameTCB (node </> name)
 
--- |First-time initialization function
+-- | First-time initialization function.  The argument specifies the
+-- 'Label' for the root directory, but this has no effect if the root
+-- already exists.
 mkRoot   :: (Label l) => l -> IO ()
 mkRoot l = do
   let (NameTCB root) = rootDir
@@ -358,7 +372,7 @@ mkRoot l = do
 -- LIO Monad function
 --
 
--- |Looks up a FilePath, turning it into a 'Name', and raising to
+-- | Looks up a FilePath, turning it into a 'Name', and raising to
 -- current label to reflect all directories traversed.  Note that this
 -- only looks up a 'Name'; it does not ensure the 'Name' actually
 -- exists.  The intent is that you call lookupName before creating or
