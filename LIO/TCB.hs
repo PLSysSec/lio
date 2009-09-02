@@ -51,7 +51,7 @@ module LIO.TCB (
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
-               , rethrowTCB, bracketTCB
+               , rethrowTCB, onExceptionTCB, bracketTCB
                -- End TCB exports
                ) where
 
@@ -534,6 +534,19 @@ onExceptionLp         :: (Priv l p, Typeable s) =>
                          LIO l s a -> p -> LIO l s b -> LIO l s a
 onExceptionLp io p what = catchLp io p
                           (\l e -> what >> throwL (e :: SomeException))
+
+-- | For privileged code that needs to catch all exceptions.  Note:
+-- This function does not call 'rethrowTCB' to label the exceptions.
+-- Since bracketTCB is in the LIO monad, it is assumed that you will
+-- use 'rtioTCB' for IO within the computation.
+onExceptionTCB            :: (Label l) =>
+                             LIO l s a -- ^ Operation to perform
+                          -> LIO l s b -- ^ Cleanup to perform if exception
+                          -> LIO l s a
+onExceptionTCB io cleanup =
+    mkLIO $ \s -> unLIO io s
+    `catch` \e -> do unLIO cleanup s
+                     throwIO (e :: SomeException)
 
 -- | For privileged code that needs to catch all exceptions.  Note:
 -- This function does not call 'rethrowTCB' to label the exceptions.

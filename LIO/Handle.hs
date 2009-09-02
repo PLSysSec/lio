@@ -29,12 +29,12 @@ import qualified System.Directory as IO
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
 
-class DirectoryOps h m | m -> h where
+class (Monad m) => DirectoryOps h m | m -> h where
     getDirectoryContents :: FilePath -> m [FilePath]
     createDirectory      :: FilePath -> m ()
     openFile             :: FilePath -> IO.IOMode -> m h
 
-class CloseOps h m where
+class (Monad m) => CloseOps h m where
     hClose               :: h -> m ()
 
 class (CloseOps h m) => HandleOps h b m where
@@ -134,11 +134,9 @@ mkLHandle priv l start path mode = do
             case mn of
               Right _ -> return $ LHandleTCB l h
               Left _  -> mkLHandle priv l name "" mode
-                        
-readFile      :: (Label l, HandleOps IO.Handle b IO) =>
-                 FilePath
-              -> LIO l s b
-readFile path = bracketTCB (openFile path IO.ReadMode) hClose hGetContents
+
+readFile      :: (DirectoryOps h m, HandleOps h b m) => FilePath -> m b
+readFile path = openFile path IO.ReadMode >>= hGetContents
 
 writeFile               :: (Label l, HandleOps IO.Handle b IO) =>
                            FilePath
