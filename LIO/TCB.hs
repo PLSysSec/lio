@@ -31,7 +31,7 @@ module LIO.TCB (
                 -- $labels
                  POrdering(..), POrd(..), o2po, Label(..)
                , Lref, Priv(..), NoPrivs(..)
-               , labelOf, taint, untaint, unlref
+               , taintR, setLabelRP, unlrefP
                -- * Labeled IO Monad (LIO)
                , LIO
                , lref
@@ -216,17 +216,28 @@ instance (Label l) => Priv l NoPrivs where
 lrefTCB     :: Label l => l -> a -> Lref l a
 lrefTCB l a = Lref l a
 
-labelOf            :: Label l => Lref l a -> l
-labelOf (Lref l a) = l
+--
+-- Since this function has a covert channel, don't export for now.
+-- Really what we need is a way to check that an LRef has some
+-- particular integrity category (or is below some label that we are
+-- allowed to read).
+--
+labelOfR            :: Label l => Lref l a -> l
+labelOfR (Lref l a) = l
 
-taint               :: (Label l) => l -> Lref l a -> Lref l a
-taint l' (Lref l a) = Lref (lub l l') a
+taintR               :: (Label l) => l -> Lref l a -> Lref l a
+taintR l' (Lref l a) = Lref (lub l l') a
 
-untaint                   :: Priv l p => p -> l -> Lref l a -> Lref l a
-untaint p newl (Lref l a) = if leqp p l newl then Lref newl a else undefined
+guardR :: (Label l) => l -> Lref l a -> LIO l s ()
+guardR l' (Lref l a) = do
+  cur <- labelOfio
+  unless (l `leq` l' && l `leq` cur) $ throwL LerrHigh
 
-unlref              :: Priv l p => p -> Lref l a -> a
-unlref p (Lref l a) = if leqp p l lpure then a else undefined
+setLabelRP                   :: Priv l p => p -> l -> Lref l a -> Lref l a
+setLabelRP p newl (Lref l a) = if leqp p l newl then Lref newl a else undefined
+
+unlrefP              :: Priv l p => p -> Lref l a -> a
+unlrefP p (Lref l a) = if leqp p l lpure then a else undefined
 
 unlrefTCB            :: Label l => Lref l a -> a
 unlrefTCB (Lref l a) = a
