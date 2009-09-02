@@ -37,8 +37,8 @@ module LIO.TCB (
                , lref
                , currentLabel, currentClearance
                , taint, taintP, lguard, lguardP
-               , cleario, untaintio
-               , lowerio, unlowerio
+               , cleario, setLabelP
+               , setClearance, setClearanceP
                , openL, closeL, discardL
                -- * Exceptions
                , throwL, catchL, catchLp, onExceptionL
@@ -51,7 +51,7 @@ module LIO.TCB (
                , lrefTCB
                , PrivTCB, MintTCB(..)
                , showTCB
-               , unlrefTCB, untaintioTCB, unlowerioTCB
+               , unlrefTCB, setLabelTCB, setClearanceTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
@@ -325,36 +325,36 @@ cleario newl = do c <- currentClearance
                   unless (leq l newl) $ throwL LerrLow
                   return ()
 
-untaintio     :: (Priv l p) => p -> l -> LIO l s ()
-untaintio p l = do s <- get
+setLabelP     :: (Priv l p) => p -> l -> LIO l s ()
+setLabelP p l = do s <- get
                    if leqp p (lioL s) l
                      then put s { lioL = l }
                      else throwL LerrPriv
 
-untaintioTCB     :: (Label l) => l -> LIO l s ()
-untaintioTCB l = do s <- get
-                    if l `leq` lioC s
+setLabelTCB     :: (Label l) => l -> LIO l s ()
+setLabelTCB l = do s <- get
+                   if l `leq` lioC s
                       then put s { lioL = l }
                       else throwL LerrClearance
 
 -- |Reduce the current clearance.  One cannot raise the current label
 -- or create object with labels higher than the current clearance.
-lowerio   :: (Label l) => l -> LIO l s ()
-lowerio l = get >>= doit
+setClearance   :: (Label l) => l -> LIO l s ()
+setClearance l = get >>= doit
     where doit s | not $ l `leq` lioC s = throwL LerrClearance
                  | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = put s { lioC = l }
 
--- |Raise the current clearance (undoing the effects of 'lowerio').
+-- |Raise the current clearance (undoing the effects of 'setClearance').
 -- This requires privileges.
-unlowerio   :: (Priv l p) => p -> l -> LIO l s ()
-unlowerio p l = get >>= doit
+setClearanceP   :: (Priv l p) => p -> l -> LIO l s ()
+setClearanceP p l = get >>= doit
     where doit s | not $ leqp p l $ lioC s = throwL LerrPriv
                  | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = put s { lioC = l }
 
-unlowerioTCB   :: (Label l) => l -> LIO l s ()
-unlowerioTCB l = get >>= doit
+setClearanceTCB   :: (Label l) => l -> LIO l s ()
+setClearanceTCB l = get >>= doit
     where doit s | not $ lioL s `leq` l = throwL LerrInval
                  | otherwise            = put s { lioC = l }
 

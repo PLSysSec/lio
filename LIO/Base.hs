@@ -10,7 +10,7 @@ import LIO.TCB hiding (
                  lrefTCB
                , PrivTCB, MintTCB(..)
                , showTCB
-               , unlrefTCB, untaintioTCB, unlowerioTCB
+               , unlrefTCB, setLabelTCB, setClearanceTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
