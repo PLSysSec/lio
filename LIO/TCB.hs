@@ -36,8 +36,8 @@ module LIO.TCB (
                , LIO
                , lref
                , currentLabel, currentClearance
-               , taintio, guardio, cleario, untaintio
-               , ptaintio, pguardio
+               , taint, taintP, lguard, lguardP
+               , cleario, untaintio
                , lowerio, unlowerio
                , openL, closeL, discardL
                -- * Exceptions
@@ -274,45 +274,45 @@ currentLabel = get >>= return . lioL
 currentClearance :: (Label l) => LIO l s l
 currentClearance = get >>= return . lioC
 
--- |Use @taintio l@ in trusted code before observing an object labeled
+-- |Use @taint l@ in trusted code before observing an object labeled
 -- @l@.  This will raise the current label to a value @l'@ such that
 -- @l ``leq`` l'@, or throw @'LerrClearance'@ if @l'@ would have to be
 -- higher than the current clearance.
-taintio    :: (Label l) => l -> LIO l s ()
-taintio l' = do s <- get
-                let l = lioL s `lub` l'
-                if l `leq` lioC s
-                  then put s { lioL = l }
-                  else throwL LerrClearance
+taint    :: (Label l) => l -> LIO l s ()
+taint l' = do s <- get
+              let l = lioL s `lub` l'
+              if l `leq` lioC s
+                then put s { lioL = l }
+                else throwL LerrClearance
 
--- |Like 'taintio', but use privileges to reduce the amount of taint
+-- |Like 'taint', but use privileges to reduce the amount of taint
 -- required.
-ptaintio      :: (Priv l p) =>
+taintP      :: (Priv l p) =>
                  p              -- ^Privileges to invoke
               -> l              -- ^Label to taint to if no privileges
               -> LIO l s ()
-ptaintio p l' = do s <- get
-                   let l = lostar p l' (lioL s)
-                   if l `leq` lioC s
-                     then put s { lioL = l }
-                     else throwL LerrClearance
+taintP p l' = do s <- get
+                 let l = lostar p l' (lioL s)
+                 if l `leq` lioC s
+                   then put s { lioL = l }
+                   else throwL LerrClearance
 
--- |Use @guardio l@ in trusted code before modifying an object labeled
+-- |Use @lguard l@ in trusted code before modifying an object labeled
 -- @l@.  If @l'@ is the current label, then this function ensures that
 -- @l' ``leq`` l@ before doing the same thing as @'ltaintio' l@.
 -- Throws @'LerrHigh'@ if the current label @l'@ is too high.
-guardio :: (Label l) => l -> LIO l s ()
-guardio l = do l' <- currentLabel
-               if l' `leq` l
-                 then taintio l
-                 else throwL LerrHigh
+lguard :: (Label l) => l -> LIO l s ()
+lguard l = do l' <- currentLabel
+              if l' `leq` l
+               then taint l
+               else throwL LerrHigh
 
--- |Like 'guardio', but takes privilege argument to be more permissive.
-pguardio     :: (Priv l p) => p -> l -> LIO l s ()
-pguardio p l = do l' <- currentLabel
-                  if leqp p l' l
-                    then ptaintio p l
-                    else throwL LerrHigh
+-- |Like 'lguard', but takes privilege argument to be more permissive.
+lguardP     :: (Priv l p) => p -> l -> LIO l s ()
+lguardP p l = do l' <- currentLabel
+                 if leqp p l' l
+                  then taintP p l
+                  else throwL LerrHigh
 
 -- |Ensures the label argument is between the current IO label and
 -- current IO clearance.  Use this function in code that allocates

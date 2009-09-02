@@ -73,16 +73,16 @@ instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
       mkLHandle NoPrivs l rootDir path mode
 
 instance (Label l) => CloseOps (LHandle l IO.Handle) (LIO l s) where
-    hClose (LHandleTCB l h) = guardio l >> rtioTCB (hClose h)
+    hClose (LHandleTCB l h) = lguard l >> rtioTCB (hClose h)
 
 instance (Label l, CloseOps (LHandle l h) (LIO l s), HandleOps h b IO)
     => HandleOps (LHandle l h) b (LIO l s) where
-    hGet (LHandleTCB l h) n       = guardio l >> rtioTCB (hGet h n)
+    hGet (LHandleTCB l h) n       = lguard l >> rtioTCB (hGet h n)
     hGetNonBlocking (LHandleTCB l h) n =
-                                  guardio l >> rtioTCB (hGetNonBlocking h n)
-    hGetContents (LHandleTCB l h) = guardio l >> rtioTCB (hGetContents h)
-    hPut (LHandleTCB l h) s       = guardio l >> rtioTCB (hPut h s)
-    hPutStrLn (LHandleTCB l h) s  = guardio l >> rtioTCB (hPutStrLn h s)
+                                  lguard l >> rtioTCB (hGetNonBlocking h n)
+    hGetContents (LHandleTCB l h) = lguard l >> rtioTCB (hGetContents h)
+    hPut (LHandleTCB l h) s       = lguard l >> rtioTCB (hPut h s)
+    hPutStrLn (LHandleTCB l h) s  = lguard l >> rtioTCB (hPutStrLn h s)
 
 
 hlabelOf                  :: (Label l) => LHandle l h -> l
@@ -101,7 +101,7 @@ mkDir priv l start path = do
   cleario l                     
   name <- lookupName priv start path
   dirlabel <- ioTCB $ labelOfName name
-  pguardio priv dirlabel
+  lguardP priv dirlabel
   new <- ioTCB $ mkNodeDir l
   rtioTCB $ linkNode new name
   return ()
@@ -117,7 +117,7 @@ mkLHandle priv l start path mode = do
   cleario l
   name <- lookupName priv start path
   dirlabel <- ioTCB $ labelOfName name
-  ptaintio priv dirlabel
+  taintP priv dirlabel
   newl <- currentLabel
   mnode <- ioTCB $ tryPred IO.isDoesNotExistError (nodeOfName name)
   case (mnode, mode) of
@@ -130,7 +130,7 @@ mkLHandle priv l start path mode = do
            h <- rtioTCB $ openNode node mode
            return $ LHandleTCB hl h
     (Left e, IO.ReadMode) -> throwL e
-    _ -> do pguardio priv dirlabel
+    _ -> do lguardP priv dirlabel
             cleario l           -- lookupName may have changed label
             (h, new) <- rtioTCB $ mkNodeReg mode l
             mn <- rtioTCB $ tryPred IO.isAlreadyExistsError

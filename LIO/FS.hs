@@ -443,7 +443,7 @@ lookupName priv start path =
         -- XXX next thing should deal with partially created nodes
         node <- rtioTCB $ nodeOfName name -- Could fail if name deleted
         label <- ioTCB $ labelOfNode node -- Shouldn't fail
-        ptaintio priv label
+        taintP priv label
         dolookup (nodeEntry node cn) rest
 
 lookupNode                       :: (Priv l p) =>
@@ -456,5 +456,5 @@ lookupNode priv start path write = do
   name <- lookupName priv start path
   node <- rtioTCB $ nodeOfName name
   label <- ioTCB $ labelOfNode node
-  if write then pguardio priv label else ptaintio priv label
+  if write then lguardP priv label else taintP priv label
   return node
