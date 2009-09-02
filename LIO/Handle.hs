@@ -16,6 +16,7 @@ module LIO.Handle (DirectoryOps(..)
                   , LHandle
                   , mkDir, mkLHandle
                   , readFile, writeFile
+                  , createDirectoryP, openFileP, writeFileP
                   ) where
 
 import LIO.TCB
@@ -145,3 +146,16 @@ writeFile               :: (Label l, HandleOps IO.Handle b IO) =>
                         -> LIO l s ()
 writeFile path contents = bracketTCB (openFile path IO.WriteMode) hClose
                           (\h -> hPut h contents)
+
+createDirectoryP privs path = do
+  l <- labelOfio
+  mkDir privs l rootDir path
+
+writeFileP privs path contents =
+  bracketTCB (openFileP privs path IO.WriteMode) hClose
+             (\h -> hPut h contents)
+
+openFileP privs path mode = do
+  l <- labelOfio
+  mkLHandle privs l rootDir path mode
+
