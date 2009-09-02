@@ -15,6 +15,7 @@ module LIO.Base (
                 , openL, closeL, discardL
                 , throwL, catchL, catchLp, onExceptionL
                 , LabelFault(..)
+                , MonadBlock(..)
                 , evalLIO
                 ) where
 
@@ -25,5 +26,5 @@ import LIO.TCB hiding (
                , unlrefTCB, untaintioTCB, unlowerioTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
-               , rethrowTCB
+               , rethrowTCB, OnExceptionTCB(..)
                )
