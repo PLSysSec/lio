@@ -629,9 +629,9 @@ data LabeledExceptionTCB l =
    always run some cleanup function can use the 'onExceptionTCB' and
    'bracketTCB' to run the cleanup code on all exceptions.
 
-   Note:  You do not use the 'throw' (as opposed to 'throwIO')
-   function within the 'LIO' monad.  Because 'throw' can be invoked
-   from pure code, it has no notion of current label and so cannot
+   Note:  Do not use the 'throw' (as opposed to 'throwIO') function
+   within the 'LIO' monad.  Because 'throw' can be invoked from pure
+   code, it has no notion of current label and so cannot
 
 -}
 
