@@ -21,7 +21,7 @@
     multiple directories.
 
     There are two externally-visible abstractions. The first is
-    'Name', which referse to a file name in a user directory, of the
+    'Name', which refers to a file name in a user directory, of the
     form:
 
     > LabelHash/OpaqueName/UserName
@@ -42,23 +42,43 @@
     insecure if untrusted code could execute openNode in the LIO
     Monad.
 
-    Note that if a machine crashes, the code in the module could leave
-    the filesystem in an inconsistent state.  However, the code tries
-    to maitain the invariant that any inconsistencies will either be
-    temporary files or directories whose names end with the \"@~@\"
-    character, or else dangling symbolic links.  Both of these can be
-    checked and cleaned up locally.  Put another way, if a 'Node'
-    whose file name doesn't end @~@ exists, then there should be a
-    symbolic link to it somewhere.  This is why the code uses a
-    separate 'NewNode' type to represent a 'Node' whose name ends @~@.
-    The function 'linkNode' renames the 'NewNode' to a name without
-    @~@ after creating a 'Name' that points to it.
+    Note that if a machine crashes, the code in this module could
+    leave the filesystem in an inconsistent state.  However, the code
+    tries to maitain the invariant that any inconsistencies will
+    either be:
 
-    The code in this module assumes a file system that preserves the
-    order of metadata operations, and should mostly be okay under
-    those circumstances.  When running with BSD soft updates, however,
-    it may be necessary to remove @~@ files and dangling symbolic
-    links after a system crash.
+      1. temporary files or directories whose names end with the
+         \"@~@\" character, or
+
+      2.  dangling symbolic links.
+
+    Both of these inconsistencies can be checked and cleaned up
+    locally without examining the whole file system.  The code tries
+    to fix up these inconsistencies on-the-fly as it encounters them.
+    However, it could possibly lieave some stranded temporary
+    @LABEL...~@ files.  You could also end up with some weirdness like
+    a file that shows up in getDirectoryContents, but that you can't
+    open for reading.
+
+    To keep from having to examine the whole file system to fix
+    errors, the code tries to maintain the invariant that if a
+    'Node'\'s file name doesn't end with @~@, then there must be a
+    link pointing to it somewhere.  This is why the code uses a
+    separate 'NewNode' type to represent a 'Node' whose name ends @~@.
+    The function 'linkNode' renames the 'NewNode' to a name without a
+    trailing @~@ only after creating a 'Name' that points to the
+    permenent 'Node' path.
+
+    Assuming a file system that preserves the order of metadata
+    operations, the code should mostly be okay to recover from any
+    crashes.  If using soft updates, which can re-order metadata
+    operations, you could end up with symbolic links that point
+    nowhere.
+
+    In the worst case scenario if inconsistencies develop, you can
+    manually fix up the file system by deleting all danglinng symbolic
+    links and all files and directories ending @~@.  Make sure no
+    application is concurrently accessing the file system, however.
 
 -}
 
