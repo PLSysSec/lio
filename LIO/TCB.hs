@@ -5,21 +5,24 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- |This module implements the core (Trusted Computing Base) of the
+-- | This module implements the core (Trusted Computing Base) of the
 -- Labeled IO library for information flow control in Haskell.  It
--- provides a data structure 'Lref' (labeled reference), which
+-- provides a monad, 'LIO', that is intended to be used as a
+-- replacement for the IO monad in untrusted code.  The idea is for
+-- untrusted to provide a computation in the 'LIO' monad, which
+-- trusted code can then safely execute through the 'evalLIO'
+-- function.  (Though usually a wrapper function is employed depending
+-- on the type of labels used by an application.  For example, with
+-- "LIO.DCLabels", you would use 'evalDC' to execute an untrusted
+-- computation, and with "LIO.HiStar" labels, the function is
+-- 'evalHS'.  There are also abbreviations for the 'LIO' monad type of
+-- a particular label--for instance 'DC' or 'HS'.)
+--
+-- It provides a data structure 'Lref' (labeled reference), which
 -- protects access to pure values.  Without the appropriate
 -- privileges, one cannot produce a pure value that depends on a
 -- secret 'Lref', or conversely produce a high-integrity 'Lref' based
 -- on pure data.
---
--- The module also provides a monad, 'LIO', to allow untrusted code to
--- perform IO actions.  The idea is that untrusted code can provide a
--- computation in the 'LIO' monad, and trusted code can then safely
--- execute this code via 'evalLIO', though usually a wrapper function
--- is employed depending on the type of labels used by an application.
--- For example, with "LIO.DCLabels", you would use 'evalDC' to execute
--- an untrusted computation.
 --
 -- Untrusted code must be prevented from importing this module.  The
 -- exported symbols ending ...@TCB@ can be used to violate label
@@ -30,16 +33,17 @@ module LIO.TCB (
                -- * Basic label functions
                -- $labels
                POrdering(..), POrd(..), o2po, Label(..)
-               , Lref, Priv(..), NoPrivs(..)
-               , taintR, setLabelRP, unlrefP
+               , Priv(..), NoPrivs(..)
                -- * Labeled IO Monad (LIO)
                , LIO
-               , lref
                , currentLabel, currentClearance
-               , taint, taintP, wguard, wguardP
-               , aguard, setLabelP
+               , taint, taintP, wguard, wguardP, aguard, setLabelP
                , setClearance, setClearanceP
-               , openL, closeL, discardL
+               -- * References to labeled pure data (LRefs)
+               , Lref
+               , lref, unlrefP
+               , taintR, guardR, setLabelRP
+               , openR, closeR, discardR
                -- * Exceptions
                , throwL, catchL, catchLp, onExceptionL
                , LabelFault(..)
@@ -93,18 +97,63 @@ import Data.Typeable
 
 Labels are a way of describing who can observe and modify data.  There
 is a partial order, generally pronounced \"can flow to\" on labels.
-The idea is that an object labeled L1 should affect one labeled L2
-only if L1 /can flow to/ L2.  This can flow to relation is expressed
-by the `leq` function (i.e., less then or equal to).  Note that higher
-labels are not more-or-less privileged.  As a general rule of thumb,
-the higher your label, the more things you can read, while the lower
-the label, the more things you can write.
+In Haskell we write this partial order ``leq`` (in the literature it
+is usually written as a square less than or equal sign--@\\sqsubseteq@
+in TeX).
+
+The idea is that data labeled l1 should affect data labeled l2 only if
+l1 ``leq`` l2, (i.e., l1 /can flow to/ l2).  The 'LIO' monad keeps
+track of the current label of the executing code (accessible via the
+'currentLabel' function).  Code may attempt to perform various IO or
+memory operations on labeled data.  Touching data may change the
+current label or throw an exception if an operation would violate
+can-flow-to restrictions.
+
+If the current label is @lcurrent@, then it is only permissible to
+read data labeled @lr@ if @lr ``leq`` lcurrent@.  This is sometimes
+termed \"no read up\" in the literature; however, because the partial
+order allows for incomparable labels (i.e., two labels @l1@ and @l2@
+such that @not (l1 ``leq`` l2) && not (l2 ``leq`` l1)@), a more
+appropriate phrasing would be \"read only what can flow to your
+label\".  Note that rather than trow an exception, reading data often
+just increases the current label to ensure that @lr ``leq`` lcurrent@.
+The LIO monad keeps a second label, called the /clearance/ (see
+'currentClearance'), that represents the highest value the current
+thread can raise its label to.
+
+Conversely, it is only permissible to modify data labeled @lw@ when
+@lcurrent ``leq`` lw@, a property often cited as \"no write down\",
+but more accurately characterized as \"write only what you can flow
+to\".  In practice, there are very few IO abstractions in which it is
+possible to do a pure write that doesn't also involve observing some
+state.  For instance, writing to a file handle and not getting an
+exception tells you that the handle is not closed.  Thus, in practice,
+the requirement for modifying data labeled @lw@ is almost always that
+@lcurrent == lw@.
+
+Note that higher labels are neither more nor less privileged than
+lower ones.  Simply, the higher one's label is, the more things one
+can read.  Conversely, the lower one's label, the more things one can
+write.  Because labels are a partial and not a total order, it is
+common to have data not accessible to the current thread, for instance
+if the current label is @lcurrent@, the current clearance is
+@ccurrent@, and data is labeled @ld@ such that @not (lcurrent ``leq``
+ld || ld ``leq`` ccurrent)@, then the current thread can neigher read
+nor write the data, at least without invoking some privilege.
 
 Privilege comes from a separate class, called 'Priv', representing the
-ability to bypass the protection of certain labeles.  Given
-privileges, one might be able to copy data from an object labeled L1
-to one labeled L2, but which specific pairs depends on the specific
-privileges.
+ability to bypass the protection of certain labeles.  Essentially
+privilege allows you to behave as if @l1 ``leq`` l2@ even when that is
+not the case.  The basic operation on the 'Priv' object is 'leqp',
+which performs the more permissive can-flow-to check given particular
+privileges.  Many 'LIO' operations have variants ending @...P@ that
+take a privilege argument to act in a more permissive way.  All 'Priv'
+types are monoids, and so can be combined with 'mappend'.
+
+How to generate privileges is specific to the particular label type in
+use.  The method used is 'mintTCB', but the arguments depend on the
+particular label type.  (Obviously the symbol 'mintTCB' must not be
+available to untrusted code.)
 
 -}
 
@@ -368,16 +417,16 @@ setClearanceTCB l = get >>= doit
 -- |Within the 'LIO' monad, this function takes an 'Lref' and returns
 -- the value.  Thus, in the 'LIO' monad one can say:
 --
--- > x <- openL (xref :: Lref SomeLabelType Int)
+-- > x <- openR (xref :: Lref SomeLabelType Int)
 --
 -- And now it is possible to use the value of @x@, which is the pure
--- value of what was stored in @xref@.  Of course, @openL@ also raises
+-- value of what was stored in @xref@.  Of course, @openR@ also raises
 -- the current label.  If raising the label would exceed the current
 -- clearance, then the value of @x@ is undefined, which means the
 -- value of any computation that actually uses @x@ will also be
 -- undefined.
-openL             :: (Label l) => Lref l a -> LIO l s a
-openL (Lref la a) = do
+openR             :: (Label l) => Lref l a -> LIO l s a
+openR (Lref la a) = do
   s <- get
   if la `leq` lioC s
     then do put s { lioL = lioL s `lub` la }
@@ -385,15 +434,15 @@ openL (Lref la a) = do
     else
         return undefined
 
--- Might have lowered clearance inside closeL, so just preserve it
--- |@closeL@ is the dual of @openL@.  It allows one to invoke
+-- Might have lowered clearance inside closeR, so just preserve it
+-- |@closeR@ is the dual of @openR@.  It allows one to invoke
 -- computations that would raise the current label, but without
 -- actually raising the label.  Instead, the result of the computation
 -- is packaged into an 'Lref'.  Thus, to get at the result of the
--- computation one will have to call 'openL' and raise the label, but
--- this can be postponed, or done inside some other call to 'closeL'.
-closeL   :: (Label l) => LIO l s a -> LIO l s (Lref l a)
-closeL m = do
+-- computation one will have to call 'openR' and raise the label, but
+-- this can be postponed, or done inside some other call to 'closeR'.
+closeR   :: (Label l) => LIO l s a -> LIO l s (Lref l a)
+closeR m = do
   LIOstate { lioL = l, lioC = c } <- get
   a <- m
   s <- get
@@ -402,8 +451,8 @@ closeL m = do
 
 -- |Executes a computation that would raise the current label, but
 -- discards the result so as to keep the label the same.
-discardL   :: (Label l) => LIO l s a -> LIO l s ()
-discardL m = closeL m >> return ()
+discardR   :: (Label l) => LIO l s a -> LIO l s ()
+discardR m = closeR m >> return ()
   
 
 getTCB :: (Label l) => LIO l s s

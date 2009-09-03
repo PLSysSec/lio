@@ -16,7 +16,7 @@ module LIO.Base (
                 , taint, taintP, wguard, wguardP
                 , aguard, setLabelP
                 , setClearance, setClearanceP
-                , openL, closeL, discardL
+                , openR, closeR, discardR
                 -- * Exceptions
                 , throwL, catchL, catchLp, onExceptionL
                 , LabelFault(..)
