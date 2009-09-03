@@ -442,7 +442,7 @@ mkRoot l = do
 --
 -- Note that this function will touch bad parts of the file system if
 -- it is supplied with a malicous 'Name'.  Thus, it is important to
--- keep the constructur of 'Name' private, so that the only way for
+-- keep the constructor of 'Name' private, so that the only way for
 -- user code to generate names is to start with 'rootDir' and call
 -- @lookupName@.
 lookupName                 :: (Priv l p) =>
