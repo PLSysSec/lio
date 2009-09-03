@@ -35,10 +35,18 @@ module LIO.TCB (
                POrdering(..), POrd(..), o2po, Label(..)
                , Priv(..), NoPrivs(..)
                -- * Labeled IO Monad (LIO)
+
+               -- | The 'LIO' monad is a wrapper around 'IO' that
+               -- keeps track of the current label and clearance.  It
+               -- is possible to raise one's label or lower one's
+               -- clearance without privilege, but to move in the
+               -- other direction requires appropriate privilege.
                , LIO
                , currentLabel, currentClearance
-               , taint, taintP, wguard, wguardP, aguard, setLabelP
-               , setClearance, setClearanceP
+               , setLabelP , setClearance, setClearanceP
+               -- ** LIO guards
+               -- $guards
+               , taint, taintP, wguard, wguardP, aguard
                -- * References to labeled pure data (LRefs)
                , Lref
                , lref, unlrefP
@@ -324,11 +332,54 @@ lref l a = get >>= doit
                  | not $ lioL s `leq` l = throwL LerrLow
                  | otherwise            = return $ Lref l a
 
+-- | Returns the current value of the thread's label.
 currentLabel :: (Label l) => LIO l s l
 currentLabel = get >>= return . lioL
 
+-- | Returns the current value of the thread's clearance.
 currentClearance :: (Label l) => LIO l s l
 currentClearance = get >>= return . lioC
+
+{- $guards
+
+   Guards are used by privileged code to check that the invoking,
+   unprivileged code has access to particular data.  If the current
+   label is @lcurrent@ and the current clearance is @ccurrent@, then
+   the following checks should be performed when accessing data
+   labeled @ldata@:
+
+   * When /reading/ an object labeled @ldata@, it must be the case
+     that @ldata ``leq`` lcurrent@.  This check is performed by the
+     'taint' function, so named becuase it \"taints\" the current LIO
+     context by raising @lcurrent@ until @ldata ``leq`` lcurrent@.
+     (Specifically, it does this by computing the least upper bound of
+     the two labels with the 'lub' method of the 'Label' class.)
+     However, if after doing this it would be the case that
+     @not (lcurrent ``leq`` ccurrent)@, then 'taint' throws an
+     exception rather than raising the current label.
+
+   * When /writing/ an object, it should be the case that @ldata
+     ``leq`` lcurrent && lcurrent ``leq`` ldata@.  (As stated, this is
+     the same as saying @ldata == lcurrent@, but the two are different
+     when using 'leqp' instead of 'leq'.)  This is ensured by the
+     'wguard' (write guard) function, which does the equivalent of
+     'taint' to ensure the target label @ldata@ can flow to the
+     current label, then throws an exception if @ldata@ cannot flow
+     back to the target label.
+
+   * When /creating/ or /allocating/ objects, it is permissible for
+     them to be higher than the current label, so long as they are
+     bellow the current clearance.  In other words, it must be the
+     case that @lcurrent ``leq`` ldata && ldata ``leq`` ccurrent@.
+     This is ensured by the 'aguard' (allocation guard) function.
+
+The 'taintP' and 'wguardP' functions are variants of the above that
+take privilege to be more permissive and raise the current label less.
+There is no 'aguardP' function because it has not been necessary thus
+far--the default clearance is usually high enough that when people
+lower it they don't want it bypassed.
+
+-}
 
 -- |Use @taint l@ in trusted code before observing an object labeled
 -- @l@.  This will raise the current label to a value @l'@ such that
@@ -342,7 +393,9 @@ taint l' = do s <- get
                 else throwL LerrClearance
 
 -- |Like 'taint', but use privileges to reduce the amount of taint
--- required.
+-- required.  Note that unlike 'setLabelP', @taintP@ will never lower
+-- the current label.  It simply uses privileges to avoid raising the
+-- label as high as 'taint' would raise it.
 taintP      :: (Priv l p) =>
                  p              -- ^Privileges to invoke
               -> l              -- ^Label to taint to if no privileges
@@ -370,7 +423,7 @@ wguardP p l = do l' <- currentLabel
                   then taintP p l
                   else throwL LerrHigh
 
--- |Ensures the label argument is between the current IO label and
+-- | Ensures the label argument is between the current IO label and
 -- current IO clearance.  Use this function in code that allocates
 -- objects--you shouldn't be able to create an object labeled @l@
 -- unless @aguard l@ does not throw an exception.
@@ -381,6 +434,13 @@ aguard newl = do c <- currentClearance
                  unless (leq l newl) $ throwL LerrLow
                  return ()
 
+-- | If the current label is @oldLabel@ and the current clearance is
+-- @clearance@, this function allows a code to raise the label to any
+-- value @newLabel@ such that
+-- @oldLabel ``leq`` newLabel && newLabel ``leq`` clearance@.
+-- Note that there is no @setLabel@ variant without the @...P@ because
+-- the 'taint' function provides essentially the same functionality
+-- that @setLabel@ would.
 setLabelP     :: (Priv l p) => p -> l -> LIO l s ()
 setLabelP p l = do s <- get
                    if leqp p (lioL s) l
