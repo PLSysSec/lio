@@ -23,7 +23,7 @@ import LIO.TCB
 import LIO.FS
 
 import Prelude hiding (readFile, writeFile)
-import Control.Exception hiding (throwIO, catch)
+import Control.Exception hiding (throwIO, catch, onException)
 import qualified Data.ByteString.Lazy as L
 import qualified System.Directory as IO
 import qualified System.IO as IO

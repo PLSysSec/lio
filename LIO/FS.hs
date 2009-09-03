@@ -84,7 +84,7 @@ import LIO.TmpFile
 
 import Prelude hiding (catch)
 
-import Control.Exception hiding (throwIO, catch)
+import Control.Exception hiding (throwIO, catch, onException)
 import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC

@@ -53,8 +53,8 @@ module LIO.TCB (
                , taintR, guardR, setLabelRP
                , openR, closeR, discardR
                -- * Exceptions
-               , MonadCatch(..), onExceptionL
                , LabelFault(..)
+               , MonadCatch(..), catchP, onExceptionP
                , MonadBlock(..)
                -- * Executing computations
                , evalLIO
@@ -610,12 +610,16 @@ instance Label l => Show (LabeledExceptionTCB l) where
 instance (Label l) => Exception (LabeledExceptionTCB l)
 
 class (Monad m) => MonadCatch m where
-    throwIO :: (Exception e) => e -> m a
-    catch :: (Exception e) => m a -> (e -> m a) -> m a
+    throwIO             :: (Exception e) => e -> m a
+    catch               :: (Exception e) => m a -> (e -> m a) -> m a
+    onException         :: m a -> m b -> m a
+    onException io what = io `catch` \e ->
+                          what >> throwIO (e :: SomeException)
 
 instance MonadCatch IO where
     throwIO = E.throwIO
     catch = E.catch
+    onException = E.onException
 
 instance (Label l) => MonadCatch (LIO l s) where
     -- |It is not possible to catch pure exceptions from within the 'LIO'
@@ -626,7 +630,7 @@ instance (Label l) => MonadCatch (LIO l s) where
     -- | Basic function for catching labeled exceptions.  (The fact that
     -- they are labeled is hidden from the handler.)
     --
-    -- > catchL m c = catchLp m NoPrivs (\_ -> c)
+    -- > catchL m c = catchP m NoPrivs (\_ -> c)
     --
     catch m c = iomaps (\s m' -> m' `E.catch` doit s) m
         where
@@ -634,6 +638,7 @@ instance (Label l) => MonadCatch (LIO l s) where
               case fromException se of
                 Just e' | l `leq` lioL s -> unLIO (c e') s
                 Nothing -> E.throwIO e
+
 
 
 -- | Catches an exception, so long as the label at the point where the
@@ -652,17 +657,17 @@ catchP m p c = iomaps (\s m' -> m' `E.catch` doit s) m
                 Just e' | leqp p l $ lioL s -> unLIO (c l e') s
                 Nothing -> E.throw e
 
--- | Analogous to 'onException', but for the 'LIO' monad.  Note,
--- however, that the handler will not run if the label is raised.
-onExceptionL         :: (Label l) =>
-                        LIO l s a -> LIO l s b -> LIO l s a
-onExceptionL io what = io `catch` \e -> do what
-                                           throwIO (e :: SomeException)
-
-onExceptionLp           :: (Priv l p) =>
-                           LIO l s a -> p -> LIO l s b -> LIO l s a
-onExceptionLp io p what = catchP io p
-                          (\l e -> what >> throwIO (e :: SomeException))
+-- | 'onException' cannot run its handler if the label was raised in
+-- the computation that threw the exception.  This variant allows
+-- privileges to be supplied, so as to catch exceptions thrown with a
+-- raised label.
+onExceptionP           :: (Priv l p) =>
+                          LIO l s a -- ^ The computation to run
+                       -> p         -- ^ Privileges to downgrade exception
+                       -> LIO l s b -- ^ Handler to run on exception
+                       -> LIO l s a -- ^ Result if no exception thrown
+onExceptionP io p what = catchP io p
+                         (\l e -> what >> throwIO (e :: SomeException))
 
 -- | @MonadBlock@ is the class of monads that support the 'block' and
 -- 'unblock' functions for disabling and enabling asynchronous
