@@ -48,9 +48,9 @@ module LIO.TCB (
                , evalLIO
                -- Start TCB exports
                -- * Privileged operations
+               , ShowTCB(..)
                , lrefTCB
                , PrivTCB, MintTCB(..)
-               , showTCB
                , unlrefTCB, setLabelTCB, setClearanceTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
@@ -156,8 +156,15 @@ class (POrd a, Show a, Read a, Typeable a) => Label a where
 
 data (Label l) => Lref l t = Lref l t
 
-showTCB            :: (Label l, Show t) => Lref l t -> String
-showTCB (Lref l t) = shows t $ " {" ++ shows l "}"
+-- | It would be a security issue to make certain objects a member of
+-- the show class, but nonetheless it is useful to be able to examine
+-- such objects from within the debugger.  The 'showTCB' method can be
+-- used to examine such objects.
+class ShowTCB a where
+    showTCB :: a -> String
+
+instance (Label l, Show a) => ShowTCB (Lref l a) where
+    showTCB (Lref l t) = shows t $ " {" ++ shows l "}"
 
 instance Label l => Functor (Lref l) where
     fmap f (Lref l t) = Lref (l `lub` lpure) (f t)

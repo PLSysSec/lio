@@ -28,7 +28,8 @@ module LIO.Base (
 -- XXX - just for now
 
 import LIO.TCB hiding ( 
-                 lrefTCB
+                 ShowTCB(..)
+               , lrefTCB
                , PrivTCB, MintTCB(..)
                , showTCB
                , unlrefTCB, setLabelTCB, setClearanceTCB
