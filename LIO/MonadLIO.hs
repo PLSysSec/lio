@@ -8,11 +8,6 @@
 -- computations from transformed versions of the 'LIO' monad.  There
 -- is also a method @liftIO@, which is a synonym for 'liftLIO', to
 -- help with porting code that expects to run in the 'IO' monad.
--- Users will want to hide or qualify one of the @liftIO@ definitions.
--- For instance:
---
--- > import LIO.Base hiding (MonadLIO(liftIO))
---
 module LIO.MonadLIO where
 
 import LIO.TCB
