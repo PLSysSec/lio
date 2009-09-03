@@ -18,7 +18,7 @@ module LIO.Base (
                 , setClearance, setClearanceP
                 , openR, closeR, discardR
                 -- * Exceptions
-                , throwL, catchL, catchLp, onExceptionL
+                , MonadCatch(..), onExceptionL
                 , LabelFault(..)
                 , MonadBlock(..)
                 -- * Executing computations

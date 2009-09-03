@@ -23,7 +23,7 @@ import LIO.TCB
 import LIO.FS
 
 import Prelude hiding (readFile, writeFile)
-import Control.Exception
+import Control.Exception hiding (throwIO, catch)
 import qualified Data.ByteString.Lazy as L
 import qualified System.Directory as IO
 import qualified System.IO as IO
@@ -129,7 +129,7 @@ mkLHandle priv l start path mode = do
            aguard hl
            h <- rtioTCB $ openNode node mode
            return $ LHandleTCB hl h
-    (Left e, IO.ReadMode) -> throwL e
+    (Left e, IO.ReadMode) -> throwIO e
     _ -> do wguardP priv dirlabel
             aguard l           -- lookupName may have changed label
             (h, new) <- rtioTCB $ mkNodeReg mode l

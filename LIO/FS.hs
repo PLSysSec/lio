@@ -84,7 +84,7 @@ import LIO.TmpFile
 
 import Prelude hiding (catch)
 
-import Control.Exception
+import Control.Exception hiding (throwIO, catch)
 import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
@@ -437,7 +437,7 @@ lookupName priv start path =
       stripslash t = t
       dolookup name [] = return name
       dolookup name (".":rest) = dolookup name rest
-      dolookup _ ("..":_) = throwL $ mkIOError doesNotExistErrorType
+      dolookup _ ("..":_) = throwIO $ mkIOError doesNotExistErrorType
                             "illegal filename" Nothing (Just ".." )
       dolookup name (cn:rest) = do
         -- XXX next thing should deal with partially created nodes

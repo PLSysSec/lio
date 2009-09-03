@@ -16,6 +16,7 @@
 module LIO.MonadLIO where
 
 import LIO.TCB
+import qualified LIO.TCB as TCB
 
 import Control.Monad.Cont
 import Control.Monad.Error
@@ -49,5 +50,5 @@ instance (Monoid w, MonadLIO m l s) => MonadLIO (WriterT w m) l s where
     liftLIO = lift . liftLIO
 
 instance (Label l) => MonadError IOError (LIO l s) where
-    throwError = throwL
-    catchError = catchL
+    throwError = TCB.throwIO
+    catchError = TCB.catch

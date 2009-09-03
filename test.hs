@@ -14,14 +14,14 @@ import LIO.Handle
 import LIO.DCLabel
 import LIO.FS
 
-import Prelude hiding (readFile, writeFile)
-import Control.Exception
+import Prelude hiding (catch, readFile, writeFile)
+import Control.Exception hiding (throwIO, catch)
 import Control.Applicative
 import qualified Data.ByteString.Lazy as L
 import Data.Set (Set)
 import qualified Data.Set as Set
 import System.IO hiding (readFile, writeFile)
-import System.IO.Error
+import System.IO.Error hiding (catch)
 
 cat1 = DCat (Set.fromList [Principal "my@address.com"
                           , Principal "your@address.com"])
@@ -39,10 +39,10 @@ md = evalDC $ mkDir NoPrivs h rootDir "high"
 
 maybeReadFile :: String -> DC (Maybe L.ByteString)
 maybeReadFile path =
-  catchL (Just <$> readFile path)
-         (\e -> if isDoesNotExistError e
-                then return Nothing
-                else throwL e)
+  catch (Just <$> readFile path)
+            (\e -> if isDoesNotExistError e
+                   then return Nothing
+                   else throwIO e)
 
 doReadFile :: String -> DC L.ByteString
 doReadFile path = readFile path

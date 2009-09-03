@@ -53,7 +53,7 @@ module LIO.TCB (
                , taintR, guardR, setLabelRP
                , openR, closeR, discardR
                -- * Exceptions
-               , throwL, catchL, catchLp, onExceptionL
+               , MonadCatch(..), onExceptionL
                , LabelFault(..)
                , MonadBlock(..)
                -- * Executing computations
@@ -72,7 +72,8 @@ module LIO.TCB (
 
 import Prelude hiding (catch)
 import Control.Monad.State.Lazy hiding (put, get)
-import Control.Exception
+import Control.Exception hiding (catch, throw, throwIO, onException)
+import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
 
@@ -295,7 +296,7 @@ taintR l' (Lref l a) = Lref (lub l l') a
 guardR :: (Label l) => l -> Lref l a -> LIO l s ()
 guardR l' (Lref l a) = do
   cur <- currentLabel
-  unless (l `leq` l' && l `leq` cur) $ throwL LerrHigh
+  unless (l `leq` l' && l `leq` cur) $ throwIO LerrHigh
 
 setLabelRP                   :: Priv l p => p -> l -> Lref l a -> Lref l a
 setLabelRP p newl (Lref l a) = if leqp p l newl then Lref newl a else undefined
@@ -328,8 +329,8 @@ put s = mkLIO $ \_ -> return (() , s)
 
 lref     :: (Label l) => l -> a -> LIO l s (Lref l a)
 lref l a = get >>= doit
-    where doit s | not $ l `leq` lioC s = throwL LerrClearance
-                 | not $ lioL s `leq` l = throwL LerrLow
+    where doit s | not $ l `leq` lioC s = throwIO LerrClearance
+                 | not $ lioL s `leq` l = throwIO LerrLow
                  | otherwise            = return $ Lref l a
 
 -- | Returns the current value of the thread's label.
@@ -390,7 +391,7 @@ taint l' = do s <- get
               let l = lioL s `lub` l'
               if l `leq` lioC s
                 then put s { lioL = l }
-                else throwL LerrClearance
+                else throwIO LerrClearance
 
 -- |Like 'taint', but use privileges to reduce the amount of taint
 -- required.  Note that unlike 'setLabelP', @taintP@ will never lower
@@ -404,7 +405,7 @@ taintP p l' = do s <- get
                  let l = lostar p l' (lioL s)
                  if l `leq` lioC s
                    then put s { lioL = l }
-                   else throwL LerrClearance
+                   else throwIO LerrClearance
 
 -- |Use @wguard l@ in trusted code before modifying an object labeled
 -- @l@.  If @l'@ is the current label, then this function ensures that
@@ -414,14 +415,14 @@ wguard :: (Label l) => l -> LIO l s ()
 wguard l = do l' <- currentLabel
               if l' `leq` l
                then taint l
-               else throwL LerrHigh
+               else throwIO LerrHigh
 
 -- |Like 'wguard', but takes privilege argument to be more permissive.
 wguardP     :: (Priv l p) => p -> l -> LIO l s ()
 wguardP p l = do l' <- currentLabel
                  if leqp p l' l
                   then taintP p l
-                  else throwL LerrHigh
+                  else throwIO LerrHigh
 
 -- | Ensures the label argument is between the current IO label and
 -- current IO clearance.  Use this function in code that allocates
@@ -430,8 +431,8 @@ wguardP p l = do l' <- currentLabel
 aguard :: (Label l) => l -> LIO l s ()
 aguard newl = do c <- currentClearance
                  l <- currentLabel
-                 unless (leq newl c) $ throwL LerrClearance
-                 unless (leq l newl) $ throwL LerrLow
+                 unless (leq newl c) $ throwIO LerrClearance
+                 unless (leq l newl) $ throwIO LerrLow
                  return ()
 
 -- | If the current label is @oldLabel@ and the current clearance is
@@ -445,33 +446,33 @@ setLabelP     :: (Priv l p) => p -> l -> LIO l s ()
 setLabelP p l = do s <- get
                    if leqp p (lioL s) l
                      then put s { lioL = l }
-                     else throwL LerrPriv
+                     else throwIO LerrPriv
 
 setLabelTCB     :: (Label l) => l -> LIO l s ()
 setLabelTCB l = do s <- get
                    if l `leq` lioC s
                       then put s { lioL = l }
-                      else throwL LerrClearance
+                      else throwIO LerrClearance
 
 -- |Reduce the current clearance.  One cannot raise the current label
 -- or create object with labels higher than the current clearance.
 setClearance   :: (Label l) => l -> LIO l s ()
 setClearance l = get >>= doit
-    where doit s | not $ l `leq` lioC s = throwL LerrClearance
-                 | not $ lioL s `leq` l = throwL LerrLow
+    where doit s | not $ l `leq` lioC s = throwIO LerrClearance
+                 | not $ lioL s `leq` l = throwIO LerrLow
                  | otherwise            = put s { lioC = l }
 
 -- |Raise the current clearance (undoing the effects of 'setClearance').
 -- This requires privileges.
 setClearanceP   :: (Priv l p) => p -> l -> LIO l s ()
 setClearanceP p l = get >>= doit
-    where doit s | not $ leqp p l $ lioC s = throwL LerrPriv
-                 | not $ lioL s `leq` l = throwL LerrLow
+    where doit s | not $ leqp p l $ lioC s = throwIO LerrPriv
+                 | not $ lioL s `leq` l = throwIO LerrLow
                  | otherwise            = put s { lioC = l }
 
 setClearanceTCB   :: (Label l) => l -> LIO l s ()
 setClearanceTCB l = get >>= doit
-    where doit s | not $ lioL s `leq` l = throwL LerrInval
+    where doit s | not $ lioL s `leq` l = throwIO LerrInval
                  | otherwise            = put s { lioC = l }
 
 -- |Within the 'LIO' monad, this function takes an 'Lref' and returns
@@ -534,7 +535,7 @@ unLIO (LIO (StateT f)) = f
 
 runLIO     :: forall l s a. (Label l) => LIO l s a -> LIOstate l s
            -> IO (a, LIOstate l s)
-runLIO m s = unLIO m s `catch` (throw . delabel)
+runLIO m s = unLIO m s `E.catch` (E.throwIO . delabel)
     where delabel :: LabeledExceptionTCB l -> SomeException
           delabel (LabeledExceptionTCB l e) = e
            -- trace ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") e
@@ -575,27 +576,6 @@ data LabelFault
 
 instance Exception LabelFault
 
-data LabeledExceptionTCB l =
-    LabeledExceptionTCB l SomeException deriving Typeable
-
-instance Label l => Show (LabeledExceptionTCB l) where
-    showsPrec _ (LabeledExceptionTCB l e) rest =
-        shows e $ (" {" ++) $ shows l $ "}" ++ rest
-
-instance (Label l) => Exception (LabeledExceptionTCB l)
-
-unlabelException :: (Label l) => LabeledExceptionTCB l -> IO (a, LIOstate l s)
-unlabelException (LabeledExceptionTCB l (SomeException e)) =
-    putStrLn ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") >> -- XXX
-    throwIO e
-
--- |It is not possible to catch pure exceptions from within the 'LIO'
--- monad, but @throwL@ wraps up an exception with the current label,
--- so that it can be caught with 'catchL'.
-throwL   :: (Exception e, Label l) => e -> LIO l s a
-throwL e = mkLIO $ \s -> throwIO $
-           LabeledExceptionTCB (lioL s) (toException e)
-
 -- | Map a function over the underlying IO computation within an LIO.
 -- Obviously this symbol should not be exported, as it is privileged.
 iomaps     :: (Label l) =>
@@ -617,49 +597,72 @@ iomap f = iomaps $ \_ -> f
 -- @rethrowTCB@ not in any way change the label, as otherwise
 -- @rethrowTCB@ would put the wrong label on the exception.
 rethrowTCB :: (Label l) => LIO l s a -> LIO l s a
-rethrowTCB = iomaps $ \s -> handle (throwIO . (LabeledExceptionTCB $ lioL s))
+rethrowTCB = iomaps $ \s -> handle (E.throwIO . (LabeledExceptionTCB $ lioL s))
  -- mapException (LabeledExceptionTCB $ lioL s) c
+
+data LabeledExceptionTCB l =
+    LabeledExceptionTCB l SomeException deriving Typeable
+
+instance Label l => Show (LabeledExceptionTCB l) where
+    showsPrec _ (LabeledExceptionTCB l e) rest =
+        shows e $ (" {" ++) $ shows l $ "}" ++ rest
+
+instance (Label l) => Exception (LabeledExceptionTCB l)
+
+class (Monad m) => MonadCatch m where
+    throwIO :: (Exception e) => e -> m a
+    catch :: (Exception e) => m a -> (e -> m a) -> m a
+
+instance MonadCatch IO where
+    throwIO = E.throwIO
+    catch = E.catch
+
+instance (Label l) => MonadCatch (LIO l s) where
+    -- |It is not possible to catch pure exceptions from within the 'LIO'
+    -- monad, but @throwIO@ wraps up an exception with the current label,
+    -- so that it can be caught with 'catch' or 'catchP'..
+    throwIO e = mkLIO $ \s -> E.throwIO $
+                LabeledExceptionTCB (lioL s) (toException e)
+    -- | Basic function for catching labeled exceptions.  (The fact that
+    -- they are labeled is hidden from the handler.)
+    --
+    -- > catchL m c = catchLp m NoPrivs (\_ -> c)
+    --
+    catch m c = iomaps (\s m' -> m' `E.catch` doit s) m
+        where
+          doit s e@(LabeledExceptionTCB l se) =
+              case fromException se of
+                Just e' | l `leq` lioL s -> unLIO (c e') s
+                Nothing -> E.throwIO e
+
 
 -- | Catches an exception, so long as the label at the point where the
 -- exception was thrown can flow to the label at which catchLp is
 -- invoked, modulo the privileges specified.  Note that the handler
 -- receives an an extra first argument (before the exception), which
 -- is the label when the exception was thrown.
-catchLp       :: (Label l, Exception e, Priv l p) =>
+catchP       :: (Label l, Exception e, Priv l p) =>
                  LIO l s a             -- ^ Computation to run
-              -> p   -- ^ Privileges with which to downgrade exception
-              -> (l -> e -> LIO l s a) -- ^ Exception handler
-              -> LIO l s a             -- ^ Result of computation or handler
-catchLp m p c = iomaps (\s m' -> m' `catch` doit s) m
+             -> p   -- ^ Privileges with which to downgrade exception
+             -> (l -> e -> LIO l s a) -- ^ Exception handler
+             -> LIO l s a             -- ^ Result of computation or handler
+catchP m p c = iomaps (\s m' -> m' `E.catch` doit s) m
     where doit s e@(LabeledExceptionTCB l se) =
               case fromException se of
                 Just e' | leqp p l $ lioL s -> unLIO (c l e') s
-                Nothing -> throw e
-
--- | Basic function for catching labeled exceptions.  (The fact that
--- they are labeled is hidden from the handler.)
---
--- > catchL m c = catchLp m NoPrivs (\_ -> c)
---
-catchL     :: (Label l, Exception e) =>
-              LIO l s a -> (e -> LIO l s a) -> LIO l s a
-catchL m c = iomaps (\s m' -> m' `catch` doit s) m
-    where doit s e@(LabeledExceptionTCB l se) =
-              case fromException se of
-                Just e' | l `leq` lioL s -> unLIO (c e') s
-                Nothing -> throw e
+                Nothing -> E.throw e
 
 -- | Analogous to 'onException', but for the 'LIO' monad.  Note,
 -- however, that the handler will not run if the label is raised.
 onExceptionL         :: (Label l) =>
                         LIO l s a -> LIO l s b -> LIO l s a
-onExceptionL io what = io `catchL` \e -> do what
-                                            throwL (e :: SomeException)
+onExceptionL io what = io `catch` \e -> do what
+                                           throwIO (e :: SomeException)
 
 onExceptionLp           :: (Priv l p) =>
                            LIO l s a -> p -> LIO l s b -> LIO l s a
-onExceptionLp io p what = catchLp io p
-                          (\l e -> what >> throwL (e :: SomeException))
+onExceptionLp io p what = catchP io p
+                          (\l e -> what >> throwIO (e :: SomeException))
 
 -- | @MonadBlock@ is the class of monads that support the 'block' and
 -- 'unblock' functions for disabling and enabling asynchronous
@@ -689,11 +692,11 @@ class (MonadBlock m) => OnExceptionTCB m where
           after a
           return b
 instance OnExceptionTCB IO where
-    onExceptionTCB = onException
-    bracketTCB     = bracket
+    onExceptionTCB = E.onException
+    bracketTCB     = E.bracket
 instance (Label l) => OnExceptionTCB (LIO l s) where
     onExceptionTCB io cleanup = 
         mkLIO $ \s -> unLIO io s
-                      `catch` \e -> do unLIO cleanup s
-                                       throwIO (e :: SomeException)
+                      `E.catch` \e -> do unLIO cleanup s
+                                         E.throwIO (e :: SomeException)
 
