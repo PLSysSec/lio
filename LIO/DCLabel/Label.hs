@@ -25,7 +25,10 @@ category containing that Principal.  Hence the name
 module LIO.DCLabel.Label
     (
     -- * The base label type
-    Principal(..), DCat(..), DCLabel(..)
+    Principal(..), DCat(..), DCSet, DCLabel(..)
+    -- * Category functions
+    , dcEmpty, dcSingleton, dcFromList, dcAll
+    , dcSubsetOf, dcUnion, dcIntersection
     -- * Privileges
     , DCPrivs
     -- * Useful aliases for LIO Monad
@@ -58,56 +61,76 @@ instance Read DCat where
       (own, afterown) <- reads s
       return (DCat (Set.fromList own), afterown)
 
-data DCLabel = DCLabel { elI :: Set DCat
-                       , elS :: Set DCat
-                       }
-             | Bottom | Top deriving (Eq, Typeable)
+data DCSet = DCSet (Set DCat)
+           | DCAll deriving (Eq, Typeable)
+
+dcEmpty :: DCSet
+dcEmpty = DCSet Set.empty
+
+dcSingleton :: DCat -> DCSet
+dcSingleton c = DCSet $ Set.singleton c
+
+dcFromList   :: [DCat] -> DCSet
+dcFromList l = DCSet $ Set.fromList l
+
+dcAll :: DCSet
+dcAll = DCAll
+
+dcSubsetOf                       :: DCSet -> DCSet -> Bool
+dcSubsetOf _ DCAll               = True
+dcSubsetOf DCAll _               = False
+dcSubsetOf (DCSet s1) (DCSet s2) = Set.isSubsetOf s1 s2
+
+dcUnion                       :: DCSet -> DCSet -> DCSet
+dcUnion DCAll _               = DCAll
+dcUnion _ DCAll               = DCAll
+dcUnion (DCSet s1) (DCSet s2) = DCSet $ Set.union s1 s2
+
+dcIntersection                       :: DCSet -> DCSet -> DCSet
+dcIntersection DCAll s               = s
+dcIntersection s DCAll               = s
+dcIntersection (DCSet s1) (DCSet s2) = DCSet $ Set.intersection s1 s2
+
+match [] r s                   = [(r, s)]
+match _ _ []                   = []
+match (m:ms) r (s:ss) | m /= s = []
+                      | m == s = match ms r ss   
+
+instance Show DCSet where
+    showsPrec _ DCAll rest     = "ALL" ++ rest
+    showsPrec _ (DCSet s) rest = shows (Set.toList s) rest
+
+instance Read DCSet where
+    readsPrec _ s = match "ALL" DCAll s <|>
+                    do (set, rest) <- reads s
+                       return (DCSet $ Set.fromList set, rest)
+
+data DCLabel = DCLabel { elI :: DCSet
+                       , elS :: DCSet
+                       } deriving (Eq, Typeable)
 
 instance Show DCLabel where
-    showsPrec _ (DCLabel i s) rest = "I=" ++ (shows (Set.toList i) $
-                                      " S=" ++ shows (Set.toList s) rest)
-    showsPrec _ Bottom rest        = "Bottom" ++ rest
-    showsPrec _ Top rest           = "Top" ++ rest
+    showsPrec _ (DCLabel i s) rest =
+        "I=" ++ (shows i $ " S=" ++ shows s rest)
 
 instance Read DCLabel where
-    readsPrec _ s = match "Top" Top s <|>
-                    match "Bottom" Bottom s <|>
-                    do (_, is) <- match "I=" () s
+    readsPrec _ s = do (_, is) <- match "I=" () s
                        (i, afteri) <- reads is
                        (_, ss) <- match " S=" () afteri
                        (s, rest) <- reads ss
-                       return (DCLabel (Set.fromList i) (Set.fromList s), rest)
-        where
-          match [] r s                   = [(r, s)]
-          match _ _ []                   = []
-          match (m:ms) r (s:ss) | m /= s = []
-                                | m == s = match ms r ss   
+                       return (DCLabel i s, rest)
 
 instance POrd DCLabel where
-    Bottom `leq` _                        = True
-    _ `leq` Top                           = True
-    _ `leq` Bottom                        = False
-    Top `leq` _                           = False
-    (DCLabel i1 s1) `leq` (DCLabel i2 s2) = i2 `Set.isSubsetOf` i1
-                                            && s1 `Set.isSubsetOf` s2
+    (DCLabel i1 s1) `leq` (DCLabel i2 s2) =
+        i2 `dcSubsetOf` i1 && s1 `dcSubsetOf` s2
 
 instance Label DCLabel where
-    lpure = DCLabel Set.empty Set.empty
-    lclear = Top
-
-    lub Top _    = Top
-    lub _ Top    = Top
-    lub Bottom x = x
-    lub x Bottom = x
+    lpure = DCLabel dcEmpty dcEmpty
+    lclear = DCLabel dcEmpty DCAll
     lub (DCLabel i1 s1) (DCLabel i2 s2) =
-                 DCLabel (Set.intersection i1 i2) (Set.union s1 s2)
-
-    glb Bottom _ = Bottom
-    glb _ Bottom = Bottom
-    glb Top x    = x
-    glb x Top    = x
+        DCLabel (dcIntersection i1 i2) (dcUnion s1 s2)
     glb (DCLabel i1 s1) (DCLabel i2 s2) =
-                 DCLabel (Set.union i1 i2) (Set.intersection s1 s2)
+        DCLabel (dcUnion i1 i2) (dcIntersection s1 s2)
 
 newtype DCPrivs = DCPrivs (Set Principal) deriving (Eq, Show)
 
@@ -120,25 +143,21 @@ instance Monoid DCPrivs where
     mempty = DCPrivs Set.empty
     mappend (DCPrivs s1) (DCPrivs s2) = DCPrivs $ Set.union s1 s2
 
-overlap :: Ord a => Set a -> Set a -> Bool
-{-
-overlap a b = overlap' (Set.toAscList a) (Set.toAscList b)
-    where
-      overlap' [] []                  = True
-      overlap' (_:_) []               = False
-      overlap' [] (_:_)               = False
-      overlap' (a:as) (b:bs) | a == b = True
-      overlap' a@(a1:as) b@(b1:bs)    = 
-          if a1 < b1 then overlap' as b else overlap' a bs
--}
-overlap a b = not $ Set.null (Set.intersection a b)
-owns (DCPrivs p) (DCat c) = overlap p c
+owns                      :: DCPrivs -> DCat -> Bool
+owns (DCPrivs p) (DCat c) = not $ Set.null (Set.intersection p c)
 
 instance Priv DCLabel DCPrivs where
-    lostar p (DCLabel li ls) (DCLabel mi ms) = DCLabel ics scs
+    lostar p (DCLabel li ls) (DCLabel mi ms) =
+        DCLabel (doi li mi) (dos ls ms)
         where
-          ics = Set.filter (\c -> owns p c || Set.member c li) mi
-          scs = ms `Set.union` Set.filter (not . (owns p)) ls
+          doi (DCSet li) (DCSet mi) =
+              DCSet $ Set.filter (\c -> owns p c || Set.member c li) mi
+          doi s DCAll = s
+          doi DCAll s = s
+
+          dos (DCSet ls) (DCSet ms) =
+              DCSet $ ms `Set.union` Set.filter (not . (owns p)) ls
+          dos _ _ = DCAll
 
 -- |The base type for LIO computations using these labels.
 type DC = LIO DCLabel ()
