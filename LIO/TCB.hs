@@ -610,6 +610,25 @@ data LabeledExceptionTCB l =
    exception when the bit is 1 but not 0.  Allowing untrusted code to
    catch the exception leaks the bit.
 
+   The solution is to wrap exceptions up with a label.  The exception
+   may be caught, but only if the label of the exception can flow to
+   the label at the point the catch statement began execution.  For
+   compatibility, the 'throwIO', 'catch', and 'onException' functions
+   are now methods that work in both the 'IO' or 'LIO' monad.
+
+   If an exception is uncaught in the 'LIO' monad, the 'evalLIO'
+   function will unlabel and re-throw the exception, so that it is
+   okay to throw exceptions from within the 'LIO' monad and catch them
+   within the 'IO' monad.  (Of course, code in the 'IO' monad must be
+   careful not to let the 'LIO' code exploit it to exfiltrate
+   information.)
+
+   Wherever possible, however, code should use the 'catchP' and
+   'onExceptionP' variants that use whatever privilege is available to
+   downgrade the exception.  Note that privileged code that must
+   always run some cleanup function can use the 'onExceptionTCB' and
+   'bracketTCB' to run the cleanup code on all exceptions.
+
    Note:  You do not use the 'throw' (as opposed to 'throwIO')
    function within the 'LIO' monad.  Because 'throw' can be invoked
    from pure code, it has no notion of current label and so cannot
@@ -684,8 +703,7 @@ onExceptionP io p what = catchP io p
 
 -- | @MonadBlock@ is the class of monads that support the 'block' and
 -- 'unblock' functions for disabling and enabling asynchronous
--- exceptions, respectively.  The generalized methods are named
--- 'blockM' and 'unblockM'
+-- exceptions, respectively.
 class (Monad m) => MonadBlock m where
     block   :: m a -> m a
     unblock :: m a -> m a
