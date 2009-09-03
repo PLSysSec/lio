@@ -53,7 +53,10 @@ module LIO.TCB (
                , taintR, guardR, setLabelRP
                , openR, closeR, discardR
                -- * Exceptions
+               -- ** Exception type thrown by LIO library
                , LabelFault(..)
+               -- ** Throwing and catching labeled exceptions
+               -- $lexception
                , MonadCatch(..), catchP, onExceptionP
                , MonadBlock(..)
                -- * Executing computations
@@ -72,7 +75,8 @@ module LIO.TCB (
 
 import Prelude hiding (catch)
 import Control.Monad.State.Lazy hiding (put, get)
-import Control.Exception hiding (catch, throw, throwIO, onException)
+import Control.Exception hiding (catch, throw, throwIO,
+                                 onException, block, unblock)
 import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
@@ -555,12 +559,6 @@ iotTCB     :: (Label l) =>
            -> LIO l s a
 iotTCB f m = mkLIO $ \s -> f (unLIO m s)
 
-blockL :: (Label l) => LIO l s a -> LIO l s a
-blockL m = mkLIO $ \s -> block (unLIO m s)
-
-unblockL :: (Label l) => LIO l s a -> LIO l s a
-unblockL m = mkLIO $ \s -> unblock (unLIO m s)
-
 
 --
 -- Exceptions
@@ -603,6 +601,21 @@ rethrowTCB = iomaps $ \s -> handle (E.throwIO . (LabeledExceptionTCB $ lioL s))
 data LabeledExceptionTCB l =
     LabeledExceptionTCB l SomeException deriving Typeable
 
+{- $lexception
+
+   We must re-define the 'throwIO' and 'catch' functions to work in
+   the 'LIO' monad.  A complication is that exceptions could
+   potentially leak information.  For instance, within a block of code
+   wrapped by 'discardR', one might examine a secret bit, and throw an
+   exception when the bit is 1 but not 0.  Allowing untrusted code to
+   catch the exception leaks the bit.
+
+   Note:  You do not use the 'throw' (as opposed to 'throwIO')
+   function within the 'LIO' monad.  Because 'throw' can be invoked
+   from pure code, it has no notion of current label and so cannot
+
+-}
+
 instance Label l => Show (LabeledExceptionTCB l) where
     showsPrec _ (LabeledExceptionTCB l e) rest =
         shows e $ (" {" ++) $ shows l $ "}" ++ rest
@@ -642,7 +655,7 @@ instance (Label l) => MonadCatch (LIO l s) where
 
 
 -- | Catches an exception, so long as the label at the point where the
--- exception was thrown can flow to the label at which catchLp is
+-- exception was thrown can flow to the label at which catchP is
 -- invoked, modulo the privileges specified.  Note that the handler
 -- receives an an extra first argument (before the exception), which
 -- is the label when the exception was thrown.
@@ -674,14 +687,14 @@ onExceptionP io p what = catchP io p
 -- exceptions, respectively.  The generalized methods are named
 -- 'blockM' and 'unblockM'
 class (Monad m) => MonadBlock m where
-    blockM   :: m a -> m a
-    unblockM :: m a -> m a
+    block   :: m a -> m a
+    unblock :: m a -> m a
 instance MonadBlock IO where
-    blockM   = block
-    unblockM = unblock
+    block   = E.block
+    unblock = E.unblock
 instance (Label l) => MonadBlock (LIO l s) where
-    blockM   = iomap block
-    unblockM = iomap unblock
+    block   = iomap E.block
+    unblock = iomap E.unblock
 
 -- | For privileged code that needs to catch all exceptions in some
 -- cleanup function.  Note that for the 'LIO' monad, this function
@@ -691,9 +704,9 @@ class (MonadBlock m) => OnExceptionTCB m where
     onExceptionTCB :: m a -> m b -> m a
     bracketTCB     :: m a -> (a -> m b) -> (a -> m c) -> m c
     bracketTCB before after between =
-        blockM $ do
+        block $ do
           a <- before
-          b <- unblockM (between a) `onExceptionTCB` after a
+          b <- unblock (between a) `onExceptionTCB` after a
           after a
           return b
 instance OnExceptionTCB IO where
