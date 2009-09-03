@@ -3,7 +3,7 @@ PROGS := $(patsubst %.hs,%, $(wildcard [a-z]*.hs))
 DEPS := $(patsubst %,%.d, $(PROGS))
 
 BIN = $(HOME)/.cabal/bin/
-DOC = $(wildcard [A-Z]*/*.hs)
+DOC = $(wildcard [A-Z]*/[A-Z]*.hs [A-Z]*/[A-Z]*/[A-Z]*.hs)
 
 all: $(PROGS)
 .PHONY: all
