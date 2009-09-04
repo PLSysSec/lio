@@ -114,8 +114,8 @@ In Haskell we write this partial order ``leq`` (in the literature it
 is usually written as a square less than or equal sign--@\\sqsubseteq@
 in TeX).
 
-The idea is that data labeled l1 should affect data labeled l2 only if
-l1 ``leq`` l2, (i.e., l1 /can flow to/ l2).  The 'LIO' monad keeps
+The idea is that data labeled @l1@ should affect data labeled @l2@ only if
+@l1@ ``leq`` @l2@, (i.e., @l1@ /can flow to/ @l2@).  The 'LIO' monad keeps
 track of the current label of the executing code (accessible via the
 'currentLabel' function).  Code may attempt to perform various IO or
 memory operations on labeled data.  Touching data may change the
@@ -128,11 +128,11 @@ termed \"no read up\" in the literature; however, because the partial
 order allows for incomparable labels (i.e., two labels @l1@ and @l2@
 such that @not (l1 ``leq`` l2) && not (l2 ``leq`` l1)@), a more
 appropriate phrasing would be \"read only what can flow to your
-label\".  Note that rather than trow an exception, reading data often
-just increases the current label to ensure that @lr ``leq`` lcurrent@.
-The LIO monad keeps a second label, called the /clearance/ (see
-'currentClearance'), that represents the highest value the current
-thread can raise its label to.
+label\".  Note that, rather than throw an exception, reading data will
+often just increase the current label to ensure that @lr ``leq``
+lcurrent@.  The LIO monad keeps a second label, called the /clearance/
+(see 'currentClearance'), that represents the highest value the
+current thread can raise its label to.
 
 Conversely, it is only permissible to modify data labeled @lw@ when
 @lcurrent ``leq`` lw@, a property often cited as \"no write down\",
@@ -147,15 +147,16 @@ the requirement for modifying data labeled @lw@ is almost always that
 Note that higher labels are neither more nor less privileged than
 lower ones.  Simply, the higher one's label is, the more things one
 can read.  Conversely, the lower one's label, the more things one can
-write.  Because labels are a partial and not a total order, it is
-common to have data not accessible to the current thread, for instance
-if the current label is @lcurrent@, the current clearance is
-@ccurrent@, and data is labeled @ld@ such that @not (lcurrent ``leq``
-ld || ld ``leq`` ccurrent)@, then the current thread can neigher read
-nor write the data, at least without invoking some privilege.
+write.  But, because labels are a partial and not a total order, 
+some data may be completely inaccessible to a particular thread; for
+instance, if the current label is @lcurrent@, the current clearance is
+@ccurrent@, and some data is labeled @ld@, such that @not (lcurrent
+``leq`` ld || ld ``leq`` ccurrent)@, then the current thread can
+neither read nor write the data, at least without invoking some
+privilege.
 
-Privilege comes from a separate class, called 'Priv', representing the
-ability to bypass the protection of certain labeles.  Essentially
+Privilege comes from a separate class called 'Priv', representing the
+ability to bypass the protection of certain labels.  Essentially,
 privilege allows you to behave as if @l1 ``leq`` l2@ even when that is
 not the case.  The basic operation on the 'Priv' object is 'leqp',
 which performs the more permissive can-flow-to check given particular
@@ -165,7 +166,7 @@ types are monoids, and so can be combined with 'mappend'.
 
 How to generate privileges is specific to the particular label type in
 use.  The method used is 'mintTCB', but the arguments depend on the
-particular label type.  (Obviously the symbol 'mintTCB' must not be
+particular label type.  (Obviously, the symbol 'mintTCB' must not be
 available to untrusted code.)
 
 -}
@@ -253,16 +254,17 @@ class (Label l, Monoid p, PrivTCB p) => Priv l p where
     -- |@leqp p l1 l2@ means that privileges @p@ are sufficient to
     -- downgrade data from @l1@ to @l2@.  Note that @'leq' l1 l2@
     -- implies @'leq' p l1 l2@ for all @p@, but for some labels and
-    -- @p@ values @leqp@ will hold even if @'leq'@ does not.
+    -- privileges, values @leqp@ will hold even if @'leq'@ does not.
     leqp :: p -> l -> l -> Bool
     leqp p a b = lostar p a b `leq` b
 
     -- |@lostar p source minimum@ returns the lowest label to which
     -- one can downgrade data labeled @source@ given privileges @p@,
     -- least-upper-bounded with @minimum@.  (Without @minimum@, the
-    -- lowest label might be exponential in @p@ for some label
-    -- formats.)  More concretely, the result returned is the lowest
-    -- @lres@ such that:  @'leqp' p source lres && 'leq' minimum lres@
+    -- representation of the lowest label might have size exponential
+    -- in the size of @p@ for some label formats.)  More concretely,
+    -- the result returned is the lowest @lres@ such that:  @'leqp' p
+    -- source lres && 'leq' minimum lres@
     --
     -- This is useful if your label is originally @l1@, and you touch
     -- some stuff labeled @l2@ but want to minimize the amount of
@@ -631,7 +633,8 @@ data LabeledExceptionTCB l =
 
    Note:  Do not use the 'throw' (as opposed to 'throwIO') function
    within the 'LIO' monad.  Because 'throw' can be invoked from pure
-   code, it has no notion of current label and so cannot
+   code, it has no notion of current label and so cannot assign an
+   appropriate label to the exception.
 
 -}
 
