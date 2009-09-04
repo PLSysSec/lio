@@ -25,8 +25,8 @@ category containing that Principal.  Hence the name
 module LIO.DCLabel.Label
     (
     -- * The base label type
-    Principal(..), DCat(..), DCSet, DCLabel(..)
-    -- * Category functions
+    Principal(..), DCType, Integrity, Secrecy, DCat(..), DCSet, DCLabel(..)
+    -- * Category Set functions
     , dcEmpty, dcSingleton, dcFromList, dcAll
     , dcSubsetOf, dcUnion, dcIntersection
     -- * Privileges
@@ -51,72 +51,94 @@ instance Show Principal where
 instance Read Principal where
     readsPrec d s = map (\(p, rest) -> (Principal p, rest)) $ readsPrec d s
 
-data DCat = DCat (Set Principal) deriving (Eq, Ord)
+class (Show t) => DCType t where dcType :: t -> String
+data Secrecy = Secrecy deriving (Eq, Show)
+instance DCType Secrecy where dcType _ = "S"
+data Integrity = Integrity deriving (Eq, Show)
+instance DCType Integrity where dcType _ = "I"
 
-instance Show DCat where
-    showsPrec _ (DCat own) = shows (Set.toList own)
+newtype (DCType t) => DCat t = DCat (Set Principal) deriving (Eq, Ord)
+dCatI   :: Set Principal -> DCat Integrity
+dCatI s = DCat s
+dCatS :: Set Principal -> DCat Secrecy
+dCatS s = DCat s
 
-instance Read DCat where
+instance (DCType t) => Show (DCat t) where
+    showsPrec _ (DCat c) = shows (Set.toList c)
+
+instance (DCType t) => Read (DCat t) where
     readsPrec _ s = do
       (own, afterown) <- reads s
       return (DCat (Set.fromList own), afterown)
 
-data DCSet = DCSet (Set DCat)
-           | DCAll deriving (Eq, Typeable)
+data (DCType t) => DCSet t = DCSet (Set (DCat t))
+                           | DCAll deriving (Eq, Typeable)
 
-dcEmpty :: DCSet
+dcEmpty :: (DCType t) => DCSet t
 dcEmpty = DCSet Set.empty
 
-dcSingleton :: DCat -> DCSet
+dcSingleton :: (DCType t) => DCat t -> DCSet t
 dcSingleton c = DCSet $ Set.singleton c
 
-dcFromList   :: [DCat] -> DCSet
+dcFromList :: (DCType t) => [DCat t] -> DCSet t
 dcFromList l = DCSet $ Set.fromList l
 
-dcAll :: DCSet
+dcAll :: (DCType t) => DCSet t
 dcAll = DCAll
 
-dcSubsetOf                       :: DCSet -> DCSet -> Bool
+
+dcSubsetOf                       :: (DCType t) => DCSet t -> DCSet t -> Bool
 dcSubsetOf _ DCAll               = True
 dcSubsetOf DCAll _               = False
 dcSubsetOf (DCSet s1) (DCSet s2) = Set.isSubsetOf s1 s2
 
-dcUnion                       :: DCSet -> DCSet -> DCSet
+dcUnion                       :: (DCType t) => DCSet t -> DCSet t -> DCSet t
 dcUnion DCAll _               = DCAll
 dcUnion _ DCAll               = DCAll
 dcUnion (DCSet s1) (DCSet s2) = DCSet $ Set.union s1 s2
 
-dcIntersection                       :: DCSet -> DCSet -> DCSet
+dcIntersection :: (DCType t) => DCSet t -> DCSet t -> DCSet t
 dcIntersection DCAll s               = s
 dcIntersection s DCAll               = s
 dcIntersection (DCSet s1) (DCSet s2) = DCSet $ Set.intersection s1 s2
 
-match [] r s                   = [(r, s)]
-match _ _ []                   = []
-match (m:ms) r (s:ss) | m /= s = []
-                      | m == s = match ms r ss   
+matchskip :: String -> String -> t -> String -> [(t, String)]
+matchskip skip (m:ms) r (s:ss) | m == s        = matchskip skip ms r ss   
+matchskip skip m r (s:ss)      | s `elem` skip = matchskip skip m r ss
+matchskip _ [] r s                             = [(r, s)]
+matchskip _ _ _ _                              = []
 
-instance Show DCSet where
-    showsPrec _ DCAll rest     = "ALL" ++ rest
-    showsPrec _ (DCSet s) rest = shows (Set.toList s) rest
+match :: String -> t -> String -> [(t, String)]
+match = matchskip ""
 
-instance Read DCSet where
-    readsPrec _ s = match "ALL" DCAll s <|>
-                    do (set, rest) <- reads s
-                       return (DCSet $ Set.fromList set, rest)
+dcSetPrefix   :: (DCType t) => DCSet t -> String
+dcSetPrefix s = gettype s undefined ++ "="
+    where
+      gettype     :: (DCType t) => DCSet t -> t -> String
+      gettype _ t = dcType t
 
-data DCLabel = DCLabel { elI :: DCSet
-                       , elS :: DCSet
+instance (DCType t) => Show (DCSet t) where
+    showsPrec _ d@DCAll rest     = dcSetPrefix d ++ "ALL" ++ rest
+    showsPrec _ d@(DCSet s) rest = dcSetPrefix d ++ shows (Set.toList s) rest
+
+instance (DCType t) => Read (DCSet t) where
+    readsPrec _ s =
+        let prefix = case result of ~((r,_):_) -> dcSetPrefix r
+            result = do (_, s1) <- matchskip " " prefix () s
+                        (match "ALL" DCAll s1 <|>
+                         do (set, rest) <- reads s1
+                            return (DCSet $ Set.fromList set, rest))
+        in result
+
+data DCLabel = DCLabel { elI :: DCSet Integrity
+                       , elS :: DCSet Secrecy
                        } deriving (Eq, Typeable)
 
 instance Show DCLabel where
-    showsPrec _ (DCLabel i s) rest =
-        "I=" ++ (shows i $ " S=" ++ shows s rest)
+    showsPrec _ (DCLabel i s) rest = (shows i $ " " ++ shows s rest)
 
 instance Read DCLabel where
-    readsPrec _ s = do (_, is) <- match "I=" () s
-                       (i, afteri) <- reads is
-                       (_, ss) <- match " S=" () afteri
+    readsPrec _ s = do (i, ss) <- reads s
                        (s, rest) <- reads ss
                        return (DCLabel i s, rest)
 
@@ -143,7 +165,7 @@ instance Monoid DCPrivs where
     mempty = DCPrivs Set.empty
     mappend (DCPrivs s1) (DCPrivs s2) = DCPrivs $ Set.union s1 s2
 
-owns                      :: DCPrivs -> DCat -> Bool
+owns                      :: DCType t => DCPrivs -> DCat t -> Bool
 owns (DCPrivs p) (DCat c) = not $ Set.null (Set.intersection p c)
 
 instance Priv DCLabel DCPrivs where
