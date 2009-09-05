@@ -47,7 +47,7 @@ module LIO.TCB (
                -- ** LIO guards
                -- $guards
                , taint, taintP, wguard, wguardP, aguard
-               -- * References to labeled pure data (LRefs)
+               -- * References to labeled pure data (Lrefs)
                , Lref
                , lref, unlrefP
                , taintR, guardR, setLabelRP
@@ -289,7 +289,7 @@ lrefTCB l a = Lref l a
 
 --
 -- Since this function has a covert channel, don't export for now.
--- Really what we need is a way to check that an LRef has some
+-- Really what we need is a way to check that an Lref has some
 -- particular integrity category (or is below some label that we are
 -- allowed to read).
 --

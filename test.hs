@@ -47,4 +47,5 @@ maybeReadFile path =
 doReadFile :: String -> DC L.ByteString
 doReadFile path = readFile path
 
+main :: IO ()
 main = return ()
