@@ -28,9 +28,9 @@ cat1 = DCat (Set.fromList [Principal "my@address.com"
 cat2 = DCat (Set.fromList [Principal "my@example.com"
                           , Principal "your@address.com"])
 
-e = DCLabel (dcSingleton cat1) (dcFromList [cat1, cat2])
-d = DCLabel (dcFromList [cat1, cat2]) (dcFromList [cat1, cat2])
-h = DCLabel (dcEmpty) (dcFromList [cat1, cat2])
+e = DCLabel (dcsSingleton cat1) (dcsFromList [cat1, cat2])
+d = DCLabel (dcsFromList [cat1, cat2]) (dcsFromList [cat1, cat2])
+h = DCLabel (dcsEmpty) (dcsFromList [cat1, cat2])
 
 rl :: String -> [(DCLabel, String)]
 rl = reads

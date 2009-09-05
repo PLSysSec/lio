@@ -25,10 +25,15 @@ category containing that Principal.  Hence the name
 module LIO.DCLabel.Label
     (
     -- * The base label type
-    Principal(..), DCType, Integrity, Secrecy, DCat(..), DCSet, DCLabel(..)
-    -- * Category Set functions
-    , dcEmpty, dcSingleton, dcFromList, dcAll
-    , dcSubsetOf, dcUnion, dcIntersection
+    Principal(..), DCType, Integrity, Secrecy
+    , DCat(..), DCSet, DCLabel(..)
+    -- * Functions for categories
+    , DCatI, DCatS
+    , dcSingleton, dcFromList, dcUnion, dcSubsumes, dcSubsumesNE
+    -- * Functions for sets of categories (DCSet)
+    , dcsEmpty, dcsSingleton, dcsFromList, dcsAll
+    , dcsSubsetOf, dcsUnion, dcsIntersection
+    , dcsSubsumes
     -- * Privileges
     , DCPrivs
     -- * Useful aliases for LIO Monad
@@ -38,6 +43,8 @@ module LIO.DCLabel.Label
 import LIO.TCB
 
 import Control.Applicative
+import Data.List
+import Data.Maybe
 import Data.Monoid
 import Data.Set (Set)
 import qualified Data.Set as Set
@@ -58,10 +65,8 @@ data Integrity = Integrity deriving (Eq, Show)
 instance DCType Integrity where dcType _ = "I"
 
 newtype (DCType t) => DCat t = DCat (Set Principal) deriving (Eq, Ord)
-dCatI   :: Set Principal -> DCat Integrity
-dCatI s = DCat s
-dCatS :: Set Principal -> DCat Secrecy
-dCatS s = DCat s
+type DCatI = DCat Integrity
+type DCatS = DCat Secrecy
 
 instance (DCType t) => Show (DCat t) where
     showsPrec _ (DCat c) = shows (Set.toList c)
@@ -71,36 +76,84 @@ instance (DCType t) => Read (DCat t) where
       (own, afterown) <- reads s
       return (DCat (Set.fromList own), afterown)
 
+dcSingleton     :: (DCType t) => t -> Principal -> DCat t
+dcSingleton _ p = DCat $ Set.singleton p
+
+dcFromList      :: (DCType t) => t -> [Principal] -> DCat t
+dcFromList _ pl = DCat $ Set.fromList pl
+
+dcUnion                     :: (DCType t) => DCat t -> DCat t -> DCat t
+dcUnion (DCat c1) (DCat c2) = DCat $ Set.union c1 c2
+
+-- | With disjunction categories, the category {A} (owned by just A)
+-- is stricter than the category {A, B} (which either A or B has the
+-- right to bypass).  We therefore say that category {A} subsumes
+-- category {A, B}.  Generalizing, we define @dcSubsumes c1 c2@ as the
+-- subset relation:
+--
+-- > dcSubsumes (DCat c1) (DCat c2) = Set.isSubsetOf c1 c2
+dcSubsumes                     :: (DCType t) => DCat t -> DCat t -> Bool
+dcSubsumes (DCat c1) (DCat c2) = Set.isSubsetOf c1 c2
+
+-- | Check that one category subsumes another and the two are not
+-- equal.
+dcSubsumesNE                     :: (DCType t) => DCat t -> DCat t -> Bool
+dcSubsumesNE (DCat c1) (DCat c2) = Set.isProperSubsetOf c1 c2
+
+--
+-- Set functions
+--
+
 data (DCType t) => DCSet t = DCSet (Set (DCat t))
                            | DCAll deriving (Eq, Typeable)
 
-dcEmpty :: (DCType t) => DCSet t
-dcEmpty = DCSet Set.empty
+dcsEmpty :: (DCType t) => DCSet t
+dcsEmpty = DCSet Set.empty
 
-dcSingleton :: (DCType t) => DCat t -> DCSet t
-dcSingleton c = DCSet $ Set.singleton c
+dcsSingleton :: (DCType t) => DCat t -> DCSet t
+dcsSingleton c = DCSet $ Set.singleton c
 
-dcFromList :: (DCType t) => [DCat t] -> DCSet t
-dcFromList l = DCSet $ Set.fromList l
+dcsFromList :: (DCType t) => [DCat t] -> DCSet t
+dcsFromList l = DCSet $ Set.fromList l
 
-dcAll :: (DCType t) => DCSet t
-dcAll = DCAll
+dcsAll :: (DCType t) => DCSet t
+dcsAll = DCAll
 
 
-dcSubsetOf                       :: (DCType t) => DCSet t -> DCSet t -> Bool
-dcSubsetOf _ DCAll               = True
-dcSubsetOf DCAll _               = False
-dcSubsetOf (DCSet s1) (DCSet s2) = Set.isSubsetOf s1 s2
+dcsSubsetOf                       :: (DCType t) => DCSet t -> DCSet t -> Bool
+dcsSubsetOf _ DCAll               = True
+dcsSubsetOf DCAll _               = False
+dcsSubsetOf (DCSet s1) (DCSet s2) = Set.isSubsetOf s1 s2
 
-dcUnion                       :: (DCType t) => DCSet t -> DCSet t -> DCSet t
-dcUnion DCAll _               = DCAll
-dcUnion _ DCAll               = DCAll
-dcUnion (DCSet s1) (DCSet s2) = DCSet $ Set.union s1 s2
+dcsUnion                       :: (DCType t) => DCSet t -> DCSet t -> DCSet t
+dcsUnion DCAll _               = DCAll
+dcsUnion _ DCAll               = DCAll
+dcsUnion (DCSet s1) (DCSet s2) = DCSet $ Set.union s1 s2
 
-dcIntersection :: (DCType t) => DCSet t -> DCSet t -> DCSet t
-dcIntersection DCAll s               = s
-dcIntersection s DCAll               = s
-dcIntersection (DCSet s1) (DCSet s2) = DCSet $ Set.intersection s1 s2
+dcsIntersection :: (DCType t) => DCSet t -> DCSet t -> DCSet t
+dcsIntersection DCAll s               = s
+dcsIntersection s DCAll               = s
+dcsIntersection (DCSet s1) (DCSet s2) = DCSet $ Set.intersection s1 s2
+
+hasCatSuchThat             :: (DCType t) => DCSet t -> (DCat t -> Bool) -> Bool
+hasCatSuchThat (DCSet s) f = isJust $ find f $ Set.toList s
+
+dcsReduce              :: (DCType t) => DCSet t -> DCSet t
+dcsReduce s@(DCSet ss) =
+    DCSet $ Set.filter needed ss
+    where
+      needed c = not $ s `hasCatSuchThat` (`dcSubsumesNE` c)
+                        
+
+-- | 'DCSet' @s1@ /subsumes/ @s2@ iff for every category @c2@ in @s2@,
+-- there is a category @c1@ in @s1@ such that @c1@ subsumes @c2@.  In
+-- other words, @s1@ provides at least as much protection as @s2@.
+dcsSubsumes                       :: (DCType t) => DCSet t -> DCSet t -> Bool
+dcsSubsumes s1 s2 =
+    forallCat s2 $ \c2 -> s1 `hasCatSuchThat` (`dcSubsumes` c2)
+    where
+      forallCat s f = not $ s `hasCatSuchThat` (not . f)
+      
 
 matchskip :: String -> String -> t -> String -> [(t, String)]
 matchskip skip (m:ms) r (s:ss) | m == s        = matchskip skip ms r ss   
@@ -111,20 +164,25 @@ matchskip _ _ _ _                              = []
 match :: String -> t -> String -> [(t, String)]
 match = matchskip ""
 
-dcSetPrefix   :: (DCType t) => DCSet t -> String
-dcSetPrefix s = gettype s undefined ++ "="
+matchsp :: String -> t -> String -> [(t, String)]
+matchsp = matchskip " \t\r\n"
+
+dcsPrefix   :: (DCType t) => DCSet t -> String
+dcsPrefix s = gettype s undefined ++ "="
     where
       gettype     :: (DCType t) => DCSet t -> t -> String
       gettype _ t = dcType t
 
 instance (DCType t) => Show (DCSet t) where
-    showsPrec _ d@DCAll rest     = dcSetPrefix d ++ "ALL" ++ rest
-    showsPrec _ d@(DCSet s) rest = dcSetPrefix d ++ shows (Set.toList s) rest
+    showsPrec _ d@DCAll rest     = dcsPrefix d ++ "ALL" ++ rest
+    showsPrec _ d@(DCSet s) rest = dcsPrefix d ++ shows (Set.toList s) rest
 
 instance (DCType t) => Read (DCSet t) where
     readsPrec _ s =
-        let prefix = case result of ~((r,_):_) -> dcSetPrefix r
-            result = do (_, s1) <- matchskip " " prefix () s
+        -- Note that prefix uses result only for its type, so as to
+        -- select the right dcsPrefix function.
+        let prefix = case result of ~((r,_):_) -> dcsPrefix r
+            result = do (_, s1) <- matchsp prefix () s
                         (match "ALL" DCAll s1 <|>
                          do (set, rest) <- reads s1
                             return (DCSet $ Set.fromList set, rest))
@@ -144,15 +202,15 @@ instance Read DCLabel where
 
 instance POrd DCLabel where
     (DCLabel i1 s1) `leq` (DCLabel i2 s2) =
-        i2 `dcSubsetOf` i1 && s1 `dcSubsetOf` s2
+        i2 `dcsSubsetOf` i1 && s1 `dcsSubsetOf` s2
 
 instance Label DCLabel where
-    lpure = DCLabel dcEmpty dcEmpty
-    lclear = DCLabel dcEmpty DCAll
+    lpure = DCLabel dcsEmpty dcsEmpty
+    lclear = DCLabel dcsEmpty DCAll
     lub (DCLabel i1 s1) (DCLabel i2 s2) =
-        DCLabel (dcIntersection i1 i2) (dcUnion s1 s2)
+        DCLabel (dcsIntersection i1 i2) (dcsUnion s1 s2)
     glb (DCLabel i1 s1) (DCLabel i2 s2) =
-        DCLabel (dcUnion i1 i2) (dcIntersection s1 s2)
+        DCLabel (dcsUnion i1 i2) (dcsIntersection s1 s2)
 
 newtype DCPrivs = DCPrivs (Set Principal) deriving (Eq, Show)
 
