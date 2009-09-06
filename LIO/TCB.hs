@@ -50,8 +50,8 @@ module LIO.TCB (
                , taint, taintP, wguard, wguardP, aguard
                -- * References to labeled pure data (Lrefs)
                , Lref
-               , lref, unlrefP
-               , taintR, guardR, setLabelRP
+               , lref, lrefP, unlrefP
+               , guardR
                , openR, closeR, discardR
                -- * Exceptions
                -- ** Exception type thrown by LIO library
@@ -66,7 +66,7 @@ module LIO.TCB (
                , ShowTCB(..)
                , lrefTCB
                , PrivTCB, MintTCB(..)
-               , unlrefTCB, setLabelTCB, setClearanceTCB
+               , unlrefTCB, lrefLabelTCB, setLabelTCB, setClearanceTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
@@ -220,7 +220,7 @@ class (POrd a, Show a, Read a, Typeable a) => Label a where
 -- Downgrading privileges - Priv
 --
 
-data (Label l) => Lref l t = Lref l t
+data (Label l) => Lref l t = LrefTCB l t
 
 -- | It would be a security issue to make certain objects a member of
 -- the show class, but nonetheless it is useful to be able to examine
@@ -230,18 +230,18 @@ class ShowTCB a where
     showTCB :: a -> String
 
 instance (Label l, Show a) => ShowTCB (Lref l a) where
-    showTCB (Lref l t) = shows t $ " {" ++ shows l "}"
+    showTCB (LrefTCB l t) = shows t $ " {" ++ shows l "}"
 
 instance Label l => Functor (Lref l) where
-    fmap f (Lref l t) = Lref (l `lub` lpure) (f t)
+    fmap f (LrefTCB l t) = LrefTCB (l `lub` lpure) (f t)
 
 instance Label l => Monad (Lref l) where
-    return x = Lref lpure x
-    (Lref l x) >>= f = let Lref l' y = f x in Lref (lub l l') y
+    return x = LrefTCB lpure x
+    (LrefTCB l x) >>= f = let LrefTCB l' y = f x in LrefTCB (lub l l') y
 
 instance Label l => MonadFix (Lref l) where
     mfix f = fix g
-        where g ~(Lref _ a) = f a
+        where g ~(LrefTCB _ a) = f a
 
 -- |PrivTCB is a method-less class whose only purpose is to be
 -- unavailable to unprivileged code.  Since (PrivTCB t) => is in the
@@ -306,7 +306,7 @@ instance (Label l) => Priv l NoPrivs where
     lostar _ l min = lub l min
 
 lrefTCB     :: Label l => l -> a -> Lref l a
-lrefTCB l a = Lref l a
+lrefTCB l a = LrefTCB l a
 
 --
 -- Since this function has a covert channel, don't export for now.
@@ -314,25 +314,49 @@ lrefTCB l a = Lref l a
 -- particular integrity category (or is below some label that we are
 -- allowed to read).
 --
+{-
 labelOfR            :: Label l => Lref l a -> l
 labelOfR (Lref l a) = l
+-}
 
+{-
+-- | Raises the label of an 'Lref' to the 'lub' of it's current label
+-- and the value supplied.
 taintR               :: (Label l) => l -> Lref l a -> Lref l a
 taintR l' (Lref l a) = Lref (lub l l') a
+-}
 
+-- | Checks that the label on an 'Lref' is below a specific label, or
+-- else throws 'LerrHigh'.  Can be used to verify the integrity of an
+-- 'Lref' before doing something with the value.
 guardR :: (Label l) => l -> Lref l a -> LIO l s ()
-guardR l' (Lref l a) = do
+guardR l' (LrefTCB l a) = do
   cur <- currentLabel
   unless (l `leq` l' && l `leq` cur) $ throwIO LerrHigh
 
 setLabelRP                   :: Priv l p => p -> l -> Lref l a -> Lref l a
-setLabelRP p newl (Lref l a) = if leqp p l newl then Lref newl a else undefined
+setLabelRP p newl (LrefTCB l a) = if leqp p l newl
+                                  then LrefTCB newl a
+                                  else undefined
 
-unlrefP              :: Priv l p => p -> Lref l a -> a
-unlrefP p (Lref l a) = if leqp p l lpure then a else undefined
+-- | Experimental: Try to use privileges to lower the label on an
+-- 'Lref' to 'lpure'.  If this function succeeds, return a pure value
+-- that was the value in the 'Lref'.  If it fails, this function
+-- returns undefined, which means that the enclosing computation can
+-- still succedd if the result does not depend on the return value of
+-- 'unlrefP'.
+unlrefP                 :: Priv l p => p -> Lref l a -> a
+unlrefP p (LrefTCB l a) = if leqp p l lpure then a else undefined
 
-unlrefTCB            :: Label l => Lref l a -> a
-unlrefTCB (Lref l a) = a
+-- | Extracts the value from an 'Lref', discarding the label and any
+-- protection.
+unlrefTCB               :: Label l => Lref l a -> a
+unlrefTCB (LrefTCB _ a) = a
+
+-- | Read the label of a labeled reference.  If doing this just to
+-- check that the label is low enough, it is simpler to use 'guardR'
+lrefLabelTCB               :: Label l => Lref l a -> l
+lrefLabelTCB (LrefTCB l _) = l
 
 
 --
@@ -369,11 +393,29 @@ get = mkLIO $ \s -> return (s, s)
 put :: (Label l) => LIOstate l s -> LIO l s ()
 put s = mkLIO $ \_ -> return (() , s)
 
+-- | Function to construct an 'Lref' from a label and pure value.  If
+-- the current label is @lcurrent@ and the current clearance is
+-- @ccurrent@, then the label @l@ specified must satisfy
+-- @lcurrent ``leq`` l && l ``leq`` ccurrent@.
 lref     :: (Label l) => l -> a -> LIO l s (Lref l a)
 lref l a = get >>= doit
     where doit s | not $ l `leq` lioC s = throwIO LerrClearance
                  | not $ lioL s `leq` l = throwIO LerrLow
-                 | otherwise            = return $ Lref l a
+                 | otherwise            = return $ LrefTCB l a
+
+-- | Constructs an 'Lref' using privilege to allow the `Lref`'s label
+-- to be below the current label.  If the current label is @lcurrent@
+-- and the current clearance is @ccurrent@, then the privilege @p@ and
+-- label @l@ specified must satisfy
+-- @(leqp p lcurrent l) && l ``leq`` ccurrent@.
+-- Note that privilege is not used to bypass the clearance.  You must
+-- use 'setClearanceP' to raise the clearance first if you wish to
+-- create an 'Lref' at a higher label than the current clearance.
+lrefP       :: (Priv l p) => p -> l -> a -> LIO l s (Lref l a)
+lrefP p l a = get >>= doit
+    where doit s | not $ l `leq` lioC s    = throwIO LerrClearance
+                 | not $ leqp p (lioL s) l = throwIO LerrLow
+                 | otherwise               = return $ LrefTCB l a
 
 -- | Returns the current value of the thread's label.
 currentLabel :: (Label l) => LIO l s l
@@ -490,6 +532,7 @@ setLabelP p l = do s <- get
                      then put s { lioL = l }
                      else throwIO LerrPriv
 
+-- | Set the current label to anything, with no security check.
 setLabelTCB     :: (Label l) => l -> LIO l s ()
 setLabelTCB l = do s <- get
                    if l `leq` lioC s
@@ -512,12 +555,13 @@ setClearanceP p l = get >>= doit
                  | not $ lioL s `leq` l = throwIO LerrLow
                  | otherwise            = put s { lioC = l }
 
+-- | Set the current clearance to anything, with no security check.
 setClearanceTCB   :: (Label l) => l -> LIO l s ()
 setClearanceTCB l = get >>= doit
     where doit s | not $ lioL s `leq` l = throwIO LerrInval
                  | otherwise            = put s { lioC = l }
 
--- |Within the 'LIO' monad, this function takes an 'Lref' and returns
+-- | Within the 'LIO' monad, this function takes an 'Lref' and returns
 -- the value.  Thus, in the 'LIO' monad one can say:
 --
 -- > x <- openR (xref :: Lref SomeLabelType Int)
@@ -525,17 +569,25 @@ setClearanceTCB l = get >>= doit
 -- And now it is possible to use the value of @x@, which is the pure
 -- value of what was stored in @xref@.  Of course, @openR@ also raises
 -- the current label.  If raising the label would exceed the current
--- clearance, then the value of @x@ is undefined, which means the
--- value of any computation that actually uses @x@ will also be
--- undefined.
-openR             :: (Label l) => Lref l a -> LIO l s a
-openR (Lref la a) = do
+-- clearance, then @openR@ throws 'LerrClearance'.
+openR                :: (Label l) => Lref l a -> LIO l s a
+openR (LrefTCB la a) = do
   s <- get
   if la `leq` lioC s
     then do put s { lioL = lioL s `lub` la }
             return a
-    else
-        return undefined
+    else throwIO LerrClearance
+
+-- | Extracts the value of an 'Lref' just like 'openR', but takes a
+-- privilege argument to minimize the amount the current label must be
+-- raised.
+openRP                 :: (Priv l p) => p -> Lref l a -> LIO l s a
+openRP p (LrefTCB l a) = do
+  s <- get
+  let la = lostar p l $ lioL s
+  if la `leq` lioC s
+    then put s { lioL = la } >> return a
+    else throwIO LerrClearance
 
 -- Might have lowered clearance inside closeR, so just preserve it
 -- |@closeR@ is the dual of @openR@.  It allows one to invoke
@@ -544,23 +596,53 @@ openR (Lref la a) = do
 -- is packaged into an 'Lref'.  Thus, to get at the result of the
 -- computation one will have to call 'openR' and raise the label, but
 -- this can be postponed, or done inside some other call to 'closeR'.
+--
+-- Note that @closeR@ always restores the clearance to whatever it was
+-- when it was invoked, regardless of what occured in the computation
+-- producing the value of the 'Lref'.  Thus, for instance, the
+-- function
+--
+-- @
+--   withClearance        :: (Label l) => l -> LIO l s a -> LIO l s a
+--   withClearance newc m =
+--     closeR ('setClearance' newc >> m) >>= 'openR'
+-- @
+--
+-- executes computation @m@ with lower clearance @newc@.  This
+-- demonstrates one main use of clearance: to ensure that an Lref
+-- computed does not exceed a particular label.
 closeR   :: (Label l) => LIO l s a -> LIO l s (Lref l a)
 closeR m = do
   LIOstate { lioL = l, lioC = c } <- get
   a <- m
   s <- get
   put s { lioL = l, lioC = c }
-  return $ Lref (lioL s) a
+  return $ LrefTCB (lioL s) a
 
--- |Executes a computation that would raise the current label, but
--- discards the result so as to keep the label the same.
+-- | Executes a computation that would raise the current label, but
+-- discards the result so as to keep the label the same.  Used when
+-- one only cares about the side effects of a computation.  For
+-- instance, if @log_handle@ is an 'LHandle' with a high label, one
+-- can execute
+--
+-- @
+--   discardR $ 'hputStrLn' log_handle $ "Log message"
+-- @
+--
+-- to create a log message without affecting the current label.  (Of
+-- course, if log_handle is closed and this throws an exception, it
+-- may not be possible to catch the exception within the 'LIO' monad
+-- without sufficient privileges--see 'catchP'.)
 discardR   :: (Label l) => LIO l s a -> LIO l s ()
 discardR m = closeR m >> return ()
-  
 
+-- | Returns label-specific state of the 'LIO' monad.  This is the
+-- data specified as the second argument of 'evalLIO', whose type is
+-- @s@ in the monad @LIO l s@.
 getTCB :: (Label l) => LIO l s s
 getTCB = get >>= return . labelState
 
+-- | Sets the label-specific state of the 'LIO' monad.  See 'getTCB'.
 putTCB    :: (Label l) => s -> LIO l s ()
 putTCB ls = get >>= put . update
     where update s = s { labelState = ls }
@@ -582,21 +664,33 @@ runLIO m s = unLIO m s `E.catch` (E.throwIO . delabel)
           delabel (LabeledExceptionTCB l e) = e
            -- trace ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") e
 
-evalLIO     :: (Label l) => LIO l s a -> s -> IO (a, l)
+-- | Produces an 'IO' computation that will execute a particular 'LIO'
+-- computation.  Obviously untrusted code should have no way to
+-- execute 'IO' computations, so this function should only be useful
+-- within trusted code, though @evalLIO@ itself doesn't need to be
+-- secure.
+evalLIO     :: (Label l) =>
+               LIO l s a    -- ^ The LIO computation to execute
+            -> s         -- ^ Initial value of label-specific state
+            -> IO (a, l) -- ^ IO computation that will execute first argument
 evalLIO m s = do (a, ls) <- runLIO m (newstate s)
                  return (a, lioL ls)
 
+-- | Lifts an 'IO' computation into the 'LIO' monad.  Note that
+-- exceptions thrown within the 'IO' computation cannot directly be
+-- caught within the 'LIO' computation.  Thus, if you are not inside a
+-- 'rethrowTCB' block, you will generally want to use 'rtioTCB'
+-- instead of 'ioTCB'.
 ioTCB :: (Label l) => IO a -> LIO l s a
 ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
 
+-- | Lifts an 'IO' computation into the 'LIO' monad.  If the 'IO'
+-- computation throws an exception, it labels the exception with the
+-- current label so that the exception can be caught with 'catch' or
+-- 'catchP'.  This functions name stands for "re-throw io", because
+-- it's functionality is a combination of 'rethrowTCB' and 'ioTCB'.
 rtioTCB :: (Label l) => IO a -> LIO l s a
 rtioTCB a = rethrowTCB $ mkLIO $ \s -> do r <- a; return (r, s)
-
-iotTCB     :: (Label l) =>
-              (IO (a, LIOstate l s) -> IO (a, LIOstate l s)) -> LIO l s a
-           -> LIO l s a
-iotTCB f m = mkLIO $ \s -> f (unLIO m s)
-
 
 --
 -- Exceptions
@@ -680,6 +774,9 @@ instance Label l => Show (LabeledExceptionTCB l) where
 
 instance (Label l) => Exception (LabeledExceptionTCB l)
 
+-- | @MonadCatch@ is the class used to generalize the standard IO
+-- @catch@ and @throwIO@ functions to methods that can be defined in
+-- multiple monads.
 class (Monad m) => MonadCatch m where
     block            :: m a -> m a
     unblock          :: m a -> m a
