@@ -5,30 +5,35 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
--- | This module implements the core (Trusted Computing Base) of the
--- Labeled IO library for information flow control in Haskell.  It
--- provides a monad, 'LIO', that is intended to be used as a
--- replacement for the IO monad in untrusted code.  The idea is for
--- untrusted to provide a computation in the 'LIO' monad, which
--- trusted code can then safely execute through the 'evalLIO'
--- function.  (Though usually a wrapper function is employed depending
--- on the type of labels used by an application.  For example, with
--- "LIO.DCLabels", you would use 'evalDC' to execute an untrusted
--- computation, and with "LIO.HiStar" labels, the function is
--- 'evalHS'.  There are also abbreviations for the 'LIO' monad type of
--- a particular label--for instance 'DC' or 'HS'.)
+-- | This module implements the core of the Labeled IO library for
+-- information flow control in Haskell.  It provides a monad, 'LIO',
+-- that is intended to be used as a replacement for the IO monad in
+-- untrusted code.  The idea is for untrusted to provide a computation
+-- in the 'LIO' monad, which trusted code can then safely execute
+-- through the 'evalLIO' function.  (Though usually a wrapper function
+-- is employed depending on the type of labels used by an application.
+-- For example, with "LIO.DCLabels", you would use 'evalDC' to execute
+-- an untrusted computation, and with "LIO.HiStar" labels, the
+-- function is 'evalHS'.  There are also abbreviations for the 'LIO'
+-- monad type of a particular label--for instance 'DC' or 'HS'.)
 --
--- It provides a data structure 'Lref' (labeled reference), which
--- protects access to pure values.  Without the appropriate
--- privileges, one cannot produce a pure value that depends on a
--- secret 'Lref', or conversely produce a high-integrity 'Lref' based
--- on pure data.
+-- A data structure 'Lref' (labeled reference) protects access to pure
+-- values.  Without the appropriate privileges, one cannot produce a
+-- pure value that depends on a secret 'Lref', or conversely produce a
+-- high-integrity 'Lref' based on pure data.  The function 'closeR'
+-- allows one to seal off the results of an LIO computation inside an
+-- 'Lref' without tainting the current flow of execution.  'openR'
+-- conversely allows one to use the value stored within an 'Lref'.
 --
--- Untrusted code must be prevented from importing this module.  The
--- exported symbols ending ...@TCB@ can be used to violate label
--- protections even from within pure code or the LIO Monad.  A safe
--- subset of these symbols is exported by the "LIO.Base" module, which
--- is how untrusted code should access the core label functionality.
+-- Any code that imports this module is part of the
+-- /Trusted Computing Base/ (TCB) of the system.  Hence, untrusted
+-- code must be prevented from importing this module.  The exported
+-- symbols ending ...@TCB@ can be used to violate label protections
+-- even from within pure code or the LIO Monad.  A safe subset of
+-- these symbols is exported by the "LIO.Base" module, which is how
+-- untrusted code should access the core label functionality.
+-- ("LIO.Base" is also re-exported by "LIO.LIO", the main gateway to
+-- this library.)
 module LIO.TCB (
                -- * Basic label functions
                -- $labels
