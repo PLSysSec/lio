@@ -83,27 +83,6 @@ import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
 
-{- Things to worry about:
-
-   - Because code can look at an Lref, it is possible to leak data in
-     Lclose.  For example, look at a secret bit, and if it is 1, then
-     taint yourself in a whole bunch more categories.
-
-   - Similar to above, but even without Lclose, just taint yourself
-     within the Lref.
-
-   - unsafe... functions must be blocked
-
-   - inlinePerformIO must be blocked
-
-   - Allowing untrusted code to define instances Typeable with bogus
-     typeOf functions could lead to unsafe casts.
-
-   - Some way of showing an Lref or even just the label, by putting it
-     into an exception.
-
- -}
-
 --
 -- We need a partial order and a Label
 --
