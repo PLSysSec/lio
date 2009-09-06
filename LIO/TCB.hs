@@ -748,7 +748,7 @@ onExceptionP           :: (Priv l p) =>
 onExceptionP p io what = catchP p io
                          (\l e -> what >> throwIO (e :: SomeException))
 
--- | Like standard 'bracket', but with privileges to downgrade
+-- | Like standard 'E.bracket', but with privileges to downgrade
 -- exception.
 bracketP :: (Priv l p) =>
             p
