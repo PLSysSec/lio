@@ -17,11 +17,17 @@ allowed to do any of the following:
   * Use functions such as 'unsafePerformIO', 'unsafeInterleaveIO',
     'inlinePerformIO',
 
+  * Use language extensions such as Generalized Newtype Deriving and
+    Stand-alone Deriving to extend LIO types (such as by deriving an
+    instance of the 'MonadTrans' class for 'LIO', which would allow
+    untrusted code to bypass all security with 'lift'),
+
   * Manually define @typeOf@ methods (automatically deriving
     @Typeable@ should be safe).
 
-In general, imports should be highly scrutinized.  For example, most
-of the "Foreign" class of modules are probably dangerous.
+In general, pragmas and imports should be highly scrutinized.  For
+example, most of the "Foreign" class of modules are probably
+dangerous.
 
 LIO was implemented by David Mazieres
 (<http://www.scs.stanford.edu/~dm/>).
