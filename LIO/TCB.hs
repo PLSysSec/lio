@@ -51,9 +51,9 @@ module LIO.TCB (
                , wguard, wguardP, aguard
                -- * References to labeled pure data (Lrefs)
                , Lref
-               , lref, lrefP, unlrefP
-               , guardR
-               , openR, closeR, discardR
+               , lref, lrefP, unlrefP, labelOfR, labelOfRP
+               , taintR, guardR, guardRP
+               , openR, openRP, closeR, discardR
                -- * Exceptions
                -- ** Exception type thrown by LIO library
                , LabelFault(..)
@@ -67,7 +67,8 @@ module LIO.TCB (
                , ShowTCB(..)
                , lrefTCB
                , PrivTCB, MintTCB(..)
-               , unlrefTCB, lrefLabelTCB, setLabelTCB, setClearanceTCB
+               , unlrefTCB, labelOfRTCB
+               , setLabelTCB, setClearanceTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
@@ -316,45 +317,43 @@ instance (Label l) => Priv l NoPrivs where
 lrefTCB     :: Label l => l -> a -> Lref l a
 lrefTCB l a = LrefTCB l a
 
---
--- Since this function has a covert channel, don't export for now.
--- Really what we need is a way to check that an Lref has some
--- particular integrity category (or is below some label that we are
--- allowed to read).
---
-{-
-labelOfR            :: Label l => Lref l a -> l
-labelOfR (Lref l a) = l
--}
-
-{-
 -- | Raises the label of an 'Lref' to the 'lub' of it's current label
--- and the value supplied.
-taintR               :: (Label l) => l -> Lref l a -> Lref l a
-taintR l' (Lref l a) = Lref (lub l l') a
--}
+-- and the value supplied.  The label supplied must be less than the
+-- current clarance, though the resulting label may not be if the
+-- 'Lref' is already above the current thread's clearance.
+taintR                  :: (Label l) => l -> Lref l a -> LIO l s (Lref l a)
+taintR l (LrefTCB la a) = do
+  aguard l
+  return $ LrefTCB (lub l la) a
 
--- | Checks that the label on an 'Lref' is below a specific label, or
--- else throws 'LerrHigh'.  Can be used to verify the integrity of an
--- 'Lref' before doing something with the value.
-guardR :: (Label l) => l -> Lref l a -> LIO l s ()
-guardR l' (LrefTCB l a) = do
-  taint l
-  cur <- currentLabel
-  unless (l `leq` l' && l `leq` cur) $ throwIO LerrHigh
+-- | Checks that the label on an 'Lref' is below a specific label and
+-- below the current label, or else throws 'LerrLow'.  Can be used to
+-- verify the integrity of an 'Lref' before doing something with the
+-- value.  Because the label of the 'Lref' must be below the current
+-- label, calling 'openR' on the 'Lref' will not increase the current
+-- label.
+guardR                  :: (Label l) => l -> Lref l a -> LIO l s ()
+guardR l (LrefTCB la a) = do
+  lcur <- currentLabel
+  unless (la `leq` lcur && la `leq` l) $ throwIO LerrLow
 
-setLabelRP                   :: Priv l p => p -> l -> Lref l a -> Lref l a
-setLabelRP p newl (LrefTCB l a) =
-  if leqp p l newl
-    then LrefTCB newl a
-    else undefined
+-- | Like 'guardR', but uses privileges when comparing the requested
+-- label to the current label so as to throw an exception in fewer
+-- conditions.  If @guardRP@ succeeds, then 'openRP' on the same
+-- privileges and 'Lref' will not raise the current label.  Note that
+-- the privileges are not used when comparing the label of the 'Lref'
+-- to the argument label.
+guardRP                    :: (Priv l p) => p -> l -> Lref l a -> LIO l s ()
+guardRP p l (LrefTCB la a) = do
+  lcur <- currentLabel
+  unless ((leqp p la lcur) && la `leq` l) $ throwIO LerrLow
 
 -- | Experimental: Try to use privileges to lower the label on an
--- 'Lref' to 'lpure'.  If this function succeeds, return a pure value
--- that was the value in the 'Lref'.  If it fails, this function
--- returns undefined, which means that the enclosing computation can
--- still succedd if the result does not depend on the return value of
--- 'unlrefP'.
+-- 'Lref' to 'lpure' and extract a pure value.  If this function
+-- succeeds, it returns the value referenced by the 'Lref' as a pure
+-- value.  If it fails, this function returns undefined, which means
+-- that the enclosing computation can still succedd if the result does
+-- not depend on the return value of 'unlrefP'.
 unlrefP                 :: Priv l p => p -> Lref l a -> a
 unlrefP p (LrefTCB l a) = if leqp p l lpure then a else undefined
 
@@ -363,10 +362,25 @@ unlrefP p (LrefTCB l a) = if leqp p l lpure then a else undefined
 unlrefTCB               :: Label l => Lref l a -> a
 unlrefTCB (LrefTCB _ a) = a
 
+-- | If the the value of the 'Lref', @l@, can flow to the current
+-- label, returns @'Just' l@.  Otherwise returns 'Nothing'.
+labelOfR                :: Label l => Lref l a -> LIO l s (Maybe l)
+labelOfR (LrefTCB la _) = do
+  lc <- currentLabel
+  return $ if la `leq` lc then Just la else Nothing
+
+-- | Like 'labelOfR', but compares the `Lref`'s label to the current
+-- label using privileges so as to need to return 'Nothing' in fewer
+-- situations.
+labelOfRP                  :: Priv l p => p -> Lref l a -> LIO l s (Maybe l)
+labelOfRP p (LrefTCB la _) = do
+  lc <- currentLabel
+  return $ if leqp p la lc then Just la else Nothing
+  
 -- | Read the label of a labeled reference.  If doing this just to
 -- check that the label is low enough, it is simpler to use 'guardR'
-lrefLabelTCB               :: Label l => Lref l a -> l
-lrefLabelTCB (LrefTCB l _) = l
+labelOfRTCB               :: Label l => Lref l a -> l
+labelOfRTCB (LrefTCB l _) = l
 
 
 --
@@ -631,6 +645,22 @@ withClearance l m = do
 -- value of what was stored in @xref@.  Of course, @openR@ also raises
 -- the current label.  If raising the label would exceed the current
 -- clearance, then @openR@ throws 'LerrClearance'.
+--
+-- Note that if @openR@ throws 'LerrClearance', it can only by caught
+-- by an enclosing 'catch' or 'catchP' statement that has a high
+-- enough clearance to view the data in the 'Lref'.  In particular,
+-- this means it never makes sense to say something like:
+--
+-- @
+--   openR ref ``catch`` someHandler       -- useless catch statement
+-- @
+--
+-- as @someHandler@ would never be invoked.  It might, however, make
+-- sense to wrap a 'catch' around 'withClearance' if the computation
+-- with reduced clerance calls @openR@.
+--
+-- See 'guardR'/'guardRP' and 'labelOfR'/'labelOfRP' for ways to check
+-- whether 'openR' will succeed.
 openR                :: (Label l) => Lref l a -> LIO l s a
 openR (LrefTCB la a) = do
   taintL la
@@ -638,7 +668,9 @@ openR (LrefTCB la a) = do
 
 -- | Extracts the value of an 'Lref' just like 'openR', but takes a
 -- privilege argument to minimize the amount the current label must be
--- raised.
+-- raised.  Will still throw 'LerrClearance' under the same
+-- circumstances as 'openR', so see 'openR' for a caveat about the
+-- label of the thrown exception.
 openRP                  :: (Priv l p) => p -> Lref l a -> LIO l s a
 openRP p (LrefTCB la a) = do
   taintLP p la
@@ -922,9 +954,10 @@ genericBracket myOnException before after between =
       return b
 
 -- | For privileged code that needs to catch all exceptions in some
--- cleanup function.  Note that for the 'LIO' monad, this function
--- does /not/ call 'rethrowTCB' to label the exceptions.  It is
--- assumed that you will use 'rtioTCB' for IO within the computation.
+-- cleanup function.  Note that for the 'LIO' monad, these methods do
+-- /not/ call 'rethrowTCB' to label the exceptions.  It is assumed
+-- that you will use 'rtioTCB' instead of 'ioTCB' for IO within the
+-- computation arguments of these methods.
 class (MonadCatch m) => OnExceptionTCB m where
     onExceptionTCB :: m a -> m b -> m a
     bracketTCB     :: m a -> (a -> m c) -> (a -> m b) -> m b
