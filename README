@@ -1,8 +1,15 @@
 
-* Pre-requisites:
+* Pre-requisites.  Before building this code, you must use the
+  following cabal commands to install required libraries:
 
 	cabal update
 	cabal install hscolour
 	cabal install SHA
 
+* Documentation.  The documentation must be extracted from the source
+  code using 'haddock'.  Run the following commands to build and view
+  the documentation:
+
+	gmake doc
+	firefox doc/index.html
 
