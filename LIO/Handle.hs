@@ -156,7 +156,7 @@ writeFileP  :: (Priv l p, HandleOps IO.Handle b IO) =>
                p -> FilePath -> b -> LIO l s ()
 writeFileP privs path contents =
   bracketTCB (openFileP privs path IO.WriteMode) hClose
-             (\h -> hPut h contents)
+             (flip hPut contents)
 
 openFileP :: (Priv l p) =>
              p -> FilePath -> IOMode -> LIO l s (LHandle l IO.Handle)

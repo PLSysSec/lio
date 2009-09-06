@@ -43,11 +43,12 @@ module LIO.TCB (
 
                -- $LIO
                , LIO
-               , currentLabel, currentClearance
-               , setLabelP , setClearance, setClearanceP
+               , currentLabel, setLabelP
+               , currentClearance, setClearance, setClearanceP, withClearance
                -- ** LIO guards
                -- $guards
-               , taint, taintP, wguard, wguardP, aguard
+               , taint, taintP, taintL, taintLP
+               , wguard, wguardP, aguard
                -- * References to labeled pure data (Lrefs)
                , Lref
                , lref, lrefP, unlrefP
@@ -220,6 +221,13 @@ class (POrd a, Show a, Read a, Typeable a) => Label a where
 -- Downgrading privileges - Priv
 --
 
+-- | @Lref@ is a reference to labeled data.  Importantly, the label is
+-- considered to cover /both/ the data and itself (the label).  Thus,
+-- the 'closeR' function can produce an @Lref@ whose label is not
+-- predictable by the invoking code and depends on data that can't
+-- flow to the invoking code.  Thus, any operation that observes the
+-- label must either raise the current label or throw an exception
+-- labeled with the label.
 data (Label l) => Lref l t = LrefTCB l t
 
 -- | It would be a security issue to make certain objects a member of
@@ -331,13 +339,15 @@ taintR l' (Lref l a) = Lref (lub l l') a
 -- 'Lref' before doing something with the value.
 guardR :: (Label l) => l -> Lref l a -> LIO l s ()
 guardR l' (LrefTCB l a) = do
+  taint l
   cur <- currentLabel
   unless (l `leq` l' && l `leq` cur) $ throwIO LerrHigh
 
 setLabelRP                   :: Priv l p => p -> l -> Lref l a -> Lref l a
-setLabelRP p newl (LrefTCB l a) = if leqp p l newl
-                                  then LrefTCB newl a
-                                  else undefined
+setLabelRP p newl (LrefTCB l a) =
+  if leqp p l newl
+    then LrefTCB newl a
+    else undefined
 
 -- | Experimental: Try to use privileges to lower the label on an
 -- 'Lref' to 'lpure'.  If this function succeeds, return a pure value
@@ -440,8 +450,16 @@ currentClearance = get >>= return . lioC
      (Specifically, it does this by computing the least upper bound of
      the two labels with the 'lub' method of the 'Label' class.)
      However, if after doing this it would be the case that
-     @not (lcurrent ``leq`` ccurrent)@, then 'taint' throws an
-     exception rather than raising the current label.
+     @not (lcurrent ``leq`` ccurrent)@, then 'taint' throws exception
+     'LerrClearance' rather than raising the current label.
+
+   * When /reading/ an object where not just the contents of the
+     object but also the value of label @ldata@ itself may depend on
+     data labeled @ldata@, then it must be the case that
+     @ldata ``leq`` lcurrent@ even if the operation fails and throws
+     and exception because @not (lcurrent ``leq`` ccurrent)@.  For
+     such cases, you should use 'taintL' rather than 'taint' to ensure
+     the exception itself has a high enough label.
 
    * When /writing/ an object, it should be the case that @ldata
      ``leq`` lcurrent && lcurrent ``leq`` ldata@.  (As stated, this is
@@ -458,38 +476,61 @@ currentClearance = get >>= return . lioC
      case that @lcurrent ``leq`` ldata && ldata ``leq`` ccurrent@.
      This is ensured by the 'aguard' (allocation guard) function.
 
-The 'taintP' and 'wguardP' functions are variants of the above that
-take privilege to be more permissive and raise the current label less.
-There is no 'aguardP' function because it has not been necessary thus
-far--the default clearance is usually high enough that when people
-lower it they don't want it bypassed.
+The 'taintP', 'taintLP', and 'wguardP' functions are variants of the
+above that take privilege to be more permissive and raise the current
+label less.  There is no 'aguardP' function because it has not been
+necessary thus far--the default clearance is usually high enough that
+when people lower it they don't want it bypassed.
 
 -}
+
+
+gtaint :: (Label l) => (l -> l -> l) -> Bool -> l
+       -> LIO l s ()
+gtaint mylub throwAtLabel l = do
+  s <- get
+  let lnew = l `mylub` (lioL s)
+  if lnew `leq` lioC s
+     then put s { lioL = lnew }
+     else ioTCB $ E.throwIO $ LabeledExceptionTCB
+          (if throwAtLabel then lnew else lioL s)
+          (toException LerrClearance)
 
 -- |Use @taint l@ in trusted code before observing an object labeled
 -- @l@.  This will raise the current label to a value @l'@ such that
 -- @l ``leq`` l'@, or throw @'LerrClearance'@ if @l'@ would have to be
 -- higher than the current clearance.
-taint    :: (Label l) => l -> LIO l s ()
-taint l' = do s <- get
-              let l = lioL s `lub` l'
-              if l `leq` lioC s
-                then put s { lioL = l }
-                else throwIO LerrClearance
+taint :: (Label l) => l -> LIO l s ()
+taint = gtaint lub False
 
 -- |Like 'taint', but use privileges to reduce the amount of taint
 -- required.  Note that unlike 'setLabelP', @taintP@ will never lower
 -- the current label.  It simply uses privileges to avoid raising the
 -- label as high as 'taint' would raise it.
-taintP      :: (Priv l p) =>
-                 p              -- ^Privileges to invoke
-              -> l              -- ^Label to taint to if no privileges
-              -> LIO l s ()
-taintP p l' = do s <- get
-                 let l = lostar p l' (lioL s)
-                 if l `leq` lioC s
-                   then put s { lioL = l }
-                   else throwIO LerrClearance
+taintP   :: (Priv l p) =>
+              p              -- ^Privileges to invoke
+           -> l              -- ^Label to taint to if no privileges
+           -> LIO l s ()
+taintP p = gtaint (lostar p) False
+
+-- | Equivalent to @ taintL = 'taintLP' 'NoPrivs'@.
+taintL :: (Label l) => l -> LIO l s ()
+taintL = gtaint lub True
+
+-- | @taintLP@ is like 'taintP', but where the label argument itself
+-- must be protected.  The difference between the two is that when the
+-- clearance would be exceeeded and an exception must be thrown,
+-- 'taintP' labels the exception with the current label, while
+-- @taintLP@ labels it with a label above the current clearance (which
+-- can therefore be caught in fewer places).
+--
+-- In most cases you 'taintP' is more appripriate than 'taintLP'.
+-- However, because 'closeR' function allows untrusted code to create
+-- 'Lref's with unknown labels possibly dependent on data labeled
+-- higher than the current label, functions such as 'openRP' must use
+-- @taintLP@ internally rathern than 'taintP'.
+taintLP   :: (Priv l p) => p -> l -> LIO l s ()
+taintLP p = gtaint (lostar p) True
 
 -- |Use @wguard l@ in trusted code before modifying an object labeled
 -- @l@.  If @l'@ is the current label, then this function ensures that
@@ -561,6 +602,26 @@ setClearanceTCB l = get >>= doit
     where doit s | not $ lioL s `leq` l = throwIO LerrInval
                  | otherwise            = put s { lioC = l }
 
+-- | Lowers the clearance of a computation, then restores the
+-- clearance to its previous value.  Useful to wrap around a
+-- computation if you want to be sure you can catch exceptions thrown
+-- by it.  Also useful to wrap around 'closeR' to ensure that the Lref
+-- returned does not exceed a particular label.  If @withClearance@ is
+-- given a label that can't flow to the current clearance, then the
+-- clearance is lowered to the greatest lower bound of the label
+-- supplied and the current clearance.
+--
+-- Note that if the computation inside @withClearance@ acquires any
+-- 'Privs', it may still be able to raise its clearance above the
+-- supplied argument using 'setClearanceP'.
+withClearance     :: (Label l) => l -> LIO l s a -> LIO l s a
+withClearance l m = do
+  s <- get
+  put s { lioC = l `glb` lioC s }
+  a <- m
+  put s { lioC = lioC s }
+  return a
+
 -- | Within the 'LIO' monad, this function takes an 'Lref' and returns
 -- the value.  Thus, in the 'LIO' monad one can say:
 --
@@ -572,24 +633,17 @@ setClearanceTCB l = get >>= doit
 -- clearance, then @openR@ throws 'LerrClearance'.
 openR                :: (Label l) => Lref l a -> LIO l s a
 openR (LrefTCB la a) = do
-  s <- get
-  if la `leq` lioC s
-    then do put s { lioL = lioL s `lub` la }
-            return a
-    else throwIO LerrClearance
+  taintL la
+  return a
 
 -- | Extracts the value of an 'Lref' just like 'openR', but takes a
 -- privilege argument to minimize the amount the current label must be
 -- raised.
-openRP                 :: (Priv l p) => p -> Lref l a -> LIO l s a
-openRP p (LrefTCB l a) = do
-  s <- get
-  let la = lostar p l $ lioL s
-  if la `leq` lioC s
-    then put s { lioL = la } >> return a
-    else throwIO LerrClearance
+openRP                  :: (Priv l p) => p -> Lref l a -> LIO l s a
+openRP p (LrefTCB la a) = do
+  taintLP p la
+  return a
 
--- Might have lowered clearance inside closeR, so just preserve it
 -- |@closeR@ is the dual of @openR@.  It allows one to invoke
 -- computations that would raise the current label, but without
 -- actually raising the label.  Instead, the result of the computation
@@ -599,8 +653,8 @@ openRP p (LrefTCB l a) = do
 --
 -- Note that @closeR@ always restores the clearance to whatever it was
 -- when it was invoked, regardless of what occured in the computation
--- producing the value of the 'Lref'.  Thus, for instance, the
--- function
+-- producing the value of the 'Lref'.  Thus, for instance,
+-- 'withClearance' could be defined as:
 --
 -- @
 --   withClearance        :: (Label l) => l -> LIO l s a -> LIO l s a
@@ -608,8 +662,7 @@ openRP p (LrefTCB l a) = do
 --     closeR ('setClearance' newc >> m) >>= 'openR'
 -- @
 --
--- executes computation @m@ with lower clearance @newc@.  This
--- demonstrates one main use of clearance: to ensure that an Lref
+-- This demonstrates one main use of clearance: to ensure that an Lref
 -- computed does not exceed a particular label.
 closeR   :: (Label l) => LIO l s a -> LIO l s (Lref l a)
 closeR m = do
@@ -860,7 +913,7 @@ genericBracket :: (MonadCatch m) =>
                -> m a                 -- ^ Action to perform before
                -> (a -> m c)          -- ^ Action for afterwards
                -> (a -> m b)          -- ^ Main (in between) action
-               -> m b                 -- ^ Result main action
+               -> m b                 -- ^ Result of main action
 genericBracket myOnException before after between =
     block $ do
       a <- before
