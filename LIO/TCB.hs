@@ -58,8 +58,7 @@ module LIO.TCB (
                , LabelFault(..)
                -- ** Throwing and catching labeled exceptions
                -- $lexception
-               , MonadCatch(..), catchP, onExceptionP
-               , MonadBlock(..)
+               , MonadCatch(..), catchP, onExceptionP, bracketP
                -- * Executing computations
                , evalLIO
                -- Start TCB exports
@@ -616,7 +615,7 @@ instance Exception LabelFault
 -- | Map a function over the underlying IO computation within an LIO.
 -- Obviously this symbol should not be exported, as it is privileged.
 iomaps     :: (Label l) =>
-              ((LIOstate l s) -> IO (a, LIOstate l s) -> IO (a, LIOstate l s))
+              (LIOstate l s -> IO (a, LIOstate l s) -> IO (a, LIOstate l s))
            -> LIO l s a -> LIO l s a
 iomaps f c = mkLIO $ \s -> (f s $ unLIO c s)
 
@@ -666,12 +665,12 @@ data LabeledExceptionTCB l =
    'onExceptionP' variants that use whatever privilege is available to
    downgrade the exception.  Note that privileged code that must
    always run some cleanup function can use the 'onExceptionTCB' and
-   'bracketTCB' to run the cleanup code on all exceptions.
+   'bracketTCB' functions to run the cleanup code on all exceptions.
 
-   Note:  Do not use the 'throw' (as opposed to 'throwIO') function
-   within the 'LIO' monad.  Because 'throw' can be invoked from pure
-   code, it has no notion of current label and so cannot assign an
-   appropriate label to the exception.
+   Note:  Do not use 'throw' (as opposed to 'throwIO') within the
+   'LIO' monad.  Because 'throw' can be invoked from pure code, it has
+   no notion of current label and so cannot assign an appropriate
+   label to the exception.
 
 -}
 
@@ -682,18 +681,26 @@ instance Label l => Show (LabeledExceptionTCB l) where
 instance (Label l) => Exception (LabeledExceptionTCB l)
 
 class (Monad m) => MonadCatch m where
-    throwIO             :: (Exception e) => e -> m a
-    catch               :: (Exception e) => m a -> (e -> m a) -> m a
-    onException         :: m a -> m b -> m a
-    onException io what = io `catch` \e ->
-                          what >> throwIO (e :: SomeException)
+    block            :: m a -> m a
+    unblock          :: m a -> m a
+    throwIO          :: (Exception e) => e -> m a
+    catch            :: (Exception e) => m a -> (e -> m a) -> m a
+    onException      :: m a -> m b -> m a
+    onException io h = io `catch` \e -> h >> throwIO (e :: SomeException)
+    bracket          :: m a -> (a -> m c) -> (a -> m b) -> m b
+    bracket          = genericBracket onException
 
 instance MonadCatch IO where
-    throwIO = E.throwIO
-    catch = E.catch
+    block       = E.block
+    unblock     = E.unblock
+    throwIO     = E.throwIO
+    catch       = E.catch
     onException = E.onException
+    bracket     = E.bracket
 
 instance (Label l) => MonadCatch (LIO l s) where
+    block   = iomap E.block
+    unblock = iomap E.unblock
     -- |It is not possible to catch pure exceptions from within the 'LIO'
     -- monad, but @throwIO@ wraps up an exception with the current label,
     -- so that it can be caught with 'catch' or 'catchP'..
@@ -709,7 +716,7 @@ instance (Label l) => MonadCatch (LIO l s) where
           doit s e@(LabeledExceptionTCB l se) =
               case fromException se of
                 Just e' | l `leq` lioL s -> unLIO (c e') s
-                Nothing -> E.throwIO e
+                Nothing                  -> E.throwIO e
 
 
 
@@ -719,11 +726,11 @@ instance (Label l) => MonadCatch (LIO l s) where
 -- receives an an extra first argument (before the exception), which
 -- is the label when the exception was thrown.
 catchP       :: (Label l, Exception e, Priv l p) =>
-                 LIO l s a             -- ^ Computation to run
-             -> p   -- ^ Privileges with which to downgrade exception
+                p   -- ^ Privileges with which to downgrade exception
+             -> LIO l s a             -- ^ Computation to run
              -> (l -> e -> LIO l s a) -- ^ Exception handler
              -> LIO l s a             -- ^ Result of computation or handler
-catchP m p c = iomaps (\s m' -> m' `E.catch` doit s) m
+catchP p m c = iomaps (\s m' -> m' `E.catch` doit s) m
     where doit s e@(LabeledExceptionTCB l se) =
               case fromException se of
                 Just e' | leqp p l $ lioL s -> unLIO (c l e') s
@@ -734,45 +741,49 @@ catchP m p c = iomaps (\s m' -> m' `E.catch` doit s) m
 -- privileges to be supplied, so as to catch exceptions thrown with a
 -- raised label.
 onExceptionP           :: (Priv l p) =>
-                          LIO l s a -- ^ The computation to run
-                       -> p         -- ^ Privileges to downgrade exception
+                          p         -- ^ Privileges to downgrade exception
+                       -> LIO l s a -- ^ The computation to run
                        -> LIO l s b -- ^ Handler to run on exception
                        -> LIO l s a -- ^ Result if no exception thrown
-onExceptionP io p what = catchP io p
+onExceptionP p io what = catchP p io
                          (\l e -> what >> throwIO (e :: SomeException))
 
--- | @MonadBlock@ is the class of monads that support the 'block' and
--- 'unblock' functions for disabling and enabling asynchronous
--- exceptions, respectively.
-class (Monad m) => MonadBlock m where
-    block   :: m a -> m a
-    unblock :: m a -> m a
-instance MonadBlock IO where
-    block   = E.block
-    unblock = E.unblock
-instance (Label l) => MonadBlock (LIO l s) where
-    block   = iomap E.block
-    unblock = iomap E.unblock
+-- | Like standard 'bracket', but with privileges to downgrade
+-- exception.
+bracketP :: (Priv l p) =>
+            p
+         -> LIO l s a
+         -> (a -> LIO l s c)
+         -> (a -> LIO l s b)
+         -> LIO l s b
+bracketP p = genericBracket (onExceptionP p)
+
+genericBracket :: (MonadCatch m) =>
+                  (m b -> m c -> m b) -- ^ On exception function
+               -> m a                 -- ^ Action to perform before
+               -> (a -> m c)          -- ^ Action for afterwards
+               -> (a -> m b)          -- ^ Main (in between) action
+               -> m b                 -- ^ Result main action
+genericBracket myOnException before after between =
+    block $ do
+      a <- before
+      b <- unblock (between a) `myOnException` after a
+      after a
+      return b
 
 -- | For privileged code that needs to catch all exceptions in some
 -- cleanup function.  Note that for the 'LIO' monad, this function
 -- does /not/ call 'rethrowTCB' to label the exceptions.  It is
 -- assumed that you will use 'rtioTCB' for IO within the computation.
-class (MonadBlock m) => OnExceptionTCB m where
+class (MonadCatch m) => OnExceptionTCB m where
     onExceptionTCB :: m a -> m b -> m a
-    bracketTCB     :: m a -> (a -> m b) -> (a -> m c) -> m c
-    bracketTCB before after between =
-        block $ do
-          a <- before
-          b <- unblock (between a) `onExceptionTCB` after a
-          after a
-          return b
+    bracketTCB     :: m a -> (a -> m c) -> (a -> m b) -> m b
+    bracketTCB     = genericBracket onExceptionTCB
 instance OnExceptionTCB IO where
     onExceptionTCB = E.onException
     bracketTCB     = E.bracket
 instance (Label l) => OnExceptionTCB (LIO l s) where
-    onExceptionTCB io cleanup = 
-        mkLIO $ \s -> unLIO io s
-                      `E.catch` \e -> do unLIO cleanup s
-                                         E.throwIO (e :: SomeException)
-
+    onExceptionTCB m cleanup = 
+        mkLIO $ \s -> unLIO m s `E.catch` \e ->
+        do unLIO cleanup s
+           E.throwIO (e :: SomeException)

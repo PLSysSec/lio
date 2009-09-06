@@ -28,8 +28,7 @@ module LIO.Base (
                 , openR, closeR, discardR
                 -- * Exceptions
                 , LabelFault(..)
-                , MonadCatch(..), catchP, onExceptionP
-                , MonadBlock(..)
+                , MonadCatch(..), catchP, onExceptionP, bracketP
                 -- * Executing computations
                 , evalLIO
                 -- Start TCB exports
