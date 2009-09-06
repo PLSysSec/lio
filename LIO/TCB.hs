@@ -41,11 +41,7 @@ module LIO.TCB (
                , Priv(..), NoPrivs(..)
                -- * Labeled IO Monad (LIO)
 
-               -- | The 'LIO' monad is a wrapper around 'IO' that
-               -- keeps track of the current label and clearance.  It
-               -- is possible to raise one's label or lower one's
-               -- clearance without privilege, but to move in the
-               -- other direction requires appropriate privilege.
+               -- $LIO
                , LIO
                , currentLabel, currentClearance
                , setLabelP , setClearance, setClearanceP
@@ -163,14 +159,17 @@ privilege.
 Privilege comes from a separate class called 'Priv', representing the
 ability to bypass the protection of certain labels.  Essentially,
 privilege allows you to behave as if @l1 ``leq`` l2@ even when that is
-not the case.  The basic operation on the 'Priv' object is 'leqp',
-which performs the more permissive can-flow-to check given particular
+not the case.  The process of making data labeled @l1@ affect data
+labeled @l2@ when @not (l1 ``leq`` l2)@ is called /downgrading/.
+
+The basic method of the 'Priv' object is 'leqp', which performs the
+more permissive can-flow-to check in the presence of particular
 privileges.  Many 'LIO' operations have variants ending @...P@ that
 take a privilege argument to act in a more permissive way.  All 'Priv'
 types are monoids, and so can be combined with 'mappend'.
 
-How to generate privileges is specific to the particular label type in
-use.  The method used is 'mintTCB', but the arguments depend on the
+How to create 'Priv' objects is specific to the particular label type
+in use.  The method used is 'mintTCB', but the arguments depend on the
 particular label type.  (Obviously, the symbol 'mintTCB' must not be
 available to untrusted code.)
 
@@ -259,24 +258,42 @@ class (Label l, Monoid p, PrivTCB p) => Priv l p where
     -- |@leqp p l1 l2@ means that privileges @p@ are sufficient to
     -- downgrade data from @l1@ to @l2@.  Note that @'leq' l1 l2@
     -- implies @'leq' p l1 l2@ for all @p@, but for some labels and
-    -- privileges, values @leqp@ will hold even if @'leq'@ does not.
+    -- privileges, @leqp@ will hold even where @'leq'@ does not.
     leqp :: p -> l -> l -> Bool
     leqp p a b = lostar p a b `leq` b
 
-    -- |@lostar p source minimum@ returns the lowest label to which
-    -- one can downgrade data labeled @source@ given privileges @p@,
-    -- least-upper-bounded with @minimum@.  (Without @minimum@, the
-    -- representation of the lowest label might have size exponential
-    -- in the size of @p@ for some label formats.)  More concretely,
-    -- the result returned is the lowest @lres@ such that:  @'leqp' p
-    -- source lres && 'leq' minimum lres@
+    -- | Roughly speaking, the function
+    -- 
+    -- > result = lostar p label goal
+    -- 
+    -- computes how close one can come to downgrading data labeled
+    -- @label@ to @goal@ given privileges @p@.  When @p == 'NoPrivs'@,
+    -- @result == 'lub' label goal@.  If @p@ contains all possible
+    -- privileges, then @result == goal@.
     --
-    -- This is useful if your label is originally @l1@, and you touch
-    -- some stuff labeled @l2@ but want to minimize the amount of
-    -- taint @l2@ causes you.  After raising your label to @l2@, you
-    -- can use the privileges in @p@ to lower your label to @lostar p
-    -- l2 l1@.
-    lostar :: p -> l -> l -> l
+    -- More specifically, @result@ is the greatest lower bound of the
+    -- set of all labels @r@ satisfying:
+    --
+    --   1. @'leq' goal r@, and
+    --
+    --   2. @'leqp' p label r@
+    --
+    -- Operationally, @lostar@ captures the minimum change required to
+    -- the current label when viewing data labeled @label@.  A common
+    -- pattern is to use the result of 'currentLabel' as @goal@ (i.e.,
+    -- the goal is to use privileges @p@ to avoid changing the label
+    -- at all), and then compute @result@ based on the @label@ of data
+    -- the code is about to observe.  For example, 'taintP' could be
+    -- implemented as:
+    --
+    -- @
+    --    taintP p l = do lcurrent <- 'currentLabel'
+    --                    'taint' (lostar p l lcurrent)
+    -- @
+    lostar :: p                 -- ^ Privileges
+           -> l                 -- ^ Label from which data must flow
+           -> l                 -- ^ Goal label
+           -> l                 -- ^ Result
 
 -- |A generic 'Priv' instance that works for all 'Label's and confers
 -- no downgrading privileges.
@@ -322,6 +339,21 @@ unlrefTCB (Lref l a) = a
 --
 -- Labeled IO
 --
+
+-- $LIO
+-- 
+-- The 'LIO' monad is a wrapper around 'IO' that keeps track of the
+-- current label and clearance.  It is possible to raise one's label
+-- or lower one's clearance without privilege, but moving in the other
+-- direction requires appropriate privilege.
+--
+-- 'LIO' is parameterized by two types.  The first is the particular
+-- label type.  The second type is state specific to the label type.
+-- (For instance, "LIO.HiStar" uses this in the 'newcat' function to
+-- keep track of how many categories have been allocated, while
+-- "LIO.DCLabels" doesn't need state and hence uses @()@ as the state
+-- type.)  Trusted label implementation code can use 'getTCB' and
+-- 'putTCB' to get and set the label state.
 
 data (Label l) => LIOstate l s =
     LIOstate { labelState :: s
@@ -447,7 +479,7 @@ aguard newl = do c <- currentClearance
                  return ()
 
 -- | If the current label is @oldLabel@ and the current clearance is
--- @clearance@, this function allows a code to raise the label to any
+-- @clearance@, this function allows code to raise the label to any
 -- value @newLabel@ such that
 -- @oldLabel ``leq`` newLabel && newLabel ``leq`` clearance@.
 -- Note that there is no @setLabel@ variant without the @...P@ because
