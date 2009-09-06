@@ -254,10 +254,11 @@ instance Label l => MonadFix (Lref l) where
 
 -- |PrivTCB is a method-less class whose only purpose is to be
 -- unavailable to unprivileged code.  Since (PrivTCB t) => is in the
--- context of class 'Priv', this ensures that, since unprivileged code
--- cannot create new instances of the PrivTCB class, it won't be able
--- to create new instances of the 'Priv' class either, even though the
--- symbol 'Priv' is exported by "LIO.Base".
+-- context of class 'Priv' and unprivileged code cannot create new
+-- instances of the PrivTCB class, this ensures unprivileged code
+-- cannot create new instances of the 'Priv' class either, even though
+-- the symbol 'Priv' is exported by "LIO.Base" and visible to
+-- untrusted code.
 class PrivTCB t where
 class (PrivTCB t) => MintTCB t i where
     -- |The function that mints new privileges.
@@ -750,10 +751,12 @@ runLIO m s = unLIO m s `E.catch` (E.throwIO . delabel)
            -- trace ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") e
 
 -- | Produces an 'IO' computation that will execute a particular 'LIO'
--- computation.  Obviously untrusted code should have no way to
--- execute 'IO' computations, so this function should only be useful
--- within trusted code, though @evalLIO@ itself doesn't need to be
--- secure.
+-- computation.  Untrusted code should have no way to execute 'IO'
+-- computations, so this function should only be useful within trusted
+-- code, though no harm is done from exposing the @evalLIO@ symbol to
+-- untrusted code.  (Untrusted code is free to produce 'IO'
+-- computations--it just can't execute them without access to
+-- 'ioTCB'.)
 evalLIO     :: (Label l) =>
                LIO l s a    -- ^ The LIO computation to execute
             -> s         -- ^ Initial value of label-specific state
@@ -772,8 +775,13 @@ ioTCB a = mkLIO $ \s -> do r <- a; return (r, s)
 -- | Lifts an 'IO' computation into the 'LIO' monad.  If the 'IO'
 -- computation throws an exception, it labels the exception with the
 -- current label so that the exception can be caught with 'catch' or
--- 'catchP'.  This functions name stands for "re-throw io", because
--- it's functionality is a combination of 'rethrowTCB' and 'ioTCB'.
+-- 'catchP'.  This function's name stands for \"re-throw io\", because
+-- the functionality is a combination of 'rethrowTCB' and 'ioTCB'.
+-- Effectively
+--
+-- @
+--   rtioTCB = 'rethrowTCB' . 'ioTCB'
+-- @
 rtioTCB :: (Label l) => IO a -> LIO l s a
 rtioTCB a = rethrowTCB $ mkLIO $ \s -> do r <- a; return (r, s)
 
