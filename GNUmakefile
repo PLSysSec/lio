@@ -36,7 +36,8 @@ doc: $(DOC)
 	    $(BIN)HsColour -css -anchor \
 		-o$@/src/`echo $$file|sed -e 's|/|.|g'`.html $$file; \
 	done
-	haddock -h -o$@ --prologue=prologue.haddock \
+	haddock -h -o$@ --title="Labeled IO library" \
+	    --prologue=prologue.haddock \
 	    --source-base=src/ \
 	    --source-module=src/%M.hs.html \
 	    --source-entity=src/%M.hs.html#%N $(DOC)
