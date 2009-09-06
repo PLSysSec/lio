@@ -1,0 +1,23 @@
+
+The /Labeled IO/ (LIO) library provides information flow control for
+incorporating untrusted code within Haskell applications.  Most code
+should import module "LIO.LIO", though the core functionality is
+documented in "LIO.TCB".
+
+Warning:  For security, at a minimum untrusted code must not be
+allowed to do any of the following:
+
+  * import "LIO.TCB",
+
+  * Use any symbols with names ending @...TCB@,
+
+  * Use the @foreign@ keyword,
+
+  * Use functions such as 'unsafePerformIO', 'unsafeInterleaveIO',
+    'inlinePerformIO',
+
+  * Manually define @typeOf@ methods (automatically deriving should be
+    safe).
+
+In general, imports should be highly scrutinized.  For example, most
+of the "Foreign" class of modules are probably dangerous.
