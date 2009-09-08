@@ -136,9 +136,11 @@ dcsIntersection s DCAll               = s
 dcsIntersection (DCSet s1) (DCSet s2) = DCSet $ Set.intersection s1 s2
 
 hasCatSuchThat             :: (DCType t) => DCSet t -> (DCat t -> Bool) -> Bool
+hasCatSuchThat DCAll _     = True
 hasCatSuchThat (DCSet s) f = isJust $ find f $ Set.toList s
 
 dcsReduce              :: (DCType t) => DCSet t -> DCSet t
+dcsReduce DCAll        = DCAll
 dcsReduce s@(DCSet ss) =
     DCSet $ Set.filter needed ss
     where
@@ -196,9 +198,9 @@ instance Show DCLabel where
     showsPrec _ (DCLabel i s) rest = (shows i $ " " ++ shows s rest)
 
 instance Read DCLabel where
-    readsPrec _ s = do (i, ss) <- reads s
-                       (s, rest) <- reads ss
-                       return (DCLabel i s, rest)
+    readsPrec _ str = do (i, ss) <- reads str
+                         (s, rest) <- reads ss
+                         return (DCLabel i s, rest)
 
 instance POrd DCLabel where
     (DCLabel i1 s1) `leq` (DCLabel i2 s2) =

@@ -177,9 +177,9 @@ class (Eq a) => POrd a where
                  | b `leq` a = PGT
                  | otherwise = PNE
     leq a b = case pcompare a b of
-                PEQ       -> True
-                PLT       -> True
-                otherwise -> False
+                PEQ -> True
+                PLT -> True
+                _   -> False
 
 o2po :: Ordering -> POrdering
 o2po EQ = PEQ; o2po LT = PLT; o2po GT = PGT
@@ -291,8 +291,8 @@ instance Monoid NoPrivs where
     mempty      = NoPrivs
     mappend _ _ = NoPrivs
 instance (Label l) => Priv l NoPrivs where
-    leqp _ a b     = leq a b
-    lostar _ l min = lub l min
+    leqp _ a b      = leq a b
+    lostar _ l goal = lub l goal
 
 lrefTCB     :: Label l => l -> a -> Lref l a
 lrefTCB l a = LrefTCB l a
@@ -313,7 +313,7 @@ taintR l (LrefTCB la a) = do
 -- label, calling 'openR' on 'Lref' that has passed a @guardR@ check
 -- will not increase the current label.
 guardR                  :: (Label l) => l -> Lref l a -> LIO l s ()
-guardR l (LrefTCB la a) = do
+guardR l (LrefTCB la _) = do
   lcur <- currentLabel
   unless (la `leq` lcur && la `leq` l) $ throwIO LerrLow
 
@@ -324,7 +324,7 @@ guardR l (LrefTCB la a) = do
 -- the privileges are not used when comparing the label of the 'Lref'
 -- to the argument label.
 guardRP                    :: (Priv l p) => p -> l -> Lref l a -> LIO l s ()
-guardRP p l (LrefTCB la a) = do
+guardRP p l (LrefTCB la _) = do
   lcur <- currentLabel
   unless ((leqp p la lcur) && la `leq` l) $ throwIO LerrLow
 
@@ -733,7 +733,7 @@ runLIO     :: forall l s a. (Label l) => LIO l s a -> LIOstate l s
            -> IO (a, LIOstate l s)
 runLIO m s = unLIO m s `E.catch` (E.throwIO . delabel)
     where delabel :: LabeledExceptionTCB l -> SomeException
-          delabel (LabeledExceptionTCB l e) = e
+          delabel (LabeledExceptionTCB _ e) = e
            -- trace ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") e
 
 -- | Produces an 'IO' computation that will execute a particular 'LIO'
@@ -927,7 +927,7 @@ onExceptionP           :: (Priv l p) =>
                        -> LIO l s b -- ^ Handler to run on exception
                        -> LIO l s a -- ^ Result if no exception thrown
 onExceptionP p io what = catchP p io
-                         (\l e -> what >> throwIO (e :: SomeException))
+                         (\_ e -> what >> throwIO (e :: SomeException))
 
 -- | Like standard 'E.bracket', but with privileges to downgrade
 -- exception.

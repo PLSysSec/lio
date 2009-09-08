@@ -10,7 +10,6 @@
 module LIO.Armor (armor32, dearmor32) where
 
 import Control.Monad
-import Data.Array.IArray
 import Data.Array.Unboxed
 import Data.Bits
 import qualified Data.ByteString.Lazy as L
@@ -23,8 +22,8 @@ a2b = listArray (0, 31) $ do c <- ['a'..'z'] ++ ['0' .. '9']
                              guard $ not $ elem c "lo01"
                              return c
 
-armor32 :: L.ByteString -> String
-armor32 s = doit 0 $ L.unpack s
+armor32     :: L.ByteString -> String
+armor32 str = doit 0 $ L.unpack str
     where
       doit _ [] = []
       doit skip s@(c1:s1) =
@@ -37,13 +36,14 @@ armor32 s = doit 0 $ L.unpack s
              then c : doit (skip - 3) s1
              else c : doit (skip + 5) s
 
-inval = -1 :: Word8
+inval :: Word8
+inval = -1
 b2a :: UArray Char Word8
-b2a = accumArray (\a b -> b) inval (chr 0, chr 255)
+b2a = accumArray (\_ b -> b) inval (chr 0, chr 255)
       [(y, x) | (x, y) <- assocs a2b]
 
-dearmor32 :: String -> L.ByteString
-dearmor32 s = doit 0 0 s
+dearmor32     :: String -> L.ByteString
+dearmor32 str = doit 0 0 str
     where
       doit _ _ [] = L.empty
       doit carryVal carrySize (c1:s) =

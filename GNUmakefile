@@ -18,7 +18,7 @@ all: $(PROGS)
 	@mv -f $@~ $@
 
 $(PROGS): %: %.hs
-	ghc --make $<
+	ghc --make -Wall $<
 	ghc -M -dep-makefile $@.d~ $<
 	@if cmp -s $@.d~ $@.d; then		\
 		rm $@.d~;			\
