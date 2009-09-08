@@ -19,11 +19,13 @@ allowed to do any of the following:
 
   * Use language extensions such as Generalized Newtype Deriving and
     Stand-alone Deriving to extend LIO types (such as by deriving an
-    instance of the 'MonadTrans' class for 'LIO', which would allow
-    untrusted code to bypass all security with 'lift'),
+    instance of Show for Lref, or deriving an instance of the
+    'MonadTrans' class for 'LIO', which would allow untrusted code to
+    bypass all security with 'lift'),
 
-  * Manually define @typeOf@ methods (automatically deriving
-    @Typeable@ should be safe).
+  * Manually define @typeOf@ methods (as this would cause the
+    supposedly safe 'cast' method to make usafe casts); automatically
+    deriving @Typeable@ should be safe.
 
 In general, pragmas and imports should be highly scrutinized.  For
 example, most of the "Foreign" class of modules are probably
