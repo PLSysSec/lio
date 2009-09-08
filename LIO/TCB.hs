@@ -310,8 +310,8 @@ taintR l (LrefTCB la a) = do
 -- below the current label, or else throws 'LerrLow'.  Can be used to
 -- verify the integrity of an 'Lref' before doing something with the
 -- value.  Because the label of the 'Lref' must be below the current
--- label, calling 'openR' on the 'Lref' will not increase the current
--- label.
+-- label, calling 'openR' on 'Lref' that has passed a @guardR@ check
+-- will not increase the current label.
 guardR                  :: (Label l) => l -> Lref l a -> LIO l s ()
 guardR l (LrefTCB la a) = do
   lcur <- currentLabel
@@ -639,8 +639,15 @@ withClearance l m = do
 -- sense to wrap a 'catch' around 'withClearance' if the computation
 -- with reduced clerance calls @openR@.
 --
--- See 'guardR'/'guardRP' and 'labelOfR'/'labelOfRP' for ways to check
--- whether 'openR' will succeed.
+-- You can use 'guardR' or @'isJust' . 'labelOfR'@ to check whether
+-- 'openR' will succeed without throwing an exception, but note that
+-- these checks are conservative--it is possible that @openR@ would
+-- succeed even if the checks fail.  The reason for this is that
+-- whether or not the label of the 'Lref' exceeds the current
+-- clearance could potentially leak information (as it's not possible
+-- to raise the current label above the current clearance to reflect
+-- the label of the 'Lref', yet the label of the 'Lref' itself may
+-- encode sensitive information).
 openR                :: (Label l) => Lref l a -> LIO l s a
 openR (LrefTCB la a) = do
   taintL la
@@ -884,8 +891,9 @@ instance (Label l) => MonadCatch (LIO l s) where
         where
           doit s e@(LabeledExceptionTCB l se) =
               case fromException se of
-                Just e' | l `leq` lioL s -> unLIO (c e') s
-                Nothing                  -> E.throwIO e
+                Just e' | l `leq` lioC s ->
+                            unLIO (c e') s { lioL = (lioL s) `lub` l }
+                _                        -> E.throwIO e
 
 
 
@@ -900,10 +908,14 @@ catchP       :: (Label l, Exception e, Priv l p) =>
              -> (l -> e -> LIO l s a) -- ^ Exception handler
              -> LIO l s a             -- ^ Result of computation or handler
 catchP p m c = iomaps (\s m' -> m' `E.catch` doit s) m
-    where doit s e@(LabeledExceptionTCB l se) =
-              case fromException se of
-                Just e' | leqp p l $ lioL s -> unLIO (c l e') s
-                Nothing -> E.throw e
+    where
+      doit s e@(LabeledExceptionTCB l se) =
+          case fromException se of
+            Just e' -> let lnew = lostar p l (lioL s)
+                       in if leq lnew $ lioC s
+                          then unLIO (c l e') s { lioL = lnew }
+                          else E.throw e
+            _       -> E.throw e
 
 -- | 'onException' cannot run its handler if the label was raised in
 -- the computation that threw the exception.  This variant allows
