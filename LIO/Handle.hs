@@ -14,16 +14,17 @@ module LIO.Handle (DirectoryOps(..)
                   , CloseOps (..)
                   , HandleOps (..)
                   , LHandle
+                  , hlabelOf
                   , mkDir, mkLHandle
                   , readFile, writeFile
                   , createDirectoryP, openFileP, writeFileP
+                  , IOMode(..)
                   ) where
 
 import LIO.TCB
 import LIO.FS
 
 import Prelude hiding (readFile, writeFile)
-import Control.Exception hiding (throwIO, catch, onException)
 import qualified Data.ByteString.Lazy as L
 import qualified System.Directory as IO
 import qualified System.IO as IO
@@ -86,7 +87,7 @@ instance (Label l, CloseOps (LHandle l h) (LIO l s), HandleOps h b IO)
 
 
 hlabelOf                  :: (Label l) => LHandle l h -> l
-hlabelOf (LHandleTCB l h) = l
+hlabelOf (LHandleTCB l _) = l
 
 
 

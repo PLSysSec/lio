@@ -13,7 +13,7 @@
 --
 -- > import Prelude hiding (readFile, writeFile, catch)
 -- > import Control.Exception hiding (throwIO, catch, onException
--- >                                 , block, unblock)
+-- >                                 , bracket, block, unblock)
 -- > import LIO.LIO
 --
 -- Where possible the LIO variants of the functions should work in
