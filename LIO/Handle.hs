@@ -27,6 +27,7 @@ import LIO.FS
 import Prelude hiding (readFile, writeFile)
 import qualified Data.ByteString.Lazy as L
 import qualified System.Directory as IO
+import System.IO (IOMode)
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
 

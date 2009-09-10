@@ -25,7 +25,7 @@ category containing that Principal.  Hence the name
 module LIO.DCLabel.Label
     (
     -- * The base label type
-    Principal(..), DCType, Integrity, Secrecy
+    Principal(..), DCType, Integrity(..), Secrecy(..)
     , DCat(..), DCSet, DCLabel(..)
     -- * Functions for categories
     , DCatI, DCatS
@@ -33,9 +33,11 @@ module LIO.DCLabel.Label
     -- * Functions for sets of categories (DCSet)
     , dcsEmpty, dcsSingleton, dcsFromList, dcsAll
     , dcsSubsetOf, dcsUnion, dcsIntersection
-    , dcsSubsumes
+    , dcsSubsumes, dcsUnion', dcsIntersection'
+    -- * Functions on labels
+    , dclReduce
     -- * Privileges
-    , DCPrivs
+    , DCPrivs, dcprivs, owns
     -- * Useful aliases for LIO Monad
     , DC, evalDC
     ) where
@@ -139,23 +141,44 @@ hasCatSuchThat             :: (DCType t) => DCSet t -> (DCat t -> Bool) -> Bool
 hasCatSuchThat DCAll _     = True
 hasCatSuchThat (DCSet s) f = isJust $ find f $ Set.toList s
 
-dcsReduce              :: (DCType t) => DCSet t -> DCSet t
-dcsReduce DCAll        = DCAll
-dcsReduce s@(DCSet ss) =
-    DCSet $ Set.filter needed ss
+forallCat     :: (DCType t) => DCSet t -> (DCat t -> Bool) -> Bool
+forallCat s f = not $ s `hasCatSuchThat` (not . f)
+
+hasCatSubsuming     :: (DCType t) => DCSet t -> DCat t -> Bool
+hasCatSubsuming s c = s `hasCatSuchThat` (`dcSubsumes` c)
+
+dcsFilter             :: (DCType t) => (DCat t -> Bool) -> DCSet t -> DCSet t
+dcsFilter f (DCSet s) = DCSet $ Set.filter f s
+dcsFilter _ DCAll     = DCAll
+
+-- | Eliminate categories that are subsumed (see 'dcSubsumes') by
+-- other categories in the set.
+dcsReduce   :: (DCType t) => DCSet t -> DCSet t
+dcsReduce s = dcsFilter needed s
     where
       needed c = not $ s `hasCatSuchThat` (`dcSubsumesNE` c)
-                        
+
+-- | Union two sets of secrecy categories, eliminating any category in
+-- a set that is subsumed by another category in that set (see
+-- 'dcSubsumes').
+dcsUnion'       :: (DCType t) => DCSet t -> DCSet t -> DCSet t
+dcsUnion' s1 s2 = dcsReduce $ dcsUnion s1 s2
+
+-- | Produces the set of all categories that are in both sets and that
+-- are subsumed by categories in both sets.
+dcsIntersection'         :: (DCType t) => DCSet t -> DCSet t -> DCSet t
+dcsIntersection' DCAll s = s
+dcsIntersection' s DCAll = s
+dcsIntersection' s1 s2   = dcsUnion' (subsumed s1 s2) (subsumed s2 s1)
+    where
+      subsumed a b = dcsFilter (b `hasCatSubsuming`) a
 
 -- | 'DCSet' @s1@ /subsumes/ @s2@ iff for every category @c2@ in @s2@,
 -- there is a category @c1@ in @s1@ such that @c1@ subsumes @c2@.  In
 -- other words, @s1@ provides at least as much protection as @s2@.
 dcsSubsumes                       :: (DCType t) => DCSet t -> DCSet t -> Bool
 dcsSubsumes s1 s2 =
-    forallCat s2 $ \c2 -> s1 `hasCatSuchThat` (`dcSubsumes` c2)
-    where
-      forallCat s f = not $ s `hasCatSuchThat` (not . f)
-      
+    forallCat s2 $ \c2 -> s1 `hasCatSubsuming` c2
 
 matchskip :: String -> String -> t -> String -> [(t, String)]
 matchskip skip (m:ms) r (s:ss) | m == s        = matchskip skip ms r ss   
@@ -190,56 +213,75 @@ instance (DCType t) => Read (DCSet t) where
                             return (DCSet $ Set.fromList set, rest))
         in result
 
-data DCLabel = DCLabel { elI :: DCSet Integrity
-                       , elS :: DCSet Secrecy
+data DCLabel = DCLabel { dclS :: DCSet Secrecy
+                       , dclI :: DCSet Integrity
                        } deriving (Eq, Typeable)
 
 instance Show DCLabel where
-    showsPrec _ (DCLabel i s) rest = (shows i $ " " ++ shows s rest)
+    showsPrec _ (DCLabel s i) rest = (shows s $ " " ++ shows i rest)
 
 instance Read DCLabel where
-    readsPrec _ str = do (i, ss) <- reads str
-                         (s, rest) <- reads ss
-                         return (DCLabel i s, rest)
+    readsPrec _ str = do (s, str1) <- reads str
+                         (i, rest) <- reads str1
+                         return (DCLabel s i, rest)
 
 instance POrd DCLabel where
-    (DCLabel i1 s1) `leq` (DCLabel i2 s2) =
-        i2 `dcsSubsetOf` i1 && s1 `dcsSubsetOf` s2
+    (DCLabel s1 i1) `leq` (DCLabel s2 i2) =
+        s2 `dcsSubsumes` s1 && i1 `dcsSubsumes` i2
+        -- i2 `dcsSubsetOf` i1 && s1 `dcsSubsetOf` s2
+
+dclReduce                 :: DCLabel -> DCLabel
+dclReduce (DCLabel s1 i1) = DCLabel (dcsReduce s1) (dcsReduce i1)
 
 instance Label DCLabel where
     lpure = DCLabel dcsEmpty dcsEmpty
     lclear = DCLabel dcsEmpty DCAll
-    lub (DCLabel i1 s1) (DCLabel i2 s2) =
-        DCLabel (dcsIntersection i1 i2) (dcsUnion s1 s2)
-    glb (DCLabel i1 s1) (DCLabel i2 s2) =
-        DCLabel (dcsUnion i1 i2) (dcsIntersection s1 s2)
+    lub (DCLabel s1 i1) (DCLabel s2 i2) =
+        DCLabel (dcsUnion' s1 s2) (dcsIntersection' i1 i2)
+    glb (DCLabel s1 i1) (DCLabel s2 i2) =
+        DCLabel (dcsIntersection' s1 s2) (dcsUnion' i1 i2)
 
-newtype DCPrivs = DCPrivs (Set Principal) deriving (Eq, Show)
+newtype DCPrivs = DCPrivsTCB (Set Principal) deriving (Eq, Show)
 
 instance PrivTCB DCPrivs
 
 instance MintTCB DCPrivs Principal where
-    mintTCB p = DCPrivs $ Set.singleton p
+    mintTCB p = DCPrivsTCB $ Set.singleton p
 
 instance Monoid DCPrivs where
-    mempty = DCPrivs Set.empty
-    mappend (DCPrivs s1) (DCPrivs s2) = DCPrivs $ Set.union s1 s2
+    mempty = DCPrivsTCB Set.empty
+    mappend (DCPrivsTCB s1) (DCPrivsTCB s2) = DCPrivsTCB $ Set.union s1 s2
 
-owns                      :: DCType t => DCPrivs -> DCat t -> Bool
-owns (DCPrivs p) (DCat c) = not $ Set.null (Set.intersection p c)
+dcprivs                :: DCPrivs -> Set Principal
+dcprivs (DCPrivsTCB s) = s
+
+owns                         :: DCType t => DCPrivs -> DCat t -> Bool
+owns (DCPrivsTCB p) (DCat c) = not $ Set.null (Set.intersection p c)
+
+{-
+dclostar :: DCPrivs -> DCLabel -> DCLabel -> DCLabel
+dclostar p (DCLabel ls li) (DCLabel ms mi) =
+    DCLabel ss si
+    where
+      hasCat DCAll _     = True
+      hasCat (DCSet s) c = Set.member c s
+      ss                 = dcsUnion ms $ dcsFilter needS ls
+      needS c            = not (p `owns` c) && not (ms `hasCat` c)
+      si                 = dcsFilter okayI mi
+      okayI c            = p `owns` c || li `hasCat` c
+-}
+
+subsumesP       :: (DCType t) => DCPrivs -> DCSet t -> DCat t -> Bool
+subsumesP p s c = p `owns` c || s `hasCatSubsuming` c
 
 instance Priv DCLabel DCPrivs where
-    lostar p (DCLabel li ls) (DCLabel mi ms) =
-        DCLabel (doi li mi) (dos ls ms)
-        where
-          doi (DCSet li) (DCSet mi) =
-              DCSet $ Set.filter (\c -> owns p c || Set.member c li) mi
-          doi s DCAll = s
-          doi DCAll s = s
+    leqp p (DCLabel s1 i1) (DCLabel s2 i2) =
+        forallCat s1 (subsumesP p s2) && forallCat i2 (subsumesP p i1)
 
-          dos (DCSet ls) (DCSet ms) =
-              DCSet $ ms `Set.union` Set.filter (not . (owns p)) ls
-          dos _ _ = DCAll
+    lostar p (DCLabel ls li) (DCLabel ms mi) = DCLabel ss si
+        where
+          ss = dcsUnion ms $ dcsFilter (not . subsumesP p ms) ls
+          si = dcsFilter (subsumesP p li) mi
 
 -- |The base type for LIO computations using these labels.
 type DC = LIO DCLabel ()

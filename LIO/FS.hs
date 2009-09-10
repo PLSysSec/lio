@@ -85,7 +85,6 @@
 module LIO.FS ( -- * The opaque name object
                 Name -- Do not Export constructor!  Names are TRUSTED
               , rootDir, lookupName
-              , IOMode
               -- * Initializing the file system
               , mkRoot
               -- * Internal data structures
@@ -106,7 +105,6 @@ import Prelude hiding (catch)
 
 import Control.Exception hiding (throwIO, catch, onException)
 import Control.Monad
-import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Typeable
 import qualified GHC.IOBase
@@ -115,9 +113,7 @@ import System.FilePath
 import System.IO
 import System.IO.Error hiding (catch, try)
 import System.FilePath
-import System.Posix.Directory hiding (removeDirectory)
 import System.Posix.Files
-import System.Posix.IO
 import System.Posix.Process
 
 import Data.Digest.Pure.SHA
@@ -135,19 +131,19 @@ strictReadFile f = withFile f ReadMode readit
 catchIO     :: IO a -> IO a -> IO a
 catchIO a h = catch a ((const :: a -> IOException -> a) h)
 
-catchPred          :: Exception e => (e -> Bool) -> IO a -> IO a -> IO a
-catchPred pred a h = catchJust test a runh
+catchPred               :: Exception e => (e -> Bool) -> IO a -> IO a -> IO a
+catchPred predicate a h = catchJust test a runh
     where
-      test e = if pred e then Just () else Nothing
+      test e = if predicate e then Just () else Nothing
       runh () = h
 
-tryPred        :: Exception e => (e -> Bool) -> IO a -> IO (Either e a)
-tryPred pred a = tryJust test a
+tryPred             :: Exception e => (e -> Bool) -> IO a -> IO (Either e a)
+tryPred predicate a = tryJust test a
     where
-      test e = if pred e then Just e else Nothing
+      test e = if predicate e then Just e else Nothing
 
 ignoreErr :: IO () -> IO ()
-ignoreErr m = catch m ((\e -> return ()) :: IOException -> IO ())
+ignoreErr m = catch m ((\_ -> return ()) :: IOException -> IO ())
 
 -- |Delete a name whether it's a file or directory, by trying both.
 -- This is slow, but only used for error conditions when performance
@@ -169,29 +165,31 @@ instance Exception FSErr
 -- LDir functions
 --
 
+prefix :: FilePath
 prefix = "ls"
 
 -- |File name in which labels are stored in 'LDir's.
 labelFile :: FilePath
 labelFile = "LABEL"
 
--- |Type containing the pathname of a @LabelHash@ directory (which
+-- | Type containing the pathname of a @LabelHash@ directory (which
 -- must contain a file named 'labelFile').
 newtype LDir = LDir FilePath deriving (Show)
 
--- |Hash a label down to the directory storing all 'Node's with that
+-- | Hash a label down to the directory storing all 'Node's with that
 -- label.
 lDirOfLabel   :: (Label l) => l -> LDir
 lDirOfLabel l =
     case armor32 $ bytestringDigest $ sha224 $ LC.pack $ show l of
       c1:c2:c3:rest -> LDir (prefix </> (c1:[]) </> (c2:[])
                                         </> (c3:[]) </> rest)
+      _             -> error "lDirOfLabel bad sha"
 
--- |'LDir' that contains a 'Node'
+-- | 'LDir' that contains a 'Node'
 lDirOfNode          :: Node -> LDir
 lDirOfNode (Node n) = LDir $ takeDirectory n
 
--- |'LDir' that contains the directory that contains a file name.
+-- | 'LDir' that contains the directory that contains a file name.
 lDirOfName          :: Name -> LDir
 lDirOfName (NameTCB n) = LDir $ takeDirectory $ takeDirectory n
 
@@ -216,13 +214,13 @@ labelOfLDir (LDir p) = do
 -- |Gets the LDir for a particular label.  Creates it if it does not
 -- exist.  May throw 'FSCorruptLabel'.
 getLDir   :: Label l => l -> IO LDir
-getLDir l = try (labelOfLDir ldir) >>= handle
+getLDir l = try (labelOfLDir ldir) >>= handler
     where
       ldir@(LDir dir) = lDirOfLabel l
-      handle (Right l')
+      handler (Right l')
           | l' == l   = return ldir
           | otherwise = dumplabel >> throwIO (FSCorruptLabel dir)
-      handle (Left e) =
+      handler (Left e) =
           case fromException e of
             Just e' | isDoesNotExistError e' -> makedir
             _                                -> dumplabel >> throwIO e
@@ -376,6 +374,7 @@ rootDir = NameTCB $ prefix </> "root"
 labelOfName :: (Label l) => Name -> IO l
 labelOfName = labelOfLDir . lDirOfName
 
+{-
 unlinkName                  :: (FilePath -> IO ()) -> Name -> IO ()
 unlinkName f (NameTCB name) = do
   (Node node) <- nodeOfName (NameTCB name)
@@ -387,6 +386,7 @@ unlinkNameDir = unlinkName removeDirectory
 
 -- |Remove a regular file by name.
 unlinkNameReg = unlinkName removeFile
+-}
   
 -- | This function reads the contents of a symbolic link and returns
 -- the pathname of its destination, relative to the current working
@@ -405,10 +405,10 @@ expandLink path = do
            else domerge (takeDirectory path) suffix
     where
       domerge [] suffix = suffix
-      domerge path [] = path
-      domerge path ('.':'.':pathSeparator:suffix) =
-          domerge (takeDirectory path) suffix
-      domerge path suffix = path </> suffix
+      domerge p [] = p
+      domerge p ('.':'.':ps:suffix) | ps == pathSeparator =
+          domerge (takeDirectory p) suffix
+      domerge p suffix = p </> suffix
 
 -- | 'Node' that a 'Name' is pointing to.
 nodeOfName             :: Name -> IO Node

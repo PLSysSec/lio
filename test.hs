@@ -15,10 +15,10 @@ import LIO.DCLabel
 import LIO.FS
 
 import Prelude hiding (catch, readFile, writeFile)
-import Control.Exception hiding (throwIO, catch)
+-- import Control.Exception hiding (throwIO, catch)
 import Control.Applicative
 import qualified Data.ByteString.Lazy as L
-import Data.Set (Set)
+-- import Data.Set (Set)
 import qualified Data.Set as Set
 import System.IO hiding (readFile, writeFile)
 import System.IO.Error hiding (catch)
@@ -27,10 +27,16 @@ cat1 = DCat (Set.fromList [Principal "my@address.com"
                           , Principal "your@address.com"])
 cat2 = DCat (Set.fromList [Principal "my@example.com"
                           , Principal "your@address.com"])
+cat3 = DCat (Set.fromList [Principal "my@example.com"
+                          , Principal "yourother@address.com"])
+cat4 = DCat (Set.singleton $ Principal "my@example.com")
 
 e = DCLabel (dcsSingleton cat1) (dcsFromList [cat1, cat2])
 d = DCLabel (dcsFromList [cat1, cat2]) (dcsFromList [cat1, cat2])
 h = DCLabel (dcsEmpty) (dcsFromList [cat1, cat2])
+
+l1 = DCLabel (dcsFromList [cat2, cat3]) (dcsFromList [cat3, cat4])
+l2 = DCLabel (dcsFromList [cat3, cat4]) (dcsFromList [cat2, cat3])
 
 rl :: String -> [(DCLabel, String)]
 rl = reads
