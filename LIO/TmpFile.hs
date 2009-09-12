@@ -18,19 +18,19 @@ module LIO.TmpFile (-- * The high level interface
 import LIO.Armor
 
 import Prelude hiding (catch)
-import Control.Exception (throwIO, catch, Exception(..))
+import Control.Exception (throwIO, catch)
 import qualified Control.Exception as IO
-import Data.Bits (shiftL, shiftR, (.|.), (.&.))
+import Data.Bits (shiftL, shiftR, (.|.))
 import qualified Data.ByteString.Lazy as L
 import Data.Word (Word8)
 import Foreign.C.Error
 import Foreign.C.Types
-import System.Directory (createDirectory, createDirectoryIfMissing)
-import System.FilePath (FilePath(..), (</>))
+import System.Directory (createDirectory)
+import System.FilePath (FilePath, (</>))
 import System.Posix.IO (OpenMode(..), OpenFileFlags(..)
                        , defaultFileFlags , openFd
                        , fdToHandle, handleToFd)
-import System.Posix.Types (Fd(..), FileMode)
+import System.Posix.Types (Fd(..))
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
 import System.Time (ClockTime(..), getClockTime)
@@ -80,6 +80,8 @@ openFileExclusive m p = do
                    IO.WriteMode     -> (WriteOnly, dom)
                    IO.AppendMode    -> (WriteOnly, dom { append = True })
                    IO.ReadWriteMode -> (ReadWrite, dom)
+                   IO.ReadMode      ->
+                       error "openFileExclusive: ReadMode is illegal"
   fd <- openFd p om (Just $ toEnum 0o666) fm
   fdToHandle fd
 

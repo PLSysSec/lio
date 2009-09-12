@@ -22,6 +22,7 @@
 module LIO.LIO (module LIO.Base
                , module LIO.Handle
                , module LIO.LIORef
+               , module LIO.MonadLIO
                ) where
 
 import LIO.Base

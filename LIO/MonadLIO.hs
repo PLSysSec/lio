@@ -43,7 +43,3 @@ instance (MonadLIO m l s) => MonadLIO (StateT s' m) l s where
     liftLIO = lift . liftLIO
 instance (Monoid w, MonadLIO m l s) => MonadLIO (WriterT w m) l s where
     liftLIO = lift . liftLIO
-
-instance (Label l) => MonadError IOError (LIO l s) where
-    throwError = TCB.throwIO
-    catchError = TCB.catch

@@ -76,6 +76,7 @@ module LIO.TCB (
                ) where
 
 import Prelude hiding (catch)
+import Control.Monad.Error
 import Control.Monad.State.Lazy hiding (put, get)
 import Control.Exception hiding (catch, throw, throwIO,
                                  onException, block, unblock)
@@ -969,3 +970,7 @@ instance (Label l) => OnExceptionTCB (LIO l s) where
         mkLIO $ \s -> unLIO m s `E.catch` \e ->
         do unLIO cleanup s
            E.throwIO (e :: SomeException)
+
+instance (Label l) => MonadError IOException (LIO l s) where
+    throwError = throwIO
+    catchError = catch
