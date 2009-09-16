@@ -12,6 +12,7 @@ import Control.Exception hiding (throwIO, catch, onException
                                 , bracket, block, unblock)
 import qualified Data.ByteString.Lazy as L
 import Data.Char
+import qualified Data.Set as Set
 import Data.Word (Word8, Word16)
 import System.Directory
 import System.FilePath
@@ -22,7 +23,7 @@ import Data.Digest.Pure.SHA
 
 import LIO.Armor
 import LIO.LIO
-import LIO.DCLabel
+import LIO.DCLabel.Label
 import LIO.TCB
 import LIO.TmpFile
 
@@ -47,6 +48,7 @@ defaultPrefix = "ps"
 keyfile :: FilePath
 keyfile = "key"
 
+{-
 princ2FilePath :: PrivStore -> Principal -> FilePath
 princ2FilePath ps (Principal p) = psPrefix ps </> (outerEncode $ innerEncode p)
     where
@@ -57,6 +59,7 @@ princ2FilePath ps (Principal p) = psPrefix ps </> (outerEncode $ innerEncode p)
               printf "\\x%x\\&%s" (ord c) (innerEncode s)
       innerEncode (c:s) = c:innerEncode s
       innerEncode [] = []
+-}
 
 princ2ascii :: Principal -> [Word8]
 princ2ascii (Principal p) = strip $ encode p
@@ -92,7 +95,7 @@ picklePrivP                      :: DCPrivs   -- ^ Proof caller owns principal
                                  -> Integer   -- ^ Expiration time
                                  -> DC String -- ^ Result
 picklePrivP priv ps princ expire = do
-  when not (priv `owns` dcsSingleton princ) throwIO LerrPriv
+  unless (princ `Set.member` dcprivs priv) $ throwIO LerrPriv
   ioTCB $ picklePrivTCB ps princ expire
 
 picklePrivLifetimeP :: DCPrivs
