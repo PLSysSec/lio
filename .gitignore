@@ -4,4 +4,5 @@
 /*.d
 /.depend
 /doc
+privStore
 test
