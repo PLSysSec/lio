@@ -63,5 +63,10 @@ maybeReadFile path =
 doReadFile :: String -> DC L.ByteString
 doReadFile path = readFile path
 
+prin :: Principal
+prin = Principal "hello"
+priv :: DCPrivs
+priv = mintTCB $ Principal "hello"
+
 main :: IO ()
 main = return ()

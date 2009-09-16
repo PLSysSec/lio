@@ -1,6 +1,10 @@
 
--- module LIO.DCLabel.PrivStore where
-module Main where
+module LIO.DCLabel.PrivStore (PrivStore
+                             , initPS
+                             , picklePrivP
+                             , picklePrivLifetimeP
+                             , unpickePriv
+                             ) where
 
 import Prelude hiding (readFile, writeFile, catch)
 import Control.Monad
@@ -82,6 +86,24 @@ picklePrivTCB ps princ expire = do
       out = L.append expp $ L.take 11 macOut
   return $ armor32 out
 
+picklePrivP                      :: DCPrivs   -- ^ Proof caller owns principal
+                                 -> PrivStore
+                                 -> Principal -- ^ Principal to pickle
+                                 -> Integer   -- ^ Expiration time
+                                 -> DC String -- ^ Result
+picklePrivP priv ps princ expire = do
+  when not (priv `owns` dcsSingleton princ) throwIO LerrPriv
+  ioTCB $ picklePrivTCB ps princ expire
+
+picklePrivLifetimeP :: DCPrivs
+                    -> PrivStore
+                    -> Principal
+                    -> Integer
+                    -> DC String
+picklePrivLifetimeP priv ps princ lifetime = do
+  (TOD now _) <- ioTCB getClockTime
+  picklePrivP priv ps princ (now + lifetime)
+
 unpickePriv :: PrivStore -> Principal -> String -> DC (Maybe DCPrivs)
 unpickePriv ps princ cookie = do
   let bcookie = dearmor32 cookie
@@ -107,11 +129,3 @@ initPS = do
          return k'
   return PS { psPrefix = prefix, psKey = k }
 
-
-prin :: Principal
-prin = Principal "hello"
-priv :: DCPrivs
-priv = mintTCB $ Principal "hello"
-
-main :: IO ()
-main = initPS >> return ()
