@@ -235,7 +235,7 @@ dclReduce (DCLabel s1 i1) = DCLabel (dcsReduce s1) (dcsReduce i1)
 
 instance Label DCLabel where
     lpure = DCLabel dcsEmpty dcsEmpty
-    lclear = DCLabel dcsEmpty DCAll
+    lclear = DCLabel dcsAll dcsEmpty
     lub (DCLabel s1 i1) (DCLabel s2 i2) =
         DCLabel (dcsUnion' s1 s2) (dcsIntersection' i1 i2)
     glb (DCLabel s1 i1) (DCLabel s2 i2) =

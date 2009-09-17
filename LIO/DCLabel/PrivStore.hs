@@ -27,9 +27,9 @@ import LIO.DCLabel.Label
 import LIO.TCB
 import LIO.TmpFile
 
-data PrivStore = PS { psKey :: L.ByteString
-                    , psPrefix :: FilePath
-                    }
+data PrivStore = PSTCB { psKey :: L.ByteString
+                       , psPrefix :: FilePath
+                       }
 
 getRandomBytes :: IO L.ByteString
 getRandomBytes = foldr orElse (error "no random device") $
@@ -130,5 +130,5 @@ initPS = do
          k' <- getRandomBytes
          L.writeFile kf k'
          return k'
-  return PS { psPrefix = prefix, psKey = k }
+  return PSTCB { psPrefix = prefix, psKey = k }
 

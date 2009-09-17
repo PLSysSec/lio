@@ -479,8 +479,17 @@ when people lower it they don't want it bypassed.
 
 -}
 
-
-gtaint :: (Label l) => (l -> l -> l) -> Bool -> l
+-- | General (internal) taint function.  Uses @mylub@ instead of
+-- 'lub', so that privileges can optionally be passed in.  Throws
+-- 'LerrClearance' if raising the current label would exceed the
+-- current clearance.  If an exception is thrown and @throwAtLabel@ is
+-- 'True', then the exception will be labeled at least as high as @l@.
+-- (This is necessary when the value of the label @l@ itself needs to
+-- be protected.)
+gtaint :: (Label l) =>
+          (l -> l -> l)         -- ^ @mylub@ function
+       -> Bool                  -- ^ @throwAtLabel@
+       -> l                     -- ^ @l@ - Label to taint with
        -> LIO l s ()
 gtaint mylub throwAtLabel l = do
   s <- get

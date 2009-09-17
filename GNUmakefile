@@ -5,6 +5,8 @@ DEPS := $(patsubst %,%.d, $(PROGS))
 BIN = $(HOME)/.cabal/bin/
 DOC = $(wildcard [A-Z]*/[A-Z]*.hs [A-Z]*/[A-Z]*/[A-Z]*.hs)
 
+WFLAGS = -Wall -Werror
+
 all: $(PROGS)
 .PHONY: all
 
@@ -18,7 +20,7 @@ all: $(PROGS)
 	@mv -f $@~ $@
 
 $(PROGS): %: %.hs
-	ghc --make -Wall -Werror $<
+	ghc --make $(WFLAGS) $<
 	ghc -M -dep-makefile $@.d~ $<
 	@if cmp -s $@.d~ $@.d; then		\
 		rm $@.d~;			\
