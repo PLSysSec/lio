@@ -3,7 +3,7 @@
 -- "LIO.TCB" module.  Note, however, that unprivileged code must not
 -- be allowed to import "LIO.TCB"--instead, a module "LIO.Base"
 -- exports just the safe symbols from "LIO.TCB".  This module,
--- "LIO.LIO", rexports "LIO.Base" as well as a few other handy
+-- "LIO.LIO", re-exports "LIO.Base" as well as a few other handy
 -- modules.  For many modules it should be the only import necessary.
 --
 -- Certain symbols in the LIO library supersede variants in the
