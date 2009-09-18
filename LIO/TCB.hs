@@ -528,11 +528,11 @@ taintL = gtaint lub True
 -- @taintLP@ labels it with a label above the current clearance (which
 -- can therefore be caught in fewer places).
 --
--- In most cases you 'taintP' is more appripriate than 'taintLP'.
--- However, because 'closeR' function allows untrusted code to create
--- 'Lref's with unknown labels possibly dependent on data labeled
--- higher than the current label, functions such as 'openRP' must use
--- @taintLP@ internally rathern than 'taintP'.
+-- In most cases, 'taintP' is more appripriate than 'taintLP'.
+-- However, because the 'closeR' function allows untrusted code to
+-- create 'Lref's with unknown labels possibly dependent on data
+-- labeled higher than the current label, functions such as 'openRP'
+-- must use @taintLP@ internally rathern than 'taintP'.
 taintLP   :: (Priv l p) => p -> l -> LIO l s ()
 taintLP p = gtaint (lostar p) True
 
@@ -555,8 +555,8 @@ wguardP p l = do l' <- currentLabel
 
 -- | Ensures the label argument is between the current IO label and
 -- current IO clearance.  Use this function in code that allocates
--- objects--you shouldn't be able to create an object labeled @l@
--- unless @aguard l@ does not throw an exception.
+-- objects--untrusted code shouldn't be able to create an object
+-- labeled @l@ unless @aguard l@ does not throw an exception.
 aguard :: (Label l) => l -> LIO l s ()
 aguard newl = do c <- currentClearance
                  l <- currentLabel
