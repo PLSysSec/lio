@@ -311,8 +311,8 @@ taintR l (LrefTCB la a) = do
 -- below the current label, or else throws 'LerrLow'.  Can be used to
 -- verify the integrity of an 'Lref' before doing something with the
 -- value.  Because the label of the 'Lref' must be below the current
--- label, calling 'openR' on 'Lref' that has passed a @guardR@ check
--- will not increase the current label.
+-- label, calling 'openR' on an 'Lref' that has passed a @guardR@
+-- check will not increase the current label.
 guardR                  :: (Label l) => l -> Lref l a -> LIO l s ()
 guardR l (LrefTCB la _) = do
   lcur <- currentLabel
@@ -322,8 +322,9 @@ guardR l (LrefTCB la _) = do
 -- label to the current label so as to throw an exception in fewer
 -- conditions.  If @guardRP@ succeeds, then 'openRP' on the same
 -- privileges and 'Lref' will not raise the current label.  Note that
--- the privileges are not used when comparing the label of the 'Lref'
--- to the argument label.
+-- the privileges are not used to compare the label of the 'Lref' to
+-- the argument label; an exception is always thrown if the `Lref`\'s
+-- label cannot flow to the argument label.
 guardRP                    :: (Priv l p) => p -> l -> Lref l a -> LIO l s ()
 guardRP p l (LrefTCB la _) = do
   lcur <- currentLabel
@@ -351,8 +352,7 @@ labelOfR (LrefTCB la _) = do
   return $ if la `leq` lc then Just la else Nothing
 
 -- | Like 'labelOfR', but compares the `Lref`'s label to the current
--- label using privileges so as to need to return 'Nothing' in fewer
--- situations.
+-- label using privileges so as to return 'Nothing' in fewer cases.
 labelOfRP                  :: Priv l p => p -> Lref l a -> LIO l s (Maybe l)
 labelOfRP p (LrefTCB la _) = do
   lc <- currentLabel
@@ -609,14 +609,14 @@ setClearanceTCB l = get >>= doit
 -- | Lowers the clearance of a computation, then restores the
 -- clearance to its previous value.  Useful to wrap around a
 -- computation if you want to be sure you can catch exceptions thrown
--- by it.  Also useful to wrap around 'closeR' to ensure that the Lref
--- returned does not exceed a particular label.  If @withClearance@ is
--- given a label that can't flow to the current clearance, then the
--- clearance is lowered to the greatest lower bound of the label
--- supplied and the current clearance.
+-- by it.  Also useful to wrap around 'closeR' to ensure that the
+-- 'Lref' returned does not exceed a particular label.  If
+-- @withClearance@ is given a label that can't flow to the current
+-- clearance, then the clearance is lowered to the greatest lower
+-- bound of the label supplied and the current clearance.
 --
 -- Note that if the computation inside @withClearance@ acquires any
--- 'Privs', it may still be able to raise its clearance above the
+-- 'Priv's, it may still be able to raise its clearance above the
 -- supplied argument using 'setClearanceP'.
 withClearance     :: (Label l) => l -> LIO l s a -> LIO l s a
 withClearance l m = do
@@ -708,11 +708,11 @@ closeR m = do
 -- can execute
 --
 -- @
---   discardR $ 'hputStrLn' log_handle $ "Log message"
+--   discardR $ 'hputStrLn' log_handle \"Log message\"
 -- @
 --
 -- to create a log message without affecting the current label.  (Of
--- course, if log_handle is closed and this throws an exception, it
+-- course, if @log_handle@ is closed and this throws an exception, it
 -- may not be possible to catch the exception within the 'LIO' monad
 -- without sufficient privileges--see 'catchP'.)
 discardR   :: (Label l) => LIO l s a -> LIO l s ()
@@ -747,11 +747,11 @@ runLIO m s = unLIO m s `E.catch` (E.throwIO . delabel)
            -- trace ("unlabeling " ++ show e ++ " {" ++ show l ++ "}") e
 
 -- | Produces an 'IO' computation that will execute a particular 'LIO'
--- computation.  Untrusted code should have no way to execute 'IO'
--- computations, so this function should only be useful within trusted
--- code, though no harm is done from exposing the @evalLIO@ symbol to
--- untrusted code.  (Untrusted code is free to produce 'IO'
--- computations--it just can't execute them without access to
+-- computation.  Because untrusted code cannot execute 'IO'
+-- computations, this function should only be useful within trusted
+-- code.  No harm is done from exposing the @evalLIO@ symbol to
+-- untrusted code.  (In general, untrusted code is free to produce
+-- 'IO' computations--it just can't execute them without access to
 -- 'ioTCB'.)
 evalLIO     :: (Label l) =>
                LIO l s a    -- ^ The LIO computation to execute
@@ -846,14 +846,18 @@ data LabeledExceptionTCB l =
 
    Wherever possible, however, code should use the 'catchP' and
    'onExceptionP' variants that use whatever privilege is available to
-   downgrade the exception.  Note that privileged code that must
-   always run some cleanup function can use the 'onExceptionTCB' and
-   'bracketTCB' functions to run the cleanup code on all exceptions.
+   downgrade the exception.  Privileged code that must always run some
+   cleanup function can use the 'onExceptionTCB' and 'bracketTCB'
+   functions to run the cleanup code on all exceptions.
 
    Note:  Do not use 'throw' (as opposed to 'throwIO') within the
    'LIO' monad.  Because 'throw' can be invoked from pure code, it has
    no notion of current label and so cannot assign an appropriate
-   label to the exception.
+   label to the exception.  AS a result, the exception will not be
+   catchable within the 'LIO' monad and will propagate all the way out
+   of the 'evalLIO' function.  Similarly, asynchronous exceptions
+   (such as divide by zero or undefined values in lazily evaluated
+   expressions) cannot be caught within the 'LIO' monad.
 
 -}
 
