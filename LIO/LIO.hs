@@ -1,10 +1,10 @@
 -- | This is the main module to be included by code using the Labeled
 -- IO (LIO) library.  The core of the library is documented in the
--- "LIO.TCB" module.  Note, however, the unprivileged code must not be
--- allowed to import "LIO.TCB"--instead, a module "LIO.Base" exports
--- just the safe symbols from "LIO.TCB".  This module, "LIO.LIO",
--- rexports "LIO.Base" as well as a few other handy modules.  For many
--- modules it should be the only import necessary.
+-- "LIO.TCB" module.  Note, however, that unprivileged code must not
+-- be allowed to import "LIO.TCB"--instead, a module "LIO.Base"
+-- exports just the safe symbols from "LIO.TCB".  This module,
+-- "LIO.LIO", rexports "LIO.Base" as well as a few other handy
+-- modules.  For many modules it should be the only import necessary.
 --
 -- Certain symbols in the LIO library supersede variants in the
 -- standard Haskell libraries.  Thus, depending on the modules
