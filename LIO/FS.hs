@@ -238,9 +238,9 @@ getLDir l = try (labelOfLDir ldir) >>= handler
         tmp <- tmpName
         let tpath = path ++ "." ++ show pid ++ "." ++ tmp ++ newNodeExt
         makelabel tpath
-        createLink tpath path `catch` \e ->
-            if isAlreadyExistsError e then return () else throwIO e
-        ignoreErr $ removeLink tpath
+        flip finally (ignoreErr $ removeLink tpath) $
+             catch (createLink tpath path) $
+             \e -> unless (isAlreadyExistsError e) (throwIO e)
       makedir = do
         let tdir = dir ++ newNodeExt
         createDirectoryIfMissing True tdir
