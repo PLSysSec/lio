@@ -11,20 +11,23 @@
 -- imported and functions used, you may wish to import LIO with
 -- commands like these:
 --
--- > import Prelude hiding (readFile, writeFile, catch)
--- > import Control.Exception hiding (throwIO, catch, onException
--- >                                 , bracket, block, unblock)
--- > import LIO.LIO
+-- @
+--  import Prelude hiding ('readFile', 'writeFile', 'catch')
+--  import Control.Exception hiding ('throwIO', 'catch', 'onException'
+--                                  , 'bracket', 'block', 'unblock')
+--  import LIO.LIO
+-- @
 --
--- Where possible the LIO variants of the functions should work in
--- both the IO and LIO monads, making it easier to put have both types
--- of code in the same module.
+-- The LIO variants of the system functions hidden in the above import
+-- commands are designed to in both the IO and LIO monads, making it
+-- easier to have both types of code in the same module.
 module LIO.LIO (module LIO.Base
                , module LIO.Handle
                , module LIO.LIORef
                , module LIO.MonadLIO
                ) where
 
+import Prelude hiding (readFile, writeFile, catch)
 import LIO.Base
 import LIO.Handle
 import LIO.LIORef
