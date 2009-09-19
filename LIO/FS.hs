@@ -84,14 +84,13 @@
 
 module LIO.FS ( -- * The opaque name object
                 Name -- Do not Export constructor!  Names are TRUSTED
-              , rootDir, lookupName
-              -- * Root nodes
-              , RootNode(..), mkRootDir, nodeOfRootP
-              , lookupNameR -- XXX
+              , rootDir
+              , getRootDir, mkRootDir
+              , lookupName
               -- * Initializing the file system
-              , mkRoot
+              , initFS
               -- * Internal data structures
-              , Node -- Do not Export constructor!  Nodes are TRUSTED
+              , Node
               -- * Helper functions in the IO Monad
               , labelOfName, labelOfNode, nodeOfName
               , mkNode, mkNodeDir, mkNodeReg, linkNode
@@ -109,7 +108,6 @@ import Prelude hiding (catch)
 import Control.Exception hiding (throwIO, catch, onException)
 import Control.Monad
 import qualified Data.ByteString.Lazy.Char8 as LC
-import Data.List (stripPrefix)
 import Data.Typeable
 import qualified GHC.IOBase
 import System.Directory
@@ -163,8 +161,6 @@ clean path =
 
 data FSErr
     = FSCorruptLabel FilePath   -- ^ File Containing Label is Corrupt
-    | FSIllegalPath FilePath    -- ^ Bad LDir
-    | FSNotFoundOrBadPrivs FilePath -- ^ Either no such file, or no permissions
       deriving (Show, Typeable)
 instance Exception FSErr
 
@@ -175,9 +171,13 @@ instance Exception FSErr
 prefix :: FilePath
 prefix = "ls"
 
--- |File name in which labels are stored in 'LDir's.
+-- | File name in which labels are stored in 'LDir's.
 labelFile :: FilePath
 labelFile = "LABEL"
+
+-- | File name of root directory for each label
+rootFile :: FilePath
+rootFile = "ROOT"
 
 -- | Type containing the pathname of a @LabelHash@ directory (which
 -- must contain a file named 'labelFile').
@@ -201,9 +201,10 @@ lDirOfLabel l =
       doit n out (c:h) = doit (n - 1) (out </> [c]) h
       doit _ _ _       = error "lDirOfLabel bad sha"
 
+{-
 -- | Minimally validate that an LDir is in the right part of the file
 -- system, or throw 'FSIllegalPath'.
-checkLDir   :: LDir -> IO ()
+checkLDir :: LDir -> IO ()
 checkLDir (LDir path) = do
     dirlist <- liftM splitDirectories $ checkpref path
     unless (length dirlist == 1 + lDirNdirs && all (all a32Valid) dirlist) bad
@@ -212,14 +213,16 @@ checkLDir (LDir path) = do
       checkpref p = case stripPrefix prefix p of
                       Just (c:r) | isPathSeparator c -> return r
                       _                              -> bad
+-}
 
 -- | 'LDir' that contains a 'Node'
 lDirOfNode             :: Node -> LDir
 lDirOfNode (NodeTCB n) = LDir $ takeDirectory n
 
 -- | 'LDir' that contains the directory that contains a file name.
-lDirOfName          :: Name -> LDir
+lDirOfName          :: (Label l) => Name l -> LDir
 lDirOfName (NameTCB n) = LDir $ takeDirectory $ takeDirectory n
+lDirOfName (RootDir l) = lDirOfLabel l
 
 -- |Takes an LDir and returns the label stored in 'labelFile' in that
 -- directory.  May throw 'FSCorruptLabel'.
@@ -304,7 +307,8 @@ labelOfNode :: (Label l) => Node -> IO l
 labelOfNode = labelOfLDir . lDirOfNode
 
 -- | Create new Node in the appropriate directory for a given label.
--- The node gets created with an extra ~ appended.
+-- The node gets created with an extra ~ appended, and wrapped in the
+-- type 'NewNode' to reflect this fact.
 mkNode     :: (Label l) => l
            -- ^Label for the new node
            -> (FilePath -> String -> IO (a, FilePath))
@@ -314,7 +318,13 @@ mkNode     :: (Label l) => l
 mkNode l f = do
   (LDir d) <- getLDir l
   (a, p) <- f d newNodeExt
-  let p' = init p
+  -- We are done, except if we got really unlucky someone else may
+  -- have created a node with the same name at the same time.  (The
+  -- node creation is exclusive, but we append newNodeExt, so someone
+  -- might have renamed it before we created the newNodeExt file
+  -- exclusively.)  We simply start over if someone claimed the name
+  -- in the mean time.
+  let p' = take (length p - length newNodeExt) p
   exists <- catchIO (getFileStatus p' >> return True) (return False)
   if not exists
     then return (a, NewNode $ NodeTCB p')
@@ -335,9 +345,9 @@ mkNodeReg m l = mkNode l (mkTmpFile m)
 -- @dst@.  If both @src@ and @dst@ are relative to the current working
 -- directory and in subdirectories, then the contents of the symbolic
 -- link cannot just be @dst@, instead it is @makeRelativeTo dst src@.
-makeRelativeTo          :: FilePath -- ^Destination of symbolic link
-                        -> FilePath -- ^Name of symbolic link
-                        -> FilePath -- ^Returns contents to put in symbolic link
+makeRelativeTo :: FilePath -- ^ Destination of symbolic link
+               -> FilePath -- ^ Name of symbolic link
+               -> FilePath -- ^ Returns contents to put in symbolic link
 makeRelativeTo dest src =
     doit (splitDirectories dest) (init $ splitDirectories src)
     where
@@ -348,11 +358,14 @@ makeRelativeTo dest src =
 -- | Assign a 'Name' to a 'NewNode', turning it into a 'Node'.  Note
 -- that unlike the Unix file system, only a single link may be created
 -- to each node.
-linkNode                                         :: NewNode -> Name -> IO Node
-linkNode (NewNode (NodeTCB path)) (NameTCB name) = do
-  let tpath = path ++ newNodeExt
+linkNode :: (Label l) => NewNode -> Name l -> IO Node
+linkNode (NewNode (NodeTCB path)) name' = do
+  let name = pathOfName name'
+      tpath = path ++ newNodeExt
   createSymbolicLink (path `makeRelativeTo` name) name `onException` clean tpath
-  ignoreErr $ rename tpath path `onException` removeFile name
+  -- The next line really shouldn't fail except for some catastrophic
+  -- IO error.  See the comment in mkNode.
+  rename tpath path `onException` removeFile name
   return $ NodeTCB path
 
 -- | It's possible that either a program crashed before renaming a
@@ -390,17 +403,16 @@ getDirectoryContentsNode node = fixNode node getDirectoryContents
 -- symbolic links, either @\"root\"@ or pathnames of the form
 -- @LabelHash\/OpaqueName\/filename@.  Intermediary components of the
 -- file name must not be symbolic links.
-newtype Name = NameTCB FilePath deriving (Show)
-
--- |Name of root directory.
-rootDir :: Name
-rootDir = NameTCB $ prefix </> "root"
+data Name l = NameTCB FilePath
+            | RootDir l
+              deriving (Show)
 
 -- |Label protecting the name of a file.  Note that this is the label
 -- of the directory containing the file name, not the label of the
 -- Node that the file name designates.
-labelOfName :: (Label l) => Name -> IO l
-labelOfName = labelOfLDir . lDirOfName
+labelOfName             :: (Label l) => Name l -> IO l
+labelOfName (RootDir l) = return l
+labelOfName n           = labelOfLDir $ lDirOfName n
 
 {-
 unlinkName                  :: (FilePath -> IO ()) -> Name -> IO ()
@@ -438,30 +450,62 @@ expandLink path = do
           domerge (takeDirectory p) suffix
       domerge p suffix = p </> suffix
 
+pathOfName :: (Label l) => Name l -> FilePath
+pathOfName (NameTCB n) = n
+pathOfName (RootDir l) = case lDirOfLabel l of (LDir ldir) -> ldir </> rootFile
+
 -- | 'Node' that a 'Name' is pointing to.
-nodeOfName             :: Name -> IO Node
-nodeOfName (NameTCB n) = liftM NodeTCB $ expandLink n
+nodeOfName   :: (Label l) => Name l -> IO Node
+nodeOfName n = liftM NodeTCB $ expandLink $ pathOfName n
 
 -- | Gives the 'Name' of a directory entry in a directory 'Node'.
-nodeEntry                     :: Node -> FilePath -> Name
+nodeEntry                     :: (Label l) => Node -> FilePath -> Name l
 nodeEntry (NodeTCB node) name = NameTCB (node </> name)
 
--- | First-time initialization function.  The argument specifies the
--- 'Label' for the root directory, but this has no effect if the root
--- already exists.
-mkRoot   :: (Label l) => l -> IO ()
-mkRoot l = do
-  let (NameTCB root) = rootDir
-  exists <- doesDirectoryExist root
-  unless exists $ do
-             new <- mkNodeDir l
-             linkNode new rootDir
-             return ()
 
+mkRootDirIO :: (Label l) => l -> IO (Name l)
+mkRootDirIO label = do
+  let name = RootDir label
+  exists <- doesDirectoryExist $ pathOfName name
+  unless exists $ do
+              new <- mkNodeDir label
+              linkNode new name
+              return ()
+  return name
+
+defRoot :: FilePath
+defRoot = prefix </> rootFile
+
+initFS :: (Label l) => l -> IO ()
+initFS l = do
+  name <- mkRootDirIO l
+  (NodeTCB node) <- nodeOfName name
+  let root = node `makeRelativeTo` defRoot
+  root' <- catchIO (readSymbolicLink defRoot) $
+           createSymbolicLink root defRoot >> return root
+  when (root' /= root) $ error "default root doesn't match requested label"
+  
 
 --
 -- LIO Monad function
 --
+
+-- | Return the root directory for the default root label.  (There is
+-- a root directory for each label, but only one label is the
+-- default.)
+rootDir :: (Label l) => LIO l s (Name l)
+rootDir = return $ NameTCB $ defRoot
+
+-- | Get the root directory for a particular label.
+getRootDir :: (Label l) => l -> Name l
+getRootDir l = RootDir l
+
+-- | Creates a root directory for a particular label.
+mkRootDir :: (Priv l p) => p -> l -> LIO l s (Name l)
+mkRootDir priv label = do
+  wguardP priv label
+  name <- rtioTCB $ mkRootDirIO label
+  return name
 
 -- | Looks up a FilePath, turning it into a 'Name', and raising to
 -- current label to reflect all directories traversed.  Note that this
@@ -475,10 +519,10 @@ mkRoot l = do
 -- user code to generate names is to start with 'rootDir' and call
 -- @lookupName@.
 lookupName                 :: (Priv l p) =>
-                              p    -- ^Privileges to limit tainting
-                           -> Name -- ^Start point (e.g., rootDir)
-                           -> FilePath -- ^Name to look up
-                           -> LIO l s Name
+                              p      -- ^ Privileges to limit tainting
+                           -> Name l -- ^ Start point
+                           -> FilePath -- ^ Name to look up
+                           -> LIO l s (Name l)
 lookupName priv start path = 
     dolookup start (stripslash $ splitDirectories path)
     where
@@ -488,6 +532,10 @@ lookupName priv start path =
       dolookup name (".":rest) = dolookup name rest
       dolookup _ ("..":_) = throwIO $ mkIOError doesNotExistErrorType
                             "illegal filename" Nothing (Just ".." )
+      dolookup name@(RootDir label) (cn:rest) = do
+        taintP priv label
+        node <- rtioTCB $ nodeOfName name
+        dolookup (nodeEntry node cn) rest
       dolookup name (cn:rest) = do
         -- XXX next thing should deal with partially created nodes
         node <- rtioTCB $ nodeOfName name -- Could fail if name deleted
@@ -495,92 +543,16 @@ lookupName priv start path =
         taintP priv label
         dolookup (nodeEntry node cn) rest
 
-lookupNode                       :: (Priv l p) =>
-                                    p    -- ^Privileges to limit tainting
-                                 -> Name -- ^Start point (e.g., rootDir)
-                                 -> FilePath -- ^Name to look up
-                                 -> Bool     -- ^True if you want to write it
-                                 -> LIO l s Node
+lookupNode :: (Priv l p) =>
+              p                 -- ^ Privileges to limit tainting
+           -> Name l            -- ^ Start point (e.g., 'rootDir')
+           -> FilePath          -- ^ Name to look up
+           -> Bool              -- ^ True if you want to write it
+           -> LIO l s Node
 lookupNode priv start path write = do
   name <- lookupName priv start path
   node <- rtioTCB $ nodeOfName name
   label <- ioTCB $ labelOfNode node
   if write then wguardP priv label else taintP priv label
   return node
-
-
---
--- RootNodes
---
-
-newtype RootNode = RootNode FilePath deriving (Show)
-
-rootNodeExt :: String
-rootNodeExt = ".r"
-
--- | Create a new 'RootNode' in the appropriate directory for a given
--- label.
-mkRootNode     :: (Label l) => l
-               -- ^ Label for the new node
-               -> (FilePath -> String -> IO (a, FilePath))
-               -- ^ Either 'mkTmpDir' or 'mkTmpFile' with curried 'IOMode'
-               -> IO (a, RootNode)
-               -- ^ Returns file handle or () and destination path
-mkRootNode l f = do
-  (LDir d) <- getLDir l
-  (a, p) <- f d rootNodeExt
-  return (a, RootNode p)
-
-mkRootDir   :: (Label l) => l -> LIO l s RootNode
-mkRootDir l = do
-  aguard l
-  ((), r) <- rtioTCB $ mkRootNode l mkTmpDir
-  return r
-
--- | Basic sanity checking on the pathname in a RootNode, which might
--- come from an untrusted source.
-nodeOfRootTCB              :: RootNode -> IO Node
-nodeOfRootTCB (RootNode r) = do
-  let (pre, post) = splitAt (length r - length rootNodeExt) r
-  unless (post == rootNodeExt && okay (takeFileName pre)) bad
-  let n = NodeTCB r
-  checkLDir $ lDirOfNode n
-  return n
-    where
-      bad = throwIO $ FSIllegalPath r
-      okay [] = False
-      okay s  = all a32Valid s
-
-nodeOfRootP :: (Priv l p) =>
-               p                -- ^ Privileges to minimize tainting
-            -> RootNode         -- ^ The root node
-            -> LIO l s Node
-nodeOfRootP p r@(RootNode r') = do
-  n <- rtioTCB $ nodeOfRootTCB r
-  flip onExceptionTCB (throwIO $ FSNotFoundOrBadPrivs r') $
-       ioTCB (labelOfNode n) >>= taintP p >> return n
-
-lookupNameR                 :: (Priv l p) =>
-                               p
-                            -> RootNode
-                            -> FilePath
-                            -> LIO l s Name
-lookupNameR priv start path = do
-  startnode <- nodeOfRootP priv start
-  dolookup startnode (stripslash $ splitDirectories path)
-    where
-      stripslash ((c:_):t) | c == pathSeparator = t
-      stripslash t = t
-
-      dolookup _ []            = throwIO $ FSIllegalPath path
-      dolookup node (".":rest) = dolookup node rest
-      dolookup _ ("..":_)      = throwIO $ mkIOError doesNotExistErrorType
-                                 "illegal filename" Nothing (Just ".." )
-      dolookup node (cn:[])    = return $ nodeEntry node cn
-      dolookup node (cn:rest)  = do
-        let name = nodeEntry node cn
-        nextnode <- rtioTCB $ nodeOfName name
-        label <- ioTCB $ labelOfNode nextnode
-        taintP priv label 
-        dolookup node rest 
 

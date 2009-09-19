@@ -10,6 +10,9 @@
 -- functions that wish to open file names that are not relative to
 -- 'rootDir'.  (There is no notion of changeable current working
 -- directory in the 'LIO' Monad.)
+--
+-- The actual storage of labeled files is handled by the "LIO.FS"
+-- module.
 module LIO.Handle (DirectoryOps(..)
                   , CloseOps (..)
                   , HandleOps (..)
@@ -65,14 +68,17 @@ data LHandle l h = LHandleTCB l h
 
 instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
     getDirectoryContents d  = do
-      node <- lookupNode NoPrivs rootDir d False
+      root <- rootDir
+      node <- lookupNode NoPrivs root d False
       rtioTCB $ getDirectoryContentsNode node
     createDirectory path    = do
+      root <- rootDir
       l <- currentLabel
-      mkDir NoPrivs l rootDir path
+      mkDir NoPrivs l root path
     openFile path mode      = do
+      root <- rootDir
       l <- currentLabel
-      mkLHandle NoPrivs l rootDir path mode
+      mkLHandle NoPrivs l root path mode
 
 instance (Label l) => CloseOps (LHandle l IO.Handle) (LIO l s) where
     hClose (LHandleTCB l h) = wguard l >> rtioTCB (hClose h)
@@ -95,7 +101,7 @@ hlabelOf (LHandleTCB l _) = l
 mkDir                   :: (Priv l p) =>
                            p        -- ^Privileges
                         -> l        -- ^Label for the new directory
-                        -> Name     -- ^Start point
+                        -> Name l   -- ^Start point
                         -> FilePath -- ^Name to create
                         -> LIO l s () 
 mkDir priv l start path = do
@@ -111,7 +117,7 @@ mkDir priv l start path = do
 mkLHandle                        :: (Priv l p) =>
                                     p -- ^Privileges to minimize taint
                                  -> l -- ^Label if new file is created
-                                 -> Name -- ^Starting point of pathname
+                                 -> Name l -- ^Starting point of pathname
                                  -> FilePath -- ^Path of file relative to prev
                                  -> IO.IOMode -- ^Mode of handle
                                  -> LIO l s (LHandle l IO.Handle)
@@ -151,8 +157,9 @@ writeFile path contents = bracketTCB (openFile path IO.WriteMode) hClose
 
 createDirectoryP            :: (Priv l p) => p -> FilePath -> LIO l s ()
 createDirectoryP privs path = do
+  root <- rootDir
   l <- currentLabel
-  mkDir privs l rootDir path
+  mkDir privs l root path
 
 writeFileP  :: (Priv l p, HandleOps IO.Handle b IO) =>
                p -> FilePath -> b -> LIO l s ()
@@ -163,6 +170,7 @@ writeFileP privs path contents =
 openFileP :: (Priv l p) =>
              p -> FilePath -> IOMode -> LIO l s (LHandle l IO.Handle)
 openFileP privs path mode = do
+  root <- rootDir
   l <- currentLabel
-  mkLHandle privs l rootDir path mode
+  mkLHandle privs l root path mode
 

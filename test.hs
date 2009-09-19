@@ -40,7 +40,7 @@ e = DCLabel (dcsSingleton cat1) (dcsFromList [cat1, cat2])
 d :: DCLabel
 d = DCLabel (dcsFromList [cat1, cat2]) (dcsFromList [cat1, cat2])
 h :: DCLabel
-h = DCLabel (dcsEmpty) (dcsFromList [cat1, cat2])
+h = DCLabel (dcsFromList [cat1, cat2]) (dcsEmpty)
 
 l1 :: DCLabel
 l1 = DCLabel (dcsFromList [cat2, cat3]) (dcsFromList [cat3, cat4])
@@ -51,7 +51,7 @@ rl :: String -> [(DCLabel, String)]
 rl = reads
 
 md :: IO ((), DCLabel)
-md = evalDC $ mkDir NoPrivs h rootDir "high"
+md = evalDC $ rootDir >>= \root -> mkDir NoPrivs h root "high"
 
 maybeReadFile :: String -> DC (Maybe L.ByteString)
 maybeReadFile path =
