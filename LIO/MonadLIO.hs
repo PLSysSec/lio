@@ -1,25 +1,17 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# OPTIONS_GHC -XUndecidableInstances #-}
 
--- |This module provides a function 'liftLIO' for executing 'LIO'
+-- | This module provides a function 'liftLIO' for executing 'LIO'
 -- computations from transformed versions of the 'LIO' monad.  There
 -- is also a method @liftIO@, which is a synonym for 'liftLIO', to
 -- help with porting code that expects to run in the 'IO' monad.
 module LIO.MonadLIO where
 
 import LIO.TCB
-import qualified LIO.TCB as TCB
 
-import Control.Monad.Cont
-import Control.Monad.Error
-import Control.Monad.List
-import Control.Monad.Reader
-import Control.Monad.RWS
-import Control.Monad.State
-import Control.Monad.Writer
+import Control.Monad.Trans (MonadTrans(..))
 
 class (Monad m, Label l) => MonadLIO m l s | m -> l s where
     liftLIO :: LIO l s a -> m a
@@ -29,17 +21,5 @@ class (Monad m, Label l) => MonadLIO m l s | m -> l s where
 instance (Label l) => MonadLIO (LIO l s) l s where
     liftLIO = id
 
-instance (MonadLIO m l s) => MonadLIO (ContT r m) l s where
-    liftLIO = lift . liftLIO
-instance (Error e, MonadLIO m l s) => MonadLIO (ErrorT e m) l s where
-    liftLIO = lift . liftLIO
-instance (MonadLIO m l s) => MonadLIO (ListT m) l s where
-    liftLIO = lift . liftLIO
-instance (MonadLIO m l s) => MonadLIO (ReaderT r m) l s where
-    liftLIO = lift . liftLIO
-instance (Monoid w, MonadLIO m l s) => MonadLIO (RWST r w s' m) l s where
-    liftLIO = lift . liftLIO
-instance (MonadLIO m l s) => MonadLIO (StateT s' m) l s where
-    liftLIO = lift . liftLIO
-instance (Monoid w, MonadLIO m l s) => MonadLIO (WriterT w m) l s where
+instance (MonadLIO m l s, MonadTrans t, Monad (t m)) => MonadLIO (t m) l s where
     liftLIO = lift . liftLIO
