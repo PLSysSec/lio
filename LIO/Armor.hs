@@ -7,7 +7,7 @@
 -- while 'dearmor32' reverses the encoding.
 --
 -- Binary data is assumed to come from the "Data.ByteString.Lazy" type.
-module LIO.Armor (armor32, dearmor32, a2b, b2a) where
+module LIO.Armor (armor32, dearmor32, a2b, b2a, a32Valid) where
 
 import Control.Monad
 import Data.Array.Unboxed
@@ -41,7 +41,7 @@ inval = -1
 b2a :: UArray Char Word8
 b2a = accumArray (\_ b -> b) inval (chr 0, chr 255)
       $ [(y, x) | (x, y) <- assocs a2b]
-      ++ [(toUpper y, x) | (x, y) <- assocs a2b]
+      -- ++ [(toUpper y, x) | (x, y) <- assocs a2b]
 
 dearmor32     :: String -> L.ByteString
 dearmor32 str = doit 0 0 str
@@ -59,6 +59,10 @@ dearmor32 str = doit 0 0 str
                      then doit b (nextCarrySize + 8) s
                      else L.cons b $ doit nextCarry nextCarrySize s
 
+-- | Return 'True' iff the caracter could have been in the output of
+-- 'armor32'.
+a32Valid   :: Char -> Bool
+a32Valid c = b2a ! c /= inval 
 
 {-
 mask n = complement $ shift (fromInteger $ -1) n

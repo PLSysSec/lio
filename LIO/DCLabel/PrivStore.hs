@@ -3,7 +3,7 @@ module LIO.DCLabel.PrivStore (PrivStore
                              , initPS
                              , picklePrivP
                              , picklePrivLifetimeP
-                             , unpickePriv
+                             , unpicklePriv
                              ) where
 
 import Prelude hiding (readFile, writeFile, catch)
@@ -107,8 +107,8 @@ picklePrivLifetimeP priv ps princ lifetime = do
   (TOD now _) <- ioTCB getClockTime
   picklePrivP priv ps princ (now + lifetime)
 
-unpickePriv :: PrivStore -> Principal -> String -> DC (Maybe DCPrivs)
-unpickePriv ps princ cookie = do
+unpicklePriv :: PrivStore -> Principal -> String -> DC (Maybe DCPrivs)
+unpicklePriv ps princ cookie = do
   let bcookie = dearmor32 cookie
   (TOD now _) <- ioTCB $ getClockTime
   let expire = unserializele $ take 5 $ L.unpack bcookie

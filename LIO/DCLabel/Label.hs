@@ -5,19 +5,24 @@
 
 This module implements Disjunction Category labels.
 
-A label consists of two sets of categories, an integrity set, and a
-secrecy set.  @l1 ``leq`` l2@ if and only if @l1@ contains all of the
-integrity categories in @l2@ and @l2@ contains all of the integrity
-categories in @l1@.
+A 'DCLabel' consists of two sets of categories, a secrecy set ('dclS',
+of type 'DCSet' 'Secrecy') and an integrity set ('dclI', of type
+'DCSet' 'Integrity').  @l1 ``leq`` l2@ if and only if @'dclS' l2@
+/subsumes/ all of the secrecy restrictions implied by @'dclS' l1@ and
+@'dclI' l1@ /subsumes/ all of the integrity restrictions implied by
+@'dclI' l2@.  (See the 'dcsSubsumes' function for a more precise
+definition of subsumes.)
 
-The categories themselves are Sets of Principals, where a 'Principal'
-is just a 'String' whose meaning is up to the application.  Privileges
-('DCPrivs') are also Principals (actually sets of Principals, but you
-can only 'mintTCB' one Pinripal at a time).  Owning a Principal
-(having it in a 'DCPrivs' object) confers the right to remote /any/
-secrecy category containing that Principal, and add /any/ integrity
-category containing that Principal.  Hence the name
-/disjunction categories/:  The category {P1, P2} can be downgraded by
+The categories themselves (of type 'DCatS' and 'DCatI', for secrecy
+and integrity, respectively) are Sets of 'Principal's, where a
+'Principal' is just a 'String' whose meaning is up to the application.
+Privileges ('DCPrivs') also correspond to 'Principal's.  You can use
+'mintTCB' to obtain the privileges of a 'Pinripal' and 'mappend' to
+combine privileges of multiple 'Principal's.  Owning a Principal
+(having it in a 'DCPrivs' object) confers the right to modify labels
+by removing /any/ 'DCatS' containing that Principal and adding /any/
+'DCatI' containing the Principal.  Hence the name
+/disjunction categories/:  The category [P1, P2] can be downgraded by
 /either/ Principal P1 or P2.
 
 -}
@@ -26,19 +31,20 @@ module LIO.DCLabel.Label
     (
     -- * The base label type
     Principal(..), DCType, Integrity(..), Secrecy(..)
-    , DCat(..), DCSet, DCLabel(..)
+    , DCat(..) , DCatI, DCatS
+    , DCSet, DCLabel(..)
     -- * Functions for categories
-    , DCatI, DCatS
     , dcSingleton, dcFromList, dcUnion, dcSubsumes, dcSubsumesNE
     -- * Functions for sets of categories (DCSet)
+    -- ** Straight set operations
     , dcsEmpty, dcsSingleton, dcsFromList, dcsAll
     , dcsSubsetOf, dcsUnion, dcsIntersection
+    -- ** Operations that reflect the disjunction property
     , dcsSubsumes, dcsUnion', dcsIntersection'
-    -- * Functions on labels
     , dclReduce
     -- * Privileges
     , DCPrivs, dcprivs, owns
-    -- * Useful aliases for LIO Monad
+    -- * Useful aliases for the LIO Monad
     , DC, evalDC
     ) where
 
@@ -60,15 +66,25 @@ instance Show Principal where
 instance Read Principal where
     readsPrec d s = map (\(p, rest) -> (Principal p, rest)) $ readsPrec d s
 
+-- | @DCType@ is a dumb class whose only purpose is to include both
+-- the 'Secrecy' and 'Integrity' types.  This way, functions that can
+-- work on both secrecy and integrity categories and sets can
+-- signatures like @f :: (DCType t) => ... -> DCat t -> ... @.
 class (Show t) => DCType t where dcType :: t -> String
 data Secrecy = Secrecy deriving (Eq, Show)
 instance DCType Secrecy where dcType _ = "S"
 data Integrity = Integrity deriving (Eq, Show)
 instance DCType Integrity where dcType _ = "I"
 
+-- | @DCat@ is the generalized type for disjunction categories.  A
+-- @DCat@ is a set of the 'Principals who own the category and can
+-- bypass its restrictions.  The type @DCat@ must be parameterized by
+-- either 'Secrecy' or 'Integrity', depending on the type of the
+-- category.  ('DCatS' and 'DCatI' are handy abbreviations for these
+-- parameterized types.)
 newtype (DCType t) => DCat t = DCat (Set Principal) deriving (Eq, Ord)
-type DCatI = DCat Integrity
 type DCatS = DCat Secrecy
+type DCatI = DCat Integrity
 
 instance (DCType t) => Show (DCat t) where
     showsPrec _ (DCat c) = shows (Set.toList c)
@@ -87,18 +103,26 @@ dcFromList _ pl = DCat $ Set.fromList pl
 dcUnion                     :: (DCType t) => DCat t -> DCat t -> DCat t
 dcUnion (DCat c1) (DCat c2) = DCat $ Set.union c1 c2
 
--- | With disjunction categories, the category {A} (owned by just A)
--- is stricter than the category {A, B} (which either A or B has the
--- right to bypass).  We therefore say that category {A} subsumes
--- category {A, B}.  Generalizing, we define @dcSubsumes c1 c2@ as the
--- subset relation:
+-- | With disjunction categories, the category [A] (which only A
+-- 'owns') is stricter than the category [A, B] (which both A and B
+-- own, and hence which either A or B can individually decide to
+-- bypass).  We therefore say that category [A] subsumes category [A,
+-- B].  In other words, if [A] is a secrecy category, then anyone who
+-- can read data labeled [A] can also read data labeled [A, B].
+-- Converely, if [A] is an integrity category, then anyone who can
+-- write data labeled [A] can also write data labeled [A, B].
 --
--- > dcSubsumes (DCat c1) (DCat c2) = Set.isSubsetOf c1 c2
+-- Generalizing, we define @c1 `dcSubsumes` c2@ as the subset
+-- relation:
+-- 
+-- @
+--   dcSubsumes ('DCat' c1) ('DCat' c2) = c1 \`Set.isSubsetOf\` c2
+-- @
 dcSubsumes                     :: (DCType t) => DCat t -> DCat t -> Bool
 dcSubsumes (DCat c1) (DCat c2) = Set.isSubsetOf c1 c2
 
--- | Check that one category subsumes another and the two are not
--- equal.
+-- | Returns 'True' iff the first category subsumes the second and the
+-- two are not equal.
 dcSubsumesNE                     :: (DCType t) => DCat t -> DCat t -> Bool
 dcSubsumesNE (DCat c1) (DCat c2) = Set.isProperSubsetOf c1 c2
 
@@ -106,8 +130,19 @@ dcSubsumesNE (DCat c1) (DCat c2) = Set.isProperSubsetOf c1 c2
 -- Set functions
 --
 
+-- | The type for representing a set of categories.  It is
+-- parameterized by either 'Secrecy' or 'Integrity', depending on the
+-- type of categories.  The special constructor @DCAll@ represents all
+-- possible categories, and is primarily useful for the 'dclS' of the
+-- default clearance--representing the fact that by default code can
+-- add any secrecy categories and remove any integrity categories from
+-- labels.  (See 'setClearance' and 'withClearance' for ways of being
+-- less permissive.)
 data (DCType t) => DCSet t = DCSet (Set (DCat t))
-                           | DCAll deriving (Eq, Typeable)
+                           -- ^ A finite set of categories
+                           | DCAll
+                           -- ^ Theset of all possible categories
+                             deriving (Eq, Typeable)
 
 dcsEmpty :: (DCType t) => DCSet t
 dcsEmpty = DCSet Set.empty
@@ -118,6 +153,8 @@ dcsSingleton c = DCSet $ Set.singleton c
 dcsFromList :: (DCType t) => [DCat t] -> DCSet t
 dcsFromList l = DCSet $ Set.fromList l
 
+-- | The set of all possible categories of a given type (either
+-- 'Secrecy' or 'Integrity').
 dcsAll :: (DCType t) => DCSet t
 dcsAll = DCAll
 
@@ -164,8 +201,14 @@ dcsReduce s = dcsFilter needed s
 dcsUnion'       :: (DCType t) => DCSet t -> DCSet t -> DCSet t
 dcsUnion' s1 s2 = dcsReduce $ dcsUnion s1 s2
 
--- | Produces the set of all categories that are in both sets and that
--- are subsumed by categories in both sets.
+-- | @dcsIntersection' s1 s2@ produces the set of all categories @c@
+-- satisfying both of the following:
+--
+--   1. @c@ is in at least one of @s1@ or @s2@, and
+--
+--   2. If one of the sets, @si@, does not contain @c@, then @si@
+--      contains another category @ci@ such that
+--      @ci ``dcSubsumes`` c@.
 dcsIntersection'         :: (DCType t) => DCSet t -> DCSet t -> DCSet t
 dcsIntersection' DCAll s = s
 dcsIntersection' s DCAll = s
@@ -174,8 +217,9 @@ dcsIntersection' s1 s2   = dcsUnion' (subsumed s1 s2) (subsumed s2 s1)
       subsumed a b = dcsFilter (b `hasCatSubsuming`) a
 
 -- | 'DCSet' @s1@ /subsumes/ @s2@ iff for every category @c2@ in @s2@,
--- there is a category @c1@ in @s1@ such that @c1@ subsumes @c2@.  In
--- other words, @s1@ provides at least as much protection as @s2@.
+-- there is a category @c1@ in @s1@ such that @c1 ``dcSubsumes`` c2@.
+--  In other words, @s1@ provides at least as much protection as
+-- @s2@.
 dcsSubsumes                       :: (DCType t) => DCSet t -> DCSet t -> Bool
 dcsSubsumes s1 s2 =
     forallCat s2 $ \c2 -> s1 `hasCatSubsuming` c2
@@ -230,6 +274,10 @@ instance POrd DCLabel where
         s2 `dcsSubsumes` s1 && i1 `dcsSubsumes` i2
         -- i2 `dcsSubsetOf` i1 && s1 `dcsSubsetOf` s2
 
+-- | Removes any categories that can be removed from a label without
+-- changing its security implications.  Specifically, any category is
+-- removed if it is subsumed by a different category that the label
+-- already has.
 dclReduce                 :: DCLabel -> DCLabel
 dclReduce (DCLabel s1 i1) = DCLabel (dcsReduce s1) (dcsReduce i1)
 
@@ -241,6 +289,9 @@ instance Label DCLabel where
     glb (DCLabel s1 i1) (DCLabel s2 i2) =
         DCLabel (dcsIntersection' s1 s2) (dcsUnion' i1 i2)
 
+-- | 'DCPrivs' wrap a set of 'Principal's.  Having a privilege object
+-- containing a 'Principal' @p@ allows one to bypass any 'DCat'
+-- containing @p@.
 newtype DCPrivs = DCPrivsTCB (Set Principal) deriving (Eq, Show)
 
 instance PrivTCB DCPrivs
@@ -252,10 +303,18 @@ instance Monoid DCPrivs where
     mempty = DCPrivsTCB Set.empty
     mappend (DCPrivsTCB s1) (DCPrivsTCB s2) = DCPrivsTCB $ Set.union s1 s2
 
+-- | Extract the set of 'Principal's from a 'DCPrivs' object.
 dcprivs                :: DCPrivs -> Set Principal
 dcprivs (DCPrivsTCB s) = s
 
-owns                         :: DCType t => DCPrivs -> DCat t -> Bool
+-- | We say a 'DCPrivs' privilege object /owns/ a 'DCat' when the
+-- privileges allow code to bypass restrictions implied by the 'DCat'.
+-- This is the case if and only if the 'DCPrivs' object contains one
+-- of the 'Principal's in the 'DCat'.
+owns :: DCType t =>
+        DCPrivs -- ^ Privileges
+     -> DCat t  -- ^ A category
+     -> Bool    -- ^ Returns 'True' if Privileges can bypass category
 owns (DCPrivsTCB p) (DCat c) = not $ Set.null (Set.intersection p c)
 
 {-
@@ -283,10 +342,10 @@ instance Priv DCLabel DCPrivs where
           ss = dcsUnion ms $ dcsFilter (not . subsumesP p ms) ls
           si = dcsFilter (subsumesP p li) mi
 
--- |The base type for LIO computations using these labels.
+-- | The monad for LIO computations using 'DCLabel' as the label.
 type DC = LIO DCLabel ()
 
--- |Runs a computation in the LIO Monad, returning both its result,
--- and the label of the result.
-evalDC :: LIO DCLabel () a -> IO (a, DCLabel)
+-- | Runs a computation in the LIO Monad, returning both the
+-- computation's result and the label of the result.
+evalDC :: DC a -> IO (a, DCLabel)
 evalDC m = evalLIO m ()
