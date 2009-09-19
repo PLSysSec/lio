@@ -20,6 +20,7 @@ module LIO.Handle (DirectoryOps(..)
                   , hlabelOf
                   , mkDir, mkLHandle
                   , readFile, writeFile
+                  , createDirectoryPR, openFilePR, writeFilePR
                   , createDirectoryP, openFileP, writeFileP
                   , IOMode(..)
                   ) where
@@ -155,7 +156,24 @@ writeFile               :: (DirectoryOps h m, HandleOps h b m,
 writeFile path contents = bracketTCB (openFile path IO.WriteMode) hClose
                           (flip hPut contents)
 
-createDirectoryP            :: (Priv l p) => p -> FilePath -> LIO l s ()
+createDirectoryPR :: (Priv l p) => p -> Name l -> FilePath -> LIO l s ()
+createDirectoryPR privs start path = do
+  l <- currentLabel
+  mkDir privs l start path
+
+writeFilePR :: (Priv l p, HandleOps IO.Handle b IO) =>
+               p -> Name l -> FilePath -> b -> LIO l s ()
+writeFilePR privs start path contents =
+  bracketTCB (openFilePR privs start path IO.WriteMode) hClose
+             (flip hPut contents)
+
+openFilePR :: (Priv l p) =>
+              p -> Name l -> FilePath -> IOMode -> LIO l s (LHandle l IO.Handle)
+openFilePR privs start path mode = do
+  l <- currentLabel
+  mkLHandle privs l start path mode
+
+createDirectoryP :: (Priv l p) => p -> FilePath -> LIO l s ()
 createDirectoryP privs path = do
   root <- rootDir
   l <- currentLabel
