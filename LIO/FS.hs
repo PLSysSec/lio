@@ -86,7 +86,7 @@ module LIO.FS ( -- * The opaque name object
                 Name -- Do not Export constructor!  Names are TRUSTED
               , rootDir
               , getRootDir, mkRootDir
-              , lookupName
+              , lookupName, mkTmpDirL
               -- * Initializing the file system
               , initFS
               -- * Internal data structures
@@ -556,3 +556,28 @@ lookupNode priv start path write = do
   if write then wguardP priv label else taintP priv label
   return node
 
+-- | Creates a temporary directory in an existing directory (or
+-- label-specific root directory, if the 'Name' argument comes from
+-- 'getRootDir').
+mkTmpDirL :: (Priv l p) =>
+             p                  -- ^ Privileges to minimize tainting
+          -> l                  -- ^ Label for the new directory
+          -> Name l             -- ^ 'Name' of dir in which to create directory
+          -> String             -- ^ Suffix for name of directory
+          -> LIO l s (FilePath, Name l)
+             -- ^ Returns both name in directory and 'Name' of new directory
+mkTmpDirL priv label name suffix = do
+  aguard label
+  ensureRoot name
+  (NodeTCB node) <- lookupNode priv name "" True
+  aguard label
+  (NewNode (NodeTCB new)) <- rtioTCB $ mkNodeDir label
+  let tnew = new ++ newNodeExt
+      target = new `makeRelativeTo` (node </> "x")
+  (_, tname) <- rtioTCB $ mkTmp (createSymbolicLink target) node suffix
+                `onExceptionTCB` clean tnew
+  rtioTCB $ rename tnew new `onExceptionTCB` removeFile tname
+  return $ (takeFileName tname, NameTCB tname)
+  where
+    ensureRoot (RootDir l) = mkRootDir priv l >> return ()
+    ensureRoot _           = return ()
