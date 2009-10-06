@@ -33,3 +33,7 @@ dangerous.
 
 LIO was implemented by David Mazieres
 (<http://www.scs.stanford.edu/~dm/>).
+
+To obtain the latest source code, run:
+
+>     git clone http://www.scs.stanford.edu/~dm/repos/lio.git
