@@ -19,8 +19,8 @@
 -- @
 --
 -- The LIO variants of the system functions hidden in the above import
--- commands are designed to in both the IO and LIO monads, making it
--- easier to have both types of code in the same module.
+-- commands are designed to work in both the IO and LIO monads, making
+-- it easier to have both types of code in the same module.
 module LIO.LIO (module LIO.Base
                , module LIO.Handle
                , module LIO.LIORef
