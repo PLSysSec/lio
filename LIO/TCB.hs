@@ -335,7 +335,7 @@ guardRP p l (LrefTCB la _) = do
 -- 'Lref' to 'lpure' and extract a pure value.  If this function
 -- succeeds, it returns the value referenced by the 'Lref' as a pure
 -- value.  If it fails, this function returns undefined, which means
--- that the enclosing computation can still succedd if the result does
+-- that the enclosing computation can still succeed if the result does
 -- not depend on the return value of 'unlrefP'.
 unlrefP                 :: Priv l p => p -> Lref l a -> a
 unlrefP p (LrefTCB l a) = if leqp p l lpure then a else undefined
