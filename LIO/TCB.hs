@@ -8,14 +8,15 @@
 -- | This module implements the core of the Labeled IO library for
 -- information flow control in Haskell.  It provides a monad, 'LIO',
 -- that is intended to be used as a replacement for the IO monad in
--- untrusted code.  The idea is for untrusted to provide a computation
--- in the 'LIO' monad, which trusted code can then safely execute
--- through the 'evalLIO' function.  (Though usually a wrapper function
--- is employed depending on the type of labels used by an application.
--- For example, with "LIO.DCLabels", you would use 'evalDC' to execute
--- an untrusted computation, and with "LIO.HiStar" labels, the
--- function is 'evalHS'.  There are also abbreviations for the 'LIO'
--- monad type of a particular label--for instance 'DC' or 'HS'.)
+-- untrusted code.  The idea is for untrusted code to provide a
+-- computation in the 'LIO' monad, which trusted code can then safely
+-- execute through the 'evalLIO' function.  (Though usually a wrapper
+-- function is employed depending on the type of labels used by an
+-- application.  For example, with "LIO.DCLabels", you would use
+-- 'evalDC' to execute an untrusted computation, and with "LIO.HiStar"
+-- labels, the function is 'evalHS'.  There are also abbreviations for
+-- the 'LIO' monad type of a particular label--for instance 'DC' or
+-- 'HS'.)
 --
 -- A data structure 'Lref' (labeled reference) protects access to pure
 -- values.  Without the appropriate privileges, one cannot produce a
