@@ -539,8 +539,8 @@ taintLP p = gtaint (lostar p) True
 
 -- |Use @wguard l@ in trusted code before modifying an object labeled
 -- @l@.  If @l'@ is the current label, then this function ensures that
--- @l' ``leq`` l@ before doing the same thing as @'ltaintio' l@.
--- Throws @'LerrHigh'@ if the current label @l'@ is too high.
+-- @l' ``leq`` l@ before doing the same thing as @'taint' l@.  Throws
+-- @'LerrHigh'@ if the current label @l'@ is too high.
 wguard :: (Label l) => l -> LIO l s ()
 wguard l = do l' <- currentLabel
               if l' `leq` l
