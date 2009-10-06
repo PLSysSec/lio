@@ -12,7 +12,7 @@
 -- computation in the 'LIO' monad, which trusted code can then safely
 -- execute through the 'evalLIO' function.  (Though usually a wrapper
 -- function is employed depending on the type of labels used by an
--- application.  For example, with "LIO.DCLabels", you would use
+-- application.  For example, with "LIO.DCLabel", you would use
 -- 'evalDC' to execute an untrusted computation, and with "LIO.HiStar"
 -- labels, the function is 'evalHS'.  There are also abbreviations for
 -- the 'LIO' monad type of a particular label--for instance 'DC' or
@@ -380,7 +380,7 @@ labelOfRTCB (LrefTCB l _) = l
 -- label type.  The second type is state specific to the label type.
 -- (For instance, "LIO.HiStar" uses this in the 'newcat' function to
 -- keep track of how many categories have been allocated, while
--- "LIO.DCLabels" doesn't need state and hence uses @()@ as the state
+-- "LIO.DCLabel" doesn't need state and hence uses @()@ as the state
 -- type.)  Trusted label implementation code can use 'getTCB' and
 -- 'putTCB' to get and set the label state.
 
