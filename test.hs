@@ -25,8 +25,6 @@ import qualified Data.Set as Set
 import System.IO hiding (readFile, writeFile, hPutStrLn, openFile, hFlush)
 import System.IO.Error hiding (catch)
 
-import Debug.Trace
-
 cat1 :: DCat t
 cat1 = DCat (Set.fromList [Principal "my@address.com"
                           , Principal "your@address.com"])
@@ -73,22 +71,21 @@ priv :: DCPrivs
 priv = mintTCB $ Principal "hello"
 
 leak :: LHandle DCLabel Handle -> Lref DCLabel Int -> DC ()
-leak hout secret = tryVal 0
-    where
-      hangIfEq n = do
-        s <- openR secret
-        if s == n then forever (return ()) else return ()
-      tryVal n = do
-        trace ("Trying " ++ show n) $ return ()
-        hangIfEq n
-        hPutStrLn hout (L8.pack ("The secret is not " ++ show n))
-        hFlush hout
-        tryVal (n + 1)
+leak hout secret =
+    let tryVal n = do
+          closeR (hangIfEq n)
+          hPutStrLn hout (L8.pack ("The secret is not " ++ show n))
+          hFlush hout
+          tryVal (n + 1)
+        hangIfEq n = do
+          s <- openR secret
+          if s == n then hangIfEq n else return ()
+    in tryVal 0
 
 main :: IO ()
 main = do
   evalDC $ do
          hout <- openFile "leak" WriteMode
-         x <- lref lpure 50
+         x <- lref h 40
          leak hout x
   return ()
