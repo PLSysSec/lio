@@ -17,11 +17,15 @@ import LIO.FS
 import Prelude hiding (catch, readFile, writeFile)
 -- import Control.Exception hiding (throwIO, catch)
 import Control.Applicative
+import Control.Monad
+import qualified Data.ByteString.Lazy.Char8 as L8
 import qualified Data.ByteString.Lazy as L
 -- import Data.Set (Set)
 import qualified Data.Set as Set
-import System.IO hiding (readFile, writeFile)
+import System.IO hiding (readFile, writeFile, hPutStrLn, openFile, hFlush)
 import System.IO.Error hiding (catch)
+
+import Debug.Trace
 
 cat1 :: DCat t
 cat1 = DCat (Set.fromList [Principal "my@address.com"
@@ -68,6 +72,23 @@ prin = Principal "hello"
 priv :: DCPrivs
 priv = mintTCB $ Principal "hello"
 
+leak :: LHandle DCLabel Handle -> Lref DCLabel Int -> DC ()
+leak hout secret = tryVal 0
+    where
+      hangIfEq n = do
+        s <- openR secret
+        if s == n then forever (return ()) else return ()
+      tryVal n = do
+        trace ("Trying " ++ show n) $ return ()
+        hangIfEq n
+        hPutStrLn hout (L8.pack ("The secret is not " ++ show n))
+        hFlush hout
+        tryVal (n + 1)
 
 main :: IO ()
-main = return ()
+main = do
+  evalDC $ do
+         hout <- openFile "leak" WriteMode
+         x <- lref lpure 50
+         leak hout x
+  return ()

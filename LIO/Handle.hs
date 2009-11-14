@@ -42,6 +42,7 @@ class (Monad m) => DirectoryOps h m | m -> h where
 
 class (Monad m) => CloseOps h m where
     hClose               :: h -> m ()
+    hFlush               :: h -> m ()
 
 class (CloseOps h m) => HandleOps h b m where
     hGet            :: h -> Int -> m b
@@ -57,6 +58,7 @@ instance DirectoryOps IO.Handle IO where
 
 instance CloseOps IO.Handle IO where
     hClose               = IO.hClose
+    hFlush               = IO.hFlush
 
 instance HandleOps IO.Handle L.ByteString IO where
     hGet            = L.hGet
@@ -83,6 +85,7 @@ instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
 
 instance (Label l) => CloseOps (LHandle l IO.Handle) (LIO l s) where
     hClose (LHandleTCB l h) = wguard l >> rtioTCB (hClose h)
+    hFlush (LHandleTCB l h) = wguard l >> rtioTCB (hFlush h)
 
 instance (Label l, CloseOps (LHandle l h) (LIO l s), HandleOps h b IO)
     => HandleOps (LHandle l h) b (LIO l s) where
