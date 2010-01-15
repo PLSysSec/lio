@@ -69,6 +69,9 @@ instance HandleOps IO.Handle L.ByteString IO where
 
 data LHandle l h = LHandleTCB l h
 
+instance (Label l) => MintTCB (LHandle l IO.Handle) (IO.Handle, l) where
+    mintTCB (h, l) = LHandleTCB l h
+
 instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
     getDirectoryContents d  = do
       root <- rootDir
