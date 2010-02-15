@@ -1,10 +1,10 @@
 
 PKG = $(basename $(wildcard *.cabal))
-TARGETS = $(basename $(wildcard Examples/*.hs))
+TARGETS = $(basename $(shell find Examples -name '[a-z]*.hs' -print))
 
-all: build $(TARGETS)
+all: $(TARGETS)
 
-.PHONY: all always clean build doc browse install
+.PHONY: all always clean build dist doc browse install
 
 GHC = ghc -XForeignFunctionInterface -XFlexibleInstances $(WALL)
 WALL = -Wall -Werror
@@ -15,13 +15,13 @@ always:
 Examples/reliable/%: always
 	$(GHC) --make -iExamples/reliable -Wall -Werror $@.hs
 
-Examples/%: always
+Examples/%: always build
 	$(GHC) --make $@.hs
 
 Setup: Setup.hs
 	$(GHC) --make Setup.hs
 
-dist/setup-config: Setup
+dist/setup-config: Setup $(PKG).cabal
 	./Setup configure --user
 
 build: dist/setup-config
@@ -29,6 +29,9 @@ build: dist/setup-config
 
 doc: dist/setup-config
 	./Setup haddock --hyperlink-source
+
+dist: dist/setup-config
+	./Setup sdist
 
 install: build doc
 	./Setup install

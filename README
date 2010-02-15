@@ -10,6 +10,5 @@
   code using 'haddock'.  Run the following commands to build and view
   the documentation:
 
-	gmake doc
-	firefox doc/index.html
+	gmake browse
 

@@ -1,6 +1,6 @@
 Name:           lio
 Version:        0.0
-Cabal-Version:  >= 1.2
+Cabal-Version:  >= 1.2.3
 build-type:     Simple
 License:        GPL
 License-File:   LICENSE
@@ -10,7 +10,7 @@ Maintainer:     http://www.scs.stanford.edu/~dm/addr/
 Category:       Security
 Synopsis:       Labeled IO library
 Extra-source-files:
-        test.hs
+        Examples/test.hs
 
 Description:
         The /Labeled IO/ (LIO) library provides information flow
