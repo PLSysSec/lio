@@ -6,17 +6,14 @@ all: $(TARGETS)
 
 .PHONY: all always clean build dist doc browse install
 
-GHC = ghc -XForeignFunctionInterface -XFlexibleInstances $(WALL)
+GHC = ghc $(WALL)
 WALL = -Wall -Werror
 
 always:
 	@:
 
-Examples/reliable/%: always
-	$(GHC) --make -iExamples/reliable -Wall -Werror $@.hs
-
-Examples/%: always build
-	$(GHC) --make $@.hs
+Examples/%: always
+	$(GHC) --make -i$(dir $@) $(WALL) $@.hs
 
 Setup: Setup.hs
 	$(GHC) --make Setup.hs
