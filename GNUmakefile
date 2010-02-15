@@ -36,6 +36,11 @@ dist: dist/setup-config
 install: build doc
 	./Setup install
 
+uninstall: dist/setup-config
+	./Setup unregister --user
+	rm -rf $(HOME)/.cabal/lib/$(PKG)-[0-9]*
+	rm -rf $(HOME)/.cabal/share/doc/$(PKG)-[0-9]*
+
 browse: doc
 	firefox dist/doc/html/$(PKG)/index.html
 
