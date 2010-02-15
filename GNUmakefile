@@ -1,64 +1,42 @@
 
-PROGS := $(patsubst %.hs,%, $(wildcard [a-z]*.hs))
-DEPS := $(patsubst %,%.d, $(PROGS))
+PKG = $(basename $(wildcard *.cabal))
+TARGETS = $(basename $(wildcard Examples/*.hs))
 
-BIN = $(HOME)/.cabal/bin/
-DOC = $(wildcard [A-Z]*/[A-Z]*.hs [A-Z]*/[A-Z]*/[A-Z]*.hs)
+all: build $(TARGETS)
 
-WFLAGS = -Wall -Werror
+.PHONY: all always clean build doc browse install
 
-all: $(PROGS)
-.PHONY: all
+GHC = ghc -XForeignFunctionInterface -XFlexibleInstances $(WALL)
+WALL = -Wall -Werror
 
--include .depend
+always:
+	@:
 
-.depend: $(DEPS)
-	@rm -f $@~
-	for prog in $(PROGS); do \
-		sed -ne 's/.*\(:.*\.hs\)$$/'$$prog'\1/p' test.d >> $@~; \
-	done
-	@mv -f $@~ $@
+Examples/reliable/%: always
+	$(GHC) --make -iExamples/reliable -Wall -Werror $@.hs
 
-$(PROGS): %: %.hs
-	ghc --make $(WFLAGS) $<
-	ghc -M -dep-makefile $@.d~ $<
-	@if cmp -s $@.d~ $@.d; then		\
-		rm $@.d~;			\
-	else					\
-		mv -f $@.d~ $@.d;		\
-	fi
+Examples/%: always
+	$(GHC) --make $@.hs
 
-.PHONY: doc
-doc: $(DOC)
-	rm -rf $@
-	mkdir -p $@/src
-	touch doc
-	$(BIN)HsColour -print-css -o$@/src/hscolour.css
-	for file in $(DOC); do \
-	    $(BIN)HsColour -css -anchor \
-		-o$@/src/`echo $$file|sed -e 's|/|.|g'`.html $$file; \
-	done
-	haddock -h -o$@ --title="Labeled IO library" \
-	    --prologue=prologue.haddock \
-	    --source-base=src/ \
-	    --source-module=src/%M.hs.html \
-	    --source-entity=src/%M.hs.html#%N $(DOC)
+Setup: Setup.hs
+	$(GHC) --make Setup.hs
 
-ignore:
-	rm -f .gitignore~
-	(echo '*.hi'; echo '*.o'; echo '*~'; echo '/*.d'; \
-			echo '/.depend'; echo '/doc') \
-		> .gitignore~
-	for prog in $(PROGS); do		\
-		echo $$prog >> .gitignore~;	\
-	done
-	mv -f .gitignore~ .gitignore
+dist/setup-config: Setup
+	./Setup configure --user
+
+build: dist/setup-config
+	./Setup build
+
+doc: dist/setup-config
+	./Setup haddock --hyperlink-source
+
+install: build doc
+	./Setup install
+
+browse: doc
+	firefox dist/doc/html/$(PKG)/index.html
 
 clean:
-	rm -rf doc
-	rm -f .depend $(PROGS)
-	@find . \( -name '*~' -o -name '*.o' -o -name '*.hi' -o -name '*.d' \) \
-		-print0 > .clean~
-	@xargs -0 echo rm -f -- < .clean~
-	@xargs -0 rm -f -- < .clean~
-.PHONY: clean
+	rm -rf $(TARGETS) Setup dist
+	find . \( -name '*~' -o -name '*.hi' -o -name '*.o' \) -print0 \
+		| xargs -0 rm -f --

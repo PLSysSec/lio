@@ -1,0 +1,63 @@
+Name:           lio
+Version:        0.0
+Cabal-Version:  >= 1.2
+build-type:     Simple
+License:        GPL
+License-File:   LICENSE
+Author:         David Mazieres
+Stability:      experimental
+Maintainer:     http://www.scs.stanford.edu/~dm/addr/
+Category:       Security
+Synopsis:       Labeled IO library
+Extra-source-files:
+        test.hs
+
+Description:
+        The /Labeled IO/ (LIO) library provides information flow
+        control for incorporating untrusted code within Haskell
+        applications.  Most code should import module "LIO.LIO" and
+        whichever label type the application is using (e.g.,
+        "LIO.DCLabel").  The core functionality of the library is
+        documented in "LIO.TCB".  LIO was implemented by David
+        Mazieres (<http://www.scs.stanford.edu/~dm/>).  To obtain the
+        latest source code, run:
+
+        @git clone http:\/\/www.scs.stanford.edu\/~dm\/repos\/lio.git@
+
+Library
+  Build-Depends: base >= 4 && < 5,
+                 array >= 0.2 && < 1,
+                 bytestring >= 0.9 && < 1,
+                 containers >= 0.2 && < 1,
+                 directory >= 1.0 && < 2,
+                 filepath >= 1.1 && < 2,
+                 mtl >= 1.1.0.2 && < 2,
+                 old-time >= 1 && < 2,
+                 unix >= 2.3 && < 3,
+                 SHA >= 1.4.1.1 && < 2
+
+  Exposed-modules:
+    LIO.Armor,
+    LIO.Base,
+    LIO.DCLabel,
+    LIO.DCLabel.Label,
+    LIO.DCLabel.PrivStore,
+    LIO.FS,
+    LIO.Handle,
+    LIO.HiStar,
+    LIO.LIO,
+    LIO.LIORef,
+    LIO.MonadLIO,
+    LIO.TCB,
+    LIO.TmpFile
+
+  Extensions:
+    DeriveDataTypeable,
+    ExistentialQuantification,
+    FlexibleContexts,
+    FlexibleInstances,
+    ForeignFunctionInterface,
+    FunctionalDependencies,
+    GeneralizedNewtypeDeriving,
+    MultiParamTypeClasses,
+    ScopedTypeVariables

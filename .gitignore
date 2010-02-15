@@ -1,8 +1,9 @@
 *.hi
 *.o
 *~
-/*.d
-/.depend
+/Examples/test
+/Setup
+/dist
 /doc
-privStore
-test
+/ls
+/ps
