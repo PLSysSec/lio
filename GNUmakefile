@@ -30,13 +30,20 @@ doc: dist/setup-config
 dist: dist/setup-config
 	./Setup sdist
 
+INDEXDOC = cd $(HOME)/.cabal/share/doc \
+    && find . -name '*.haddock' -print \
+	| sed -e 's/\.\/\(.*\)\/[^\/]*\.haddock/--read-interface=\1,&/' \
+	| xargs -t haddock --gen-contents --gen-index --odir=.
+
 install: build doc
 	./Setup install
+	$(INDEXDOC)
 
 uninstall: dist/setup-config
 	./Setup unregister --user
 	rm -rf $(HOME)/.cabal/lib/$(PKG)-[0-9]*
 	rm -rf $(HOME)/.cabal/share/doc/$(PKG)-[0-9]*
+	$(INDEXDOC)
 
 browse: doc
 	firefox dist/doc/html/$(PKG)/index.html
