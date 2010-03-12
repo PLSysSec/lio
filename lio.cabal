@@ -47,6 +47,7 @@ Library
     LIO.HiStar,
     LIO.LIO,
     LIO.LIORef,
+    LIO.MonadCatch,
     LIO.MonadLIO,
     LIO.TCB,
     LIO.TmpFile

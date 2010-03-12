@@ -1,7 +1,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# OPTIONS_GHC -XUndecidableInstances #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 -- | This module provides a function 'liftLIO' for executing 'LIO'
 -- computations from transformed versions of the 'LIO' monad.  There

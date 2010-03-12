@@ -16,7 +16,7 @@ module LIO.Base (
                , taintR, guardR, guardRP
                , openR, openRP, closeR, discardR
                , LabelFault(..)
-               , MonadCatch(..), catchP, onExceptionP, bracketP
+               , catchP, onExceptionP, bracketP
                , evalLIO
                 ) where
 

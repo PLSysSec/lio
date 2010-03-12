@@ -85,6 +85,8 @@ import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
 
+import LIO.MonadCatch
+
 --
 -- We need a partial order and a Label
 --
@@ -873,27 +875,6 @@ instance Label l => Show (LabeledExceptionTCB l) where
 
 instance (Label l) => Exception (LabeledExceptionTCB l)
 
--- | @MonadCatch@ is the class used to generalize the standard IO
--- @catch@ and @throwIO@ functions to methods that can be defined in
--- multiple monads.
-class (Monad m) => MonadCatch m where
-    block            :: m a -> m a
-    unblock          :: m a -> m a
-    throwIO          :: (Exception e) => e -> m a
-    catch            :: (Exception e) => m a -> (e -> m a) -> m a
-    onException      :: m a -> m b -> m a
-    onException io h = io `catch` \e -> h >> throwIO (e :: SomeException)
-    bracket          :: m a -> (a -> m c) -> (a -> m b) -> m b
-    bracket          = genericBracket onException
-
-instance MonadCatch IO where
-    block       = E.block
-    unblock     = E.unblock
-    throwIO     = E.throwIO
-    catch       = E.catch
-    onException = E.onException
-    bracket     = E.bracket
-
 instance (Label l) => MonadCatch (LIO l s) where
     block   = iomap E.block
     unblock = iomap E.unblock
@@ -905,7 +886,7 @@ instance (Label l) => MonadCatch (LIO l s) where
     -- | Basic function for catching labeled exceptions.  (The fact that
     -- they are labeled is hidden from the handler.)
     --
-    -- > catchL m c = catchP m NoPrivs (\_ -> c)
+    -- > catch m c = catchP m NoPrivs (\_ -> c)
     --
     catch m c = iomaps (\s m' -> m' `E.catch` doit s) m
         where
@@ -958,19 +939,6 @@ bracketP :: (Priv l p) =>
          -> (a -> LIO l s b)
          -> LIO l s b
 bracketP p = genericBracket (onExceptionP p)
-
-genericBracket :: (MonadCatch m) =>
-                  (m b -> m c -> m b) -- ^ On exception function
-               -> m a                 -- ^ Action to perform before
-               -> (a -> m c)          -- ^ Action for afterwards
-               -> (a -> m b)          -- ^ Main (in between) action
-               -> m b                 -- ^ Result of main action
-genericBracket myOnException before after between =
-    block $ do
-      a <- before
-      b <- unblock (between a) `myOnException` after a
-      after a
-      return b
 
 -- | For privileged code that needs to catch all exceptions in some
 -- cleanup function.  Note that for the 'LIO' monad, these methods do
