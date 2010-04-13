@@ -56,7 +56,7 @@ module LIO.LIO (module LIO.Base
                , module LIO.MonadLIO
                ) where
 
-import Prelude hiding (readFile, writeFile, catch)
+-- import Prelude hiding (readFile, writeFile, catch)
 import LIO.Base
 import LIO.Handle
 import LIO.LIORef

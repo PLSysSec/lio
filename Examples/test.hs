@@ -17,7 +17,7 @@ import LIO.FS
 import Prelude hiding (catch, readFile, writeFile)
 -- import Control.Exception hiding (throwIO, catch)
 import Control.Applicative
-import Control.Monad
+-- import Control.Monad
 import qualified Data.ByteString.Lazy.Char8 as L8
 import qualified Data.ByteString.Lazy as L
 -- import Data.Set (Set)

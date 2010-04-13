@@ -19,14 +19,14 @@ import LIO.Armor
 
 import Prelude hiding (catch)
 import Control.Exception (throwIO, catch)
-import qualified Control.Exception as IO
+-- import qualified Control.Exception as IO
 import Data.Bits (shiftL, shiftR, (.|.))
 import qualified Data.ByteString.Lazy as L
 import Data.Word (Word8)
 import Foreign.C.Error
 import Foreign.C.Types
 import System.Directory (createDirectory)
-import System.FilePath (FilePath, (</>))
+import System.FilePath ((</>))
 import System.Posix.IO (OpenMode(..), OpenFileFlags(..)
                        , defaultFileFlags , openFd
                        , fdToHandle, handleToFd)

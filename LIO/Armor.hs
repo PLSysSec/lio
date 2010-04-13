@@ -13,7 +13,7 @@ import Control.Monad
 import Data.Array.Unboxed
 import Data.Bits
 import qualified Data.ByteString.Lazy as L
-import qualified Data.ByteString.Lazy.Char8 as LC
+-- import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Char
 import Data.Word
 

@@ -7,7 +7,7 @@ all: $(TARGETS)
 .PHONY: all always clean build dist doc browse install
 
 GHC = ghc $(WALL)
-WALL = -Wall -Werror
+WALL = -Wall -Werror -fno-warn-unused-do-bind
 
 always:
 	@:

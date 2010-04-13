@@ -109,12 +109,13 @@ import Control.Exception hiding (throwIO, catch, onException)
 import Control.Monad
 import qualified Data.ByteString.Lazy.Char8 as LC
 import Data.Typeable
-import qualified GHC.IOBase
+-- import qualified GHC
+import qualified GHC.IO.Exception as GHC (IOErrorType(..))
 import System.Directory
 import System.FilePath
 import System.IO
 import System.IO.Error hiding (catch, try)
-import System.FilePath
+-- import System.FilePath
 import System.Posix.Files
 import System.Posix.Process
 
@@ -438,7 +439,7 @@ unlinkNameReg = unlinkName removeFile
 -- path to the symbolic link are also symbolic links.
 expandLink      :: FilePath -> IO FilePath
 expandLink path = do
-  suffix <- catchPred (\e -> ioeGetErrorType e == GHC.IOBase.InvalidArgument)
+  suffix <- catchPred (\e -> ioeGetErrorType e == GHC.InvalidArgument)
             (readSymbolicLink path) (return "")
   return $ if (isAbsolute suffix)
            then suffix
