@@ -470,8 +470,7 @@ mkRootDirIO label = do
   exists <- doesDirectoryExist $ pathOfName name
   unless exists $ do
               new <- mkNodeDir label
-              linkNode new name
-              return ()
+              linkNode new name >> return ()
   return name
 
 defRoot :: FilePath

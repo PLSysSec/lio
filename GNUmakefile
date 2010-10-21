@@ -1,19 +1,27 @@
 
 PKG = $(basename $(wildcard *.cabal))
-TARGETS = $(basename $(shell find Examples -name '[a-z]*.hs' -print))
+TARGETS := $(basename $(shell find Examples -name '[a-z]*.hs' -print))
+HSCS := $(patsubst %.hsc,%.hs,$(shell find . -name '*.hsc' -print))
+HSCCLEAN = $(patsubst %.hs,%_hsc.[ch],$(HSCS))
 
-all: $(TARGETS)
+all: $(TARGETS) $(HSCS)
 
-.PHONY: all always clean build dist doc browse install
+.PHONY: all always clean build dist doc browse install hsc
 
 GHC = ghc $(WALL)
-WALL = -Wall -Werror -fno-warn-unused-do-bind
+WALL = -Wall -Werror
+LIBS = 
 
 always:
 	@:
 
-Examples/%: always
-	$(GHC) --make -i$(dir $@) $(WALL) $@.hs
+Examples/%: always $(HSCS)
+	$(GHC) --make -i$(dir $@) $@.hs $(LIBS)
+
+%.hs: %.hsc
+	hsc2hs $<
+
+hsc: $(HSCS)
 
 Setup: Setup.hs
 	$(GHC) --make Setup.hs
@@ -46,9 +54,10 @@ uninstall: dist/setup-config
 	$(INDEXDOC)
 
 browse: doc
-	firefox dist/doc/html/$(PKG)/index.html
+	xdg-open dist/doc/html/$(PKG)/index.html
 
 clean:
-	rm -rf $(TARGETS) Setup dist
+	rm -rf dist
+	rm -f Setup $(TARGETS) $(HSCS) $(HSCCLEAN)
 	find . \( -name '*~' -o -name '*.hi' -o -name '*.o' \) -print0 \
 		| xargs -0 rm -f --

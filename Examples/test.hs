@@ -73,7 +73,7 @@ priv = mintTCB $ Principal "hello"
 leak :: LHandle DCLabel Handle -> Lref DCLabel Int -> DC ()
 leak hout secret =
     let tryVal n = do
-          closeR (hangIfEq n)
+          _ <- closeR (hangIfEq n)
           hPutStrLn hout (L8.pack ("The secret is not " ++ show n))
           hFlush hout
           tryVal (n + 1)
@@ -84,7 +84,7 @@ leak hout secret =
 
 main :: IO ()
 main = do
-  evalDC $ do
+  _ <- evalDC $ do
          hout <- openFile "leak" WriteMode
          x <- lref h 40
          leak hout x

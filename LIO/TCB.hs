@@ -955,8 +955,7 @@ instance OnExceptionTCB IO where
 instance (Label l) => OnExceptionTCB (LIO l s) where
     onExceptionTCB m cleanup = 
         mkLIO $ \s -> unLIO m s `E.catch` \e ->
-        do unLIO cleanup s
-           E.throwIO (e :: SomeException)
+        unLIO cleanup s >> E.throwIO (e :: SomeException)
 
 instance (Label l) => MonadError IOException (LIO l s) where
     throwError = throwIO

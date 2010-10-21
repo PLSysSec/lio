@@ -118,7 +118,7 @@ mkDir priv l start path = do
   dirlabel <- ioTCB $ labelOfName name
   wguardP priv dirlabel
   new <- ioTCB $ mkNodeDir l
-  rtioTCB $ linkNode new name
+  _ <- rtioTCB $ linkNode new name
   return ()
 
 mkLHandle                        :: (Priv l p) =>

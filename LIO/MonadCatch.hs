@@ -42,5 +42,4 @@ genericBracket myOnException before after between =
     block $ do
       a <- before
       b <- unblock (between a) `myOnException` after a
-      after a
-      return b
+      after a >> return b
