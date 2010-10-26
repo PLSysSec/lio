@@ -73,6 +73,8 @@ module LIO.TCB (
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
+               -- ** Misc symbols useful for privileged code
+               , newstate, LIOstate, runLIO
                -- End TCB exports
                ) where
 
@@ -737,6 +739,8 @@ putTCB :: (Label l) => s -> LIO l s ()
 putTCB ls = get >>= put . update
     where update s = s { labelState = ls }
 
+-- | Generate a fresh state to pass 'runLIO' when invoking it for the
+-- first time.
 newstate :: (Label l) => s -> LIOstate l s
 newstate s = LIOstate { labelState = s , lioL = lpure , lioC = lclear }
 
@@ -747,6 +751,7 @@ unLIO :: (Label l) => LIO l s a -> LIOstate l s
                        -> IO (a, LIOstate l s)
 unLIO (LIO (StateT f)) = f
 
+-- | Execute an LIO action.
 runLIO :: forall l s a. (Label l) => LIO l s a -> LIOstate l s
        -> IO (a, LIOstate l s)
 runLIO m s = unLIO m s `E.catch` (E.throwIO . delabel)

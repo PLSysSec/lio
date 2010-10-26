@@ -29,4 +29,5 @@ import LIO.TCB hiding (
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
+               , newstate, LIOstate, runLIO
                )
