@@ -28,12 +28,15 @@ import Foreign.C.Types
 import System.Directory (createDirectory)
 import System.FilePath ((</>))
 import System.Posix.IO (OpenMode(..), OpenFileFlags(..)
-                       , defaultFileFlags , openFd
-                       , fdToHandle, handleToFd)
-import System.Posix.Types (Fd(..))
+                       , defaultFileFlags , openFd, fdToHandle)
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
 import System.Time (ClockTime(..), getClockTime)
+
+import Data.Typeable
+import GHC.IO.FD (FD(..))
+import GHC.IO.Handle.Types (Handle__(..))
+import GHC.IO.Handle.Internals (wantWritableHandle)
 
 foreign import ccall "unistd.h fsync" c_fsync :: CInt -> IO CInt
 
@@ -133,8 +136,11 @@ mkTmpDir'     :: FilePath -- ^Directory in which to create subdirectory
 mkTmpDir' d s = fmap snd $ mkTmpDir d s
 
 -- | Flushes a Handle to disk with fsync()
-hSync   :: IO.Handle -> IO ()
+hSync :: IO.Handle -> IO ()
 hSync h = do
   IO.hFlush h
-  (Fd fd) <- handleToFd h
-  throwErrnoPathIfMinus1_ "fsync" (show h) (c_fsync fd)
+  wantWritableHandle "hSync" h $ fsyncH
+    where
+      fsyncH Handle__ {haDevice = dev} = maybe (return ()) fsyncD $ cast dev
+      fsyncD FD {fdFD = fd} = throwErrnoPathIfMinus1_ "fsync" (show h)
+                              (c_fsync fd)

@@ -46,6 +46,9 @@
             supposedly safe 'cast' method to make usafe casts); automatically
             deriving @Typeable@ should be safe.
 
+          * Define new 'Ix' instances (which could produce out of bounds
+            array references).
+
         In general, pragmas and imports should be highly scrutinized.  For
         example, most of the "Foreign" class of modules are probably
         dangerous.
