@@ -77,6 +77,7 @@ module LIO.TCB (
                ) where
 
 import Prelude hiding (catch)
+import Control.Applicative
 import Control.Monad.Error
 import Control.Monad.State.Lazy hiding (put, get)
 import Control.Exception hiding (catch, throw, throwIO,
@@ -225,7 +226,11 @@ instance (Label l, Show a) => ShowTCB (Lref l a) where
     showTCB (LrefTCB l t) = shows t $ " {" ++ shows l "}"
 
 instance Label l => Functor (Lref l) where
-    fmap f (LrefTCB l t) = LrefTCB (l `lub` lpure) (f t)
+    fmap = liftM
+
+instance Label l => Applicative (Lref l) where
+    pure = return
+    (<*>) = ap
 
 instance Label l => Monad (Lref l) where
     return x = LrefTCB lpure x
