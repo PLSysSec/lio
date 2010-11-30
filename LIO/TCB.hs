@@ -55,6 +55,9 @@ module LIO.TCB (
                , lref, lrefP, unlrefP, labelOfR, labelOfRP
                , taintR, guardR, guardRP
                , openR, openRP, closeR, discardR
+               -- ** Lref monad transformer
+               , LrefT(..)
+               , unliftLrefTTCB, lrefTLabelTCB 
                -- * Exceptions
                -- ** Exception type thrown by LIO library
                , LabelFault(..)
@@ -377,6 +380,34 @@ labelOfRP p (LrefTCB la _) = do
 -- check that the label is low enough, it is simpler to use 'guardR'
 labelOfRTCB :: Label l => Lref l a -> l
 labelOfRTCB (LrefTCB l _) = l
+
+-- | @LrefT@ is a monad transformer with 'Lref' as the base monad,
+--   such that the inner monad is wrapping 'Lref'.
+--   Tracking labels in the @LrefT@ monad is done as in the 'Lref' monad.
+newtype (Monad m,Label l) =>
+        LrefT l m t = LrefT { runLrefT :: m (Lref l t) }
+
+instance (Monad m,Label l) => Monad (LrefT l m) where
+  return = LrefT . return . return
+  (LrefT mlx) >>= f = LrefT $ do (LrefTCB l1 x) <- mlx
+                                 let (LrefT mly) = f x
+                                 (LrefTCB l2 y) <- mly
+                                 return $ LrefTCB (lub l1 l2) y
+
+instance (Label l) => MonadTrans (LrefT l) where
+  lift mx = LrefT $ mx >>= return . return
+
+-- | It is useful to provide the dual of lift, that takes a computation
+--   in the 'LrefT' monad and removes the underlying 'Lref'.
+unliftLrefTTCB :: (Monad m, Label l) => LrefT l m t -> m t
+unliftLrefTTCB (LrefT mlx) = do lx <- mlx
+                                let (LrefTCB _ x) = lx
+                                return x
+
+-- | Creates an empty 'LrefT' context with a given label.
+lrefTLabelTCB :: (Monad m,Label l) => l -> LrefT l m ()
+lrefTLabelTCB l = LrefT $ return $ LrefTCB l ()
+
 
 
 --
