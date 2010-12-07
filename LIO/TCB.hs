@@ -57,7 +57,6 @@ module LIO.TCB (
                , openR, openRP, closeR, discardR
                -- ** Lref monad transformer
                , LrefT(..)
-               , unliftLrefTTCB, lrefTLabelTCB 
                -- * Exceptions
                -- ** Exception type thrown by LIO library
                , LabelFault(..)
@@ -72,6 +71,7 @@ module LIO.TCB (
                , lrefTCB
                , PrivTCB, MintTCB(..)
                , unlrefTCB, labelOfRTCB
+               , unliftLrefTTCB, lrefTLabelTCB 
                , setLabelTCB, setClearanceTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB

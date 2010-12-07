@@ -17,7 +17,7 @@ The categories themselves (of type 'DCatS' and 'DCatI', for secrecy
 and integrity, respectively) are Sets of 'Principal's, where a
 'Principal' is just a 'String' whose meaning is up to the application.
 Privileges ('DCPrivs') also correspond to 'Principal's.  You can use
-'mintTCB' to obtain the privileges of a 'Pinripal' and 'mappend' to
+'mintTCB' to obtain the privileges of a 'Principal' and 'mappend' to
 combine privileges of multiple 'Principal's.  Owning a Principal
 (having it in a 'DCPrivs' object) confers the right to modify labels
 by removing /any/ 'DCatS' containing that Principal and adding /any/
@@ -34,10 +34,10 @@ module LIO.DCLabel.Label
     , DCat(..) , DCatI, DCatS
     , DCSet, DCLabel(..)
     -- * Functions for categories
-    , dcSingleton, dcFromList, dcUnion, dcSubsumes, dcSubsumesNE
+    , dcSingleton, dcFromList, dcFromPList, dcUnion, dcSubsumes, dcSubsumesNE
     -- * Functions for sets of categories (DCSet)
     -- ** Straight set operations
-    , dcsEmpty, dcsSingleton, dcsFromList, dcsAll
+    , dcsEmpty, dcsSingleton, dcsFromList, dcsFromPList, dcsAll
     , dcsSubsetOf, dcsUnion, dcsIntersection
     -- ** Operations that reflect the disjunction property
     , dcsSubsumes, dcsUnion', dcsIntersection'
@@ -100,6 +100,9 @@ dcSingleton _ p = DCat $ Set.singleton p
 dcFromList      :: (DCType t) => t -> [Principal] -> DCat t
 dcFromList _ pl = DCat $ Set.fromList pl
 
+dcFromPList :: (DCType t) => [Principal] -> DCat t
+dcFromPList pl = DCat $ Set.fromList pl
+
 dcUnion                     :: (DCType t) => DCat t -> DCat t -> DCat t
 dcUnion (DCat c1) (DCat c2) = DCat $ Set.union c1 c2
 
@@ -109,7 +112,7 @@ dcUnion (DCat c1) (DCat c2) = DCat $ Set.union c1 c2
 -- bypass).  We therefore say that category [A] subsumes category [A,
 -- B].  In other words, if [A] is a secrecy category, then anyone who
 -- can read data labeled [A] can also read data labeled [A, B].
--- Converely, if [A] is an integrity category, then anyone who can
+-- Conversely, if [A] is an integrity category, then anyone who can
 -- write data labeled [A] can also write data labeled [A, B].
 --
 -- Generalizing, we define @c1 `dcSubsumes` c2@ as the subset
@@ -152,6 +155,9 @@ dcsSingleton c = DCSet $ Set.singleton c
 
 dcsFromList :: (DCType t) => [DCat t] -> DCSet t
 dcsFromList l = DCSet $ Set.fromList l
+
+dcsFromPList :: (DCType t) => [Principal] -> DCSet t
+dcsFromPList pl = dcsFromList $ map (DCat . Set.singleton $) pl
 
 -- | The set of all possible categories of a given type (either
 -- 'Secrecy' or 'Integrity').
