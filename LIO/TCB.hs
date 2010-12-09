@@ -26,17 +26,14 @@
 -- 'Lref' without tainting the current flow of execution.  'openR'
 -- conversely allows one to use the value stored within an 'Lref'.
 -- 
--- If protection of the label on the data is necessary, i.e., only
+-- If protection of the label on the data is unnecessary, i.e., only
 -- the data needs to be protected by a label, then a secondary
 -- data structure 'LrefD' (publicly-labeled reference) can be used
--- instead of 'Lref'. 'LrefD' is a wrapper for 'Lref', hence it, too,
--- protects access to pure values. However, a 'closeR' equivalent is
--- not available to untrusted code and thus 'openRD' must be used to
--- read values stored within an 'LrefD'. As this taints the current
--- flow of execution 'Lref's should be used when label creeping is of
--- greater concern.
---
---
+-- instead of 'Lref'. 'LrefD' is a wrapper for 'Lref', hence, it also
+-- protects access to pure values. Additionally, one must use the
+-- 'openRD' function to use the value stored within an 'LrefD',
+-- thereby tainting the current flow of execution.
+-- 
 -- Any code that imports this module is part of the
 -- /Trusted Computing Base/ (TCB) of the system.  Hence, untrusted
 -- code must be prevented from importing this module.  The exported
@@ -435,15 +432,15 @@ lrefTLabelTCB l = LrefT $ return $ LrefTCB l ()
 --   necessary since the label on the  data can be observed.
 --
 --   Additionally, to avoid information leakage the equivalent of
---   'closeR', is necessarily limited to trusted code by preventing the
---   export of 'closeRDTCB'. However, since @LrefD@ is a 'Monad',
---   operations on different level labeled values can be performed using 
---   functions such as 'liftM2'. Consider the following example adding 
---   a value with a \"low\"-level label and one with a \"high\"-level label
---   in a \"medium\"-level context:
+--   'closeR' is necessarily limited to trusted code by disallowing the
+--   export of 'closeRDTCB'. Although arbitrary 'LIO' computations cannot
+--   be sealed in an @LrefD@, since @LrefD@ is a 'Monad', computations on
+--   different level labeled values can be performed using functions such
+--   as 'liftM2'. Consider the following example of adding a value labeled
+--    \"low\" and another labeled \"high\" in a context labeled \"medium\":
 --
 -- @
---   -- lD ``leq`` mD, lD ``leq`` hD, and mD ``leq`` hD
+--   -- lLabel ``leq`` mLabel, lLabel ``leq`` hLabel, and mLabel ``leq`` hLabel
 --   hD <- 'lrefD' hLabel h
 --   lD <- 'lrefD' lLabel l
 --   rD <- 'withClearance' mLabel $
@@ -453,8 +450,8 @@ lrefTLabelTCB l = LrefT $ return $ LrefTCB l ()
 --   The @LrefD@ result @rD@, has value @h+l@ and label @lD ``lub`` hD@.
 --   If instead of using 'liftM2' we used 'openRD' to extract @h@ and @l@ as
 --   to add them, an exception would have been thrown. Rather, we have the 
---   similar effect of 'closeR' and raise the current label only when we
---   wish to observe the value of @rD@.
+--   similar effect of 'closeR' and will need to taint the flow of execution
+--   only when wishing to use the value in @rD@.
 --
 --   Since @LrefD@ is an 'Lref' wrapper, we provide functions to construct,
 --   retrieve values from, raise the label of, and read the label of @LrefD@s.
@@ -485,7 +482,7 @@ lrefDTCB l a = LrefDTCB $ LrefTCB l a
 unlrefPD :: Priv l p => p -> LrefD l a -> a
 unlrefPD p = unlrefP p . unLrefD
 
--- | Returns the label of the 'LrefD' regardless of of the current label.
+-- | Returns the label of the 'LrefD' regardless of the level of the current label.
 labelOfRD :: Label l => LrefD l a -> LIO l s l
 labelOfRD = return . labelOfRTCB . unLrefD
 
@@ -607,7 +604,7 @@ currentClearance = get >>= return . lioC
      when using 'leqp' instead of 'leq'.)  This is ensured by the
      'wguard' (write guard) function, which does the equivalent of
      'taint' to ensure the target label @ldata@ can flow to the
-     current label, then throws an exception if @ldata@ cannot flow
+     current label, then throws an exception if @lcurrent@ cannot flow
      back to the target label.
 
    * When /creating/ or /allocating/ objects, it is permissible for
