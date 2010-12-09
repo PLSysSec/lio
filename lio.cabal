@@ -11,6 +11,7 @@ Category:       Security
 Synopsis:       Labeled IO library
 Extra-source-files:
         Examples/test.hs
+        Examples/test2.hs
 
 Description:
         The /Labeled IO/ (LIO) library provides information flow
