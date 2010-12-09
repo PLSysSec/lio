@@ -13,9 +13,12 @@ module LIO.Base (
                , wguard, wguardP, aguard
                , Lref
                , lref, lrefP, unlrefP, labelOfR, labelOfRP
-               , LrefT(..)
                , taintR, guardR, guardRP
                , openR, openRP, closeR, discardR
+               , LrefT(..)
+               , LrefD
+               , lrefD, lrefPD, unlrefPD, labelOfRD
+               , taintRD, openRD, openRPD
                , LabelFault(..)
                , catchP, onExceptionP, bracketP
                , evalLIO
@@ -24,6 +27,7 @@ module LIO.Base (
 import LIO.TCB hiding ( 
                  ShowTCB(..)
                , lrefTCB
+               , lrefDTCB, closeRDTCB
                , PrivTCB, MintTCB(..)
                , showTCB
                , unlrefTCB, labelOfRTCB, setLabelTCB, setClearanceTCB
