@@ -433,9 +433,28 @@ lrefTLabelTCB l = LrefT $ return $ LrefTCB l ()
 --   needed to equivalently perform the same tasks using @LrefD@s.
 --   For example, the @LrefD@ 'guardR' and 'labelOfRP' equivalents are not
 --   necessary since the label on the  data can be observed.
+--
 --   Additionally, to avoid information leakage the equivalent of
 --   'closeR', is necessarily limited to trusted code by preventing the
---   export of 'closeRDTCB'.
+--   export of 'closeRDTCB'. However, since @LrefD@ is a 'Monad',
+--   operations on different level labeled values can be performed using 
+--   functions such as 'liftM2'. Consider the following example adding 
+--   a value with a \"low\"-level label and one with a \"high\"-level label
+--   in a \"medium\"-level context:
+--
+-- @
+--   -- lD ``leq`` mD, lD ``leq`` hD, and mD ``leq`` hD
+--   hD <- 'lrefD' hLabel h
+--   lD <- 'lrefD' lLabel l
+--   rD <- 'withClearance' mLabel $
+--             return $ 'liftM2' (+) lD hD
+-- @
+--
+--   The @LrefD@ result @rD@, has value @h+l@ and label @lD ``lub`` hD@.
+--   If instead of using 'liftM2' we used 'openRD' to extract @h@ and @l@ as
+--   to add them, an exception would have been thrown. Rather, we have the 
+--   similar effect of 'closeR' and raise the current label only when we
+--   wish to observe the value of @rD@.
 --
 --   Since @LrefD@ is an 'Lref' wrapper, we provide functions to construct,
 --   retrieve values from, raise the label of, and read the label of @LrefD@s.
