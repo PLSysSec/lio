@@ -4,6 +4,8 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 -- | This module implements the core of the Labeled IO library for
 -- information flow control in Haskell.  It provides a monad, 'LIO',
@@ -51,10 +53,13 @@ module LIO.TCB (
                , taint, taintP, taintL, taintLP
                , wguard, wguardP, aguard
                -- * References to labeled pure data (Lrefs)
-               , Lref
+               , LabeledRef(..)
+               , Lref, LDref
+               {-
                , lref, lrefP, unlrefP, labelOfR, labelOfRP
                , taintR, guardR, guardRP
                , openR, openRP, closeR, discardR
+               -}
                -- ** Lref monad transformer
                , LrefT(..)
                -- * Exceptions
@@ -87,6 +92,7 @@ import Control.Exception hiding (catch, throw, throwIO,
                                  onException, block, unblock)
 import qualified Control.Exception as E
 import Data.Monoid
+import Data.Maybe (fromJust)
 import Data.Typeable
 
 import LIO.MonadCatch
@@ -318,10 +324,12 @@ lrefTCB l a = LrefTCB l a
 -- and the value supplied.  The label supplied must be less than the
 -- current clarance, though the resulting label may not be if the
 -- 'Lref' is already above the current thread's clearance.
-taintR :: (Label l) => l -> Lref l a -> LIO l s (Lref l a)
-taintR l (LrefTCB la a) = do
+{-
+staintR :: (Label l) => l -> Lref l a -> LIO l s (Lref l a)
+staintR l (LrefTCB la a) = do
   aguard l
   return $ LrefTCB (lub l la) a
+-}
 
 -- | Checks that the label on an 'Lref' is below a specific label and
 -- below the current label, or else throws 'LerrLow'.  Can be used to
@@ -329,10 +337,12 @@ taintR l (LrefTCB la a) = do
 -- value.  Because the label of the 'Lref' must be below the current
 -- label, calling 'openR' on an 'Lref' that has passed a @guardR@
 -- check will not increase the current label.
-guardR :: (Label l) => l -> Lref l a -> LIO l s ()
-guardR l (LrefTCB la _) = do
+{-
+sguardR :: (Label l) => l -> Lref l a -> LIO l s ()
+sguardR l (LrefTCB la _) = do
   lcur <- currentLabel
   unless (la `leq` lcur && la `leq` l) $ throwIO LerrLow
+-}
 
 -- | Like 'guardR', but uses privileges when comparing the requested
 -- label to the current label so as to throw an exception in fewer
@@ -341,10 +351,12 @@ guardR l (LrefTCB la _) = do
 -- the privileges are not used to compare the label of the 'Lref' to
 -- the argument label; an exception is always thrown if the `Lref`\'s
 -- label cannot flow to the argument label.
-guardRP :: (Priv l p) => p -> l -> Lref l a -> LIO l s ()
-guardRP p l (LrefTCB la _) = do
+{-
+sguardRP :: (Priv l p) => p -> l -> Lref l a -> LIO l s ()
+sguardRP p l (LrefTCB la _) = do
   lcur <- currentLabel
   unless ((leqp p la lcur) && la `leq` l) $ throwIO LerrLow
+-}
 
 -- | Experimental: Try to use privileges to lower the label on an
 -- 'Lref' to 'lpure' and extract a pure value.  If this function
@@ -352,8 +364,10 @@ guardRP p l (LrefTCB la _) = do
 -- value.  If it fails, this function returns undefined, which means
 -- that the enclosing computation can still succeed if the result does
 -- not depend on the return value of 'unlrefP'.
-unlrefP :: Priv l p => p -> Lref l a -> a
-unlrefP p (LrefTCB l a) = if leqp p l lpure then a else undefined
+{-
+sunlrefP :: Priv l p => p -> Lref l a -> a
+sunlrefP p (LrefTCB l a) = if leqp p l lpure then a else undefined
+-}
 
 -- | Extracts the value from an 'Lref', discarding the label and any
 -- protection.
@@ -362,17 +376,21 @@ unlrefTCB (LrefTCB _ a) = a
 
 -- | If the the value of the 'Lref', @l@, can flow to the current
 -- label, returns @'Just' l@.  Otherwise returns 'Nothing'.
-labelOfR :: Label l => Lref l a -> LIO l s (Maybe l)
-labelOfR (LrefTCB la _) = do
+{-
+slabelOfR :: Label l => Lref l a -> LIO l s (Maybe l)
+slabelOfR (LrefTCB la _) = do
   lc <- currentLabel
   return $ if la `leq` lc then Just la else Nothing
+-}
 
 -- | Like 'labelOfR', but compares the `Lref`'s label to the current
 -- label using privileges so as to return 'Nothing' in fewer cases.
-labelOfRP :: Priv l p => p -> Lref l a -> LIO l s (Maybe l)
-labelOfRP p (LrefTCB la _) = do
+{-
+slabelOfRP :: Priv l p => p -> Lref l a -> LIO l s (Maybe l)
+slabelOfRP p (LrefTCB la _) = do
   lc <- currentLabel
   return $ if leqp p la lc then Just la else Nothing
+-}
   
 -- | Read the label of a labeled reference.  If doing this just to
 -- check that the label is low enough, it is simpler to use 'guardR'
@@ -407,7 +425,130 @@ lrefTLabelTCB :: (Monad m,Label l) => l -> LrefT l m ()
 lrefTLabelTCB l = LrefT $ return $ LrefTCB l ()
 
 
+-- | Class defining a labeled reference. Primarily used to have uniform
+--   label interface that 'Lref' and 'LDref' use.
+class (Label l, Monad lm) => LabeledRef l lm | lm -> l where
+  lref      :: l -> a -> LIO l s (lm a)
+  lrefP     :: Priv l p => p -> l -> a -> LIO l s (lm a)
+  unlrefP   :: Priv l p => p -> (lm a) -> a
+  labelOfR  :: (lm a) -> LIO l s (Maybe l)
+  labelOfRP :: Priv l p => p -> (lm a) -> LIO l s (Maybe l)
+  taintR    :: l -> (lm a) -> LIO l s (lm a)
+  guardR    :: l -> (lm a) -> LIO l s ()
+  guardRP   :: Priv l p => p -> l -> (lm a) -> LIO l s ()
+  openR     :: (lm a) -> LIO l s a
+  openRP    :: Priv l p => p -> (lm a) -> LIO l s a
+  closeR    :: LIO l s a -> LIO l s (lm a)
+  discardR  :: (LabeledRef l lm) => LIO l s a -> LIO l s ()
 
+instance (Label l) => LabeledRef l (Lref l) where
+  lref      = constrLabeledRef LrefTCB
+  lrefP     = constrLabeledRefP LrefTCB
+  unlrefP p (LrefTCB la a) = extractLabeledRefP p la a
+
+  labelOfR (LrefTCB la _) = do
+    lc <- currentLabel
+    return $ if la `leq` lc then Just la else Nothing
+
+  labelOfRP p (LrefTCB la _) = do
+    lc <- currentLabel
+    return $ if leqp p la lc then Just la else Nothing
+
+  taintR l (LrefTCB la a) = taintLabeledRef LrefTCB l la a
+  guardR l (LrefTCB la _) = guardLabeledRef l la
+  guardRP p l (LrefTCB la _) = guardLabeledRefP p l la
+  openR (LrefTCB la a) = openLabeledRef la a
+  openRP p (LrefTCB la a) = openLabeledRefP p la a
+  closeR    = closeLabeledRef LrefTCB
+  discardR m = let cR = closeR :: (Label l) => LIO l s a -> LIO l s (Lref l a)
+               in cR m >> return ()
+
+instance (Label l) => LabeledRef l (LDref l) where
+  lref      = constrLabeledRef LDrefTCB
+  lrefP     = constrLabeledRefP LDrefTCB
+  unlrefP p (LDrefTCB la a) = extractLabeledRefP p la a
+  labelOfR (LDrefTCB la _) = return $ Just la
+  labelOfRP _ (LDrefTCB la _) = return $ Just la
+  taintR l (LDrefTCB la a) = taintLabeledRef LDrefTCB l la a
+  guardR l (LDrefTCB la _) = guardLabeledRef l la
+  guardRP p l (LDrefTCB la _) = guardLabeledRefP p l la
+  openR (LDrefTCB la a) = openLabeledRef la a
+  openRP p (LDrefTCB la a) = openLabeledRefP p la a
+  closeR    = closeLabeledRef LDrefTCB
+  discardR m = let cR = closeR :: (Label l) => LIO l s a -> LIO l s (LDref l a)
+               in cR m >> return ()
+
+
+-- | @LDref@ is a refence to labeled data, similar to 'Lref', with the
+--   label covering /only/ the data.
+data (Label l) => LDref l t = LDrefTCB l t
+
+instance (Label l, Show a) => ShowTCB (LDref l a) where
+    showTCB (LDrefTCB l t) = shows t $ " {" ++ shows l "}"
+
+instance Label l => Functor (LDref l) where
+    fmap = liftM
+
+instance Label l => Applicative (LDref l) where
+    pure = return
+    (<*>) = ap
+
+instance Label l => Monad (LDref l) where
+    return x = LDrefTCB lpure x
+    (LDrefTCB l x) >>= f = let LDrefTCB l' y = f x in LDrefTCB (lub l l') y
+
+instance Label l => MonadFix (LDref l) where
+    mfix f = fix g
+        where g ~(LDrefTCB _ a) = f a
+
+constrLabeledRef :: (Label l, LabeledRef l lm) => (l -> a -> lm a) -> l -> a -> LIO l s (lm a)
+constrLabeledRef constrF l a = get >>= doit
+    where doit s | not $ l `leq` lioC s = throwIO LerrClearance
+                 | not $ lioL s `leq` l = throwIO LerrLow
+                 | otherwise            = return $ constrF l a
+
+constrLabeledRefP :: (Priv l p, Label l, LabeledRef l lm)
+                  => (l -> a -> lm a) -> p -> l -> a -> LIO l s (lm a)
+constrLabeledRefP constrF p l a = get >>= doit
+    where doit s | not $ l `leq` lioC s    = throwIO LerrClearance
+                 | not $ leqp p (lioL s) l = throwIO LerrLow
+                 | otherwise               = return $ constrF l a
+
+
+extractLabeledRefP :: (Label l, Priv l p) => p -> l -> a -> a
+extractLabeledRefP p la a = if leqp p la lpure then a else undefined
+
+taintLabeledRef :: (Label l,LabeledRef l lm)
+                => (l -> a -> lm a) -> l -> l -> a -> LIO l s (lm a)
+taintLabeledRef constrF l la a = do
+  aguard l
+  return $ constrF (lub l la) a
+
+guardLabeledRef :: (Label l) => l -> l -> LIO l s ()
+guardLabeledRef l la = do
+  lcur <- currentLabel
+  unless (la `leq` lcur && la `leq` l) $ throwIO LerrLow
+
+guardLabeledRefP :: (Priv l p) => p -> l -> l -> LIO l s ()
+guardLabeledRefP p l la = do
+  lcur <- currentLabel
+  unless ((leqp p la lcur) && la `leq` l) $ throwIO LerrLow
+
+openLabeledRef :: (Label l) => l -> a -> LIO l s a
+openLabeledRef la a = taintL la >> return a
+
+openLabeledRefP :: (Label l, Priv l p) => p -> l -> a -> LIO l s a
+openLabeledRefP p la a = taintLP p la >> return a
+
+closeLabeledRef :: (Label l, LabeledRef l lm)
+        => (l -> a -> lm a) -> LIO l s a -> LIO l s (lm a)
+closeLabeledRef constrF m = do
+  LIOstate { lioL = l, lioC = c } <- get
+  a <- m
+  s <- get
+  put s { lioL = l, lioC = c }
+  return $ constrF (lioL s) a
+----------------------------------------------------------------------------------------------------------------
 --
 -- Labeled IO
 --
@@ -446,11 +587,13 @@ put s = mkLIO $ \_ -> return (() , s)
 -- the current label is @lcurrent@ and the current clearance is
 -- @ccurrent@, then the label @l@ specified must satisfy
 -- @lcurrent ``leq`` l && l ``leq`` ccurrent@.
-lref :: (Label l) => l -> a -> LIO l s (Lref l a)
-lref l a = get >>= doit
+{-
+slref :: (Label l) => l -> a -> LIO l s (Lref l a)
+slref l a = get >>= doit
     where doit s | not $ l `leq` lioC s = throwIO LerrClearance
                  | not $ lioL s `leq` l = throwIO LerrLow
                  | otherwise            = return $ LrefTCB l a
+-}
 
 -- | Constructs an 'Lref' using privilege to allow the `Lref`'s label
 -- to be below the current label.  If the current label is @lcurrent@
@@ -460,11 +603,13 @@ lref l a = get >>= doit
 -- Note that privilege is not used to bypass the clearance.  You must
 -- use 'setClearanceP' to raise the clearance first if you wish to
 -- create an 'Lref' at a higher label than the current clearance.
-lrefP :: (Priv l p) => p -> l -> a -> LIO l s (Lref l a)
-lrefP p l a = get >>= doit
+{-
+slrefP :: (Priv l p) => p -> l -> a -> LIO l s (Lref l a)
+slrefP p l a = get >>= doit
     where doit s | not $ l `leq` lioC s    = throwIO LerrClearance
                  | not $ leqp p (lioL s) l = throwIO LerrLow
                  | otherwise               = return $ LrefTCB l a
+-}
 
 -- | Returns the current value of the thread's label.
 currentLabel :: (Label l) => LIO l s l
@@ -506,7 +651,7 @@ currentClearance = get >>= return . lioC
      when using 'leqp' instead of 'leq'.)  This is ensured by the
      'wguard' (write guard) function, which does the equivalent of
      'taint' to ensure the target label @ldata@ can flow to the
-     current label, then throws an exception if @ldata@ cannot flow
+     current label, then throws an exception if @lcurrent@ cannot flow
      back to the target label.
 
    * When /creating/ or /allocating/ objects, it is permissible for
@@ -702,20 +847,24 @@ withClearance l m = do
 -- to raise the current label above the current clearance to reflect
 -- the label of the 'Lref', yet the label of the 'Lref' itself may
 -- encode sensitive information).
-openR :: (Label l) => Lref l a -> LIO l s a
-openR (LrefTCB la a) = do
+{-
+sopenR :: (Label l) => Lref l a -> LIO l s a
+sopenR (LrefTCB la a) = do
   taintL la
   return a
+-}
 
 -- | Extracts the value of an 'Lref' just like 'openR', but takes a
 -- privilege argument to minimize the amount the current label must be
 -- raised.  Will still throw 'LerrClearance' under the same
 -- circumstances as 'openR', so see 'openR' for a caveat about the
 -- label of the thrown exception.
-openRP :: (Priv l p) => p -> Lref l a -> LIO l s a
-openRP p (LrefTCB la a) = do
+{-
+sopenRP :: (Priv l p) => p -> Lref l a -> LIO l s a
+sopenRP p (LrefTCB la a) = do
   taintLP p la
   return a
+-}
 
 -- |@closeR@ is the dual of @openR@.  It allows one to invoke
 -- computations that would raise the current label, but without
@@ -737,13 +886,15 @@ openRP p (LrefTCB la a) = do
 --
 -- This demonstrates one main use of clearance: to ensure that an Lref
 -- computed does not exceed a particular label.
-closeR :: (Label l) => LIO l s a -> LIO l s (Lref l a)
-closeR m = do
+{-
+scloseR :: (Label l) => LIO l s a -> LIO l s (Lref l a)
+scloseR m = do
   LIOstate { lioL = l, lioC = c } <- get
   a <- m
   s <- get
   put s { lioL = l, lioC = c }
   return $ LrefTCB (lioL s) a
+-}
 
 -- | Executes a computation that would raise the current label, but
 -- discards the result so as to keep the label the same.  Used when
@@ -759,8 +910,10 @@ closeR m = do
 -- course, if @log_handle@ is closed and this throws an exception, it
 -- may not be possible to catch the exception within the 'LIO' monad
 -- without sufficient privileges--see 'catchP'.)
-discardR :: (Label l) => LIO l s a -> LIO l s ()
-discardR m = closeR m >> return ()
+{-
+sdiscardR :: (Label l) => LIO l s a -> LIO l s ()
+sdiscardR m = scloseR m >> return ()
+-}
 
 -- | Returns label-specific state of the 'LIO' monad.  This is the
 -- data specified as the second argument of 'evalLIO', whose type is
