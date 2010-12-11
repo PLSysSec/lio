@@ -26,6 +26,7 @@ module LIO.Base (
 
 import LIO.TCB hiding ( 
                  ShowTCB(..)
+               , ReadTCB(..)
                , lrefTCB
                , lrefDTCB, closeRDTCB
                , PrivTCB, MintTCB(..)

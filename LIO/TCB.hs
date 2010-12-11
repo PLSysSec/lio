@@ -80,6 +80,7 @@ module LIO.TCB (
                -- Start TCB exports
                -- * Privileged operations
                , ShowTCB(..)
+               , ReadTCB(..)
                , lrefTCB
                , lrefDTCB, closeRDTCB
                , PrivTCB, MintTCB(..)
@@ -101,6 +102,7 @@ import Control.Exception hiding (catch, throw, throwIO,
 import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
+import Text.Read (minPrec)
 
 import LIO.MonadCatch
 
@@ -263,6 +265,34 @@ class MintTCB t i where
     -- priviledged code, other modules imported by unpriviledged code
     -- can define instances of mintTCB.
     mintTCB :: i -> t
+
+-- | It is useful to have the dual of 'ShowTCB', @ReadTCB@, that allows
+-- for the reading of 'Lref's that were written using 'showTCB'. Only
+-- @readTCB@ (corresponding to 'read') and @readsPrecTCB@ (corresponding
+-- to 'readsPrec') are implemented.
+class ReadTCB a where
+  readsPrecTCB :: Int -> ReadS a
+  readTCB :: String -> a
+  readTCB str = check $ readsPrecTCB minPrec str
+    where check []                          = error "readTCB: no parse"
+          check [(x,rst)] | all (==' ') rst = x
+                         | otherwise        = error "readTCB: no parse"
+          check _                           = error "readTCB: ambiguous parse"
+
+instance (Label l, Read l, Read a) => ReadTCB (Lref l a) where
+  readsPrecTCB _ str = do (val, str1) <- reads str
+                          ("{", str2) <- lex str1
+                          (lab, str3) <- reads str2
+                          ("}", rest) <- lex str3
+                          return (lrefTCB lab val, rest)
+
+instance (Label l, Read l, Read a) => ReadTCB (LrefD l a) where
+  readsPrecTCB _ str = do (val, str1) <- reads str
+                          ("{", str2) <- lex str1
+                          (lab, str3) <- reads str2
+                          ("}", rest) <- lex str3
+                          return (lrefDTCB lab val, rest)
+
 
 -- | @PrivTCB@ is a method-less class whose only purpose is to be
 -- unavailable to unprivileged code.  Since @(PrivTCB t) =>@ is in the
@@ -462,9 +492,6 @@ newtype LrefD l t = LrefDTCB {unLrefD :: Lref l t}
 
 instance (Label l, Show a) => ShowTCB (LrefD l a) where
     showTCB = showTCB . unLrefD
-
-instance (Label l) => Show (LrefD l a) where
-    show (LrefDTCB (LrefTCB l _)) =  " {" ++ shows l "}"
 
 -- | See 'lref'.
 lrefD :: (Label l) => l -> a -> LIO l s (LrefD l a)
