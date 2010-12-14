@@ -28,10 +28,12 @@ import LIO.TCB hiding (
                  ShowTCB(..)
                , ReadTCB(..)
                , lrefTCB
-               , lrefDTCB, closeRDTCB
+               , lrefDTCB
                , PrivTCB, MintTCB(..)
                , showTCB
                , unlrefTCB, labelOfRTCB, setLabelTCB, setClearanceTCB
+               , unlrefDTCB, labelOfRDTCB
+               , closeRDTCB
                , unliftLrefTTCB, lrefTLabelTCB  
                , getTCB, putTCB
                , ioTCB, rtioTCB

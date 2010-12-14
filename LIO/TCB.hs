@@ -82,11 +82,13 @@ module LIO.TCB (
                , ShowTCB(..)
                , ReadTCB(..)
                , lrefTCB
-               , lrefDTCB, closeRDTCB
+               , lrefDTCB
                , PrivTCB, MintTCB(..)
                , unlrefTCB, labelOfRTCB
+               , unlrefDTCB, labelOfRDTCB
                , unliftLrefTTCB, lrefTLabelTCB 
                , setLabelTCB, setClearanceTCB
+               , closeRDTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
@@ -509,9 +511,17 @@ lrefDTCB l a = LrefDTCB $ LrefTCB l a
 unlrefPD :: Priv l p => p -> LrefD l a -> a
 unlrefPD p = unlrefP p . unLrefD
 
+-- | See 'unlrefTCB'.
+unlrefDTCB :: Label l => LrefD l a -> a
+unlrefDTCB (LrefDTCB (LrefTCB _ a)) = a
+
 -- | Returns the label of the 'LrefD' regardless of the level of the current label.
 labelOfRD :: Label l => LrefD l a -> LIO l s l
 labelOfRD = return . labelOfRTCB . unLrefD
+
+-- | See 'labelOfRTCB'.
+labelOfRDTCB :: Label l => LrefD l a -> l
+labelOfRDTCB (LrefDTCB (LrefTCB l _)) = l
 
 -- | See 'taintR'.
 taintRD :: (Label l) => l -> LrefD l a -> LIO l s (LrefD l a)
