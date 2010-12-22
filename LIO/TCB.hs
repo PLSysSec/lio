@@ -85,7 +85,7 @@ module LIO.TCB (
                , lrefDTCB
                , PrivTCB, MintTCB(..)
                , unlrefTCB, labelOfRTCB
-               , unlrefDTCB, labelOfRDTCB
+               , unlrefDTCB
                , unliftLrefTTCB, lrefTLabelTCB 
                , setLabelTCB, setClearanceTCB
                , closeRDTCB
@@ -516,12 +516,8 @@ unlrefDTCB :: Label l => LrefD l a -> a
 unlrefDTCB (LrefDTCB (LrefTCB _ a)) = a
 
 -- | Returns the label of the 'LrefD' regardless of the level of the current label.
-labelOfRD :: Label l => LrefD l a -> LIO l s l
-labelOfRD = return . labelOfRTCB . unLrefD
-
--- | See 'labelOfRTCB'.
-labelOfRDTCB :: Label l => LrefD l a -> l
-labelOfRDTCB (LrefDTCB (LrefTCB l _)) = l
+labelOfRD :: Label l => LrefD l a -> l
+labelOfRD (LrefDTCB (LrefTCB l _)) = l
 
 -- | See 'taintR'.
 taintRD :: (Label l) => l -> LrefD l a -> LIO l s (LrefD l a)

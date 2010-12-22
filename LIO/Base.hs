@@ -32,7 +32,7 @@ import LIO.TCB hiding (
                , PrivTCB, MintTCB(..)
                , showTCB
                , unlrefTCB, labelOfRTCB, setLabelTCB, setClearanceTCB
-               , unlrefDTCB, labelOfRDTCB
+               , unlrefDTCB
                , closeRDTCB
                , unliftLrefTTCB, lrefTLabelTCB  
                , getTCB, putTCB

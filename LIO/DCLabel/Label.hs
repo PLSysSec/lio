@@ -38,7 +38,7 @@ module LIO.DCLabel.Label
     -- * Functions for sets of categories (DCSet)
     -- ** Straight set operations
     , dcsEmpty, dcsSingleton, dcsFromList, dcsFromPList, dcsAll
-    , dcsSubsetOf, dcsUnion, dcsIntersection
+    , dcsSubsetOf, dcsUnion, dcsIntersection, dcsMap
     -- ** Operations that reflect the disjunction property
     , dcsSubsumes, dcsUnion', dcsIntersection'
     , dclReduce
@@ -175,6 +175,8 @@ dcsUnion DCAll _               = DCAll
 dcsUnion _ DCAll               = DCAll
 dcsUnion (DCSet s1) (DCSet s2) = DCSet $ Set.union s1 s2
 
+
+
 dcsIntersection :: (DCType t) => DCSet t -> DCSet t -> DCSet t
 dcsIntersection DCAll s               = s
 dcsIntersection s DCAll               = s
@@ -193,6 +195,10 @@ hasCatSubsuming s c = s `hasCatSuchThat` (`dcSubsumes` c)
 dcsFilter             :: (DCType t) => (DCat t -> Bool) -> DCSet t -> DCSet t
 dcsFilter f (DCSet s) = DCSet $ Set.filter f s
 dcsFilter _ DCAll     = DCAll
+
+dcsMap              :: (DCType t) => (DCat t -> DCat t) -> DCSet t -> DCSet t
+dcsMap f (DCSet s) = DCSet $ Set.map f s
+dcsMap _ DCAll     = DCAll
 
 -- | Eliminate categories that are subsumed (see 'dcSubsumes') by
 -- other categories in the set.
