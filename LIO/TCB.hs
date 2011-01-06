@@ -74,7 +74,7 @@ module LIO.TCB (
                , LabelFault(..)
                -- ** Throwing and catching labeled exceptions
                -- $lexception
-               , MonadCatch(..), catchP, onExceptionP, bracketP
+               , MonadCatch(..), catchP, handleP, onExceptionP, bracketP
                -- * Executing computations
                , evalLIO
                -- Start TCB exports
@@ -93,13 +93,15 @@ module LIO.TCB (
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
                -- End TCB exports
+               , lvalue, Lvalue
+               , openRv
                ) where
 
 import Prelude hiding (catch)
 import Control.Applicative
 import Control.Monad.Error
 import Control.Monad.State.Lazy hiding (put, get)
-import Control.Exception hiding (catch, throw, throwIO,
+import Control.Exception hiding (catch, handle, throw, throwIO,
                                  onException, block, unblock)
 import qualified Control.Exception as E
 import Data.Monoid
@@ -1085,6 +1087,14 @@ catchP p m c = iomaps (\s m' -> m' `E.catch` doit s) m
                           else E.throw e
             _       -> E.throw e
 
+-- | Version of 'catchP' with arguments swapped.
+handleP :: (Label l, Exception e, Priv l p) =>
+                 p   -- ^ Privileges with which to downgrade exception
+              -> (l -> e -> LIO l s a) -- ^ Exception handler
+              -> LIO l s a             -- ^ Computation to run
+              -> LIO l s a             -- ^ Result of computation or handler
+handleP p = flip (catchP p)
+
 -- | 'onException' cannot run its handler if the label was raised in
 -- the computation that threw the exception.  This variant allows
 -- privileges to be supplied, so as to catch exceptions thrown with a
@@ -1127,3 +1137,107 @@ instance (Label l) => OnExceptionTCB (LIO l s) where
 instance (Label l) => MonadError IOException (LIO l s) where
     throwError = throwIO
     catchError = catch
+
+-- | New LIO approach.
+{-
+data (Label l, Monoid s) => LabeledState l s =
+  LabeledState { labelS :: s
+               , curLabel :: l
+               , curClearance :: l
+               }
+
+emptyLabeledState :: (Label l, Monoid s) => LabeledState l s
+emptyLabeledState = LabeledState mempty lpure lclear
+
+data (Label l, Monoid s) => Lvalue l s t = LvalueTCB l (LabeledState l s) t
+
+instance (Label l, Monoid s) => Monad (Lvalue l s) where
+  return x = LvalueTCB lpure emptyLabeledState x
+  (LvalueTCB l s x) >>= f = let (LvalueTCB l' s' x') = f x
+                                cL  = lub (curLabel s) (curLabel s')
+                                cC  = curClearance s' -- no need for glb with (curClearance s)
+                                ls = (labelS s) `mappend` (labelS s')
+                                s'' = LabeledState ls cL cC
+                                l'' =  l `lub` l' `lub` cL
+                             in checkAndCreateLvalue s'' l'' x'
+                             --will not actually have 'error' in real code
+    where checkAndCreateLvalue s l x | not $ (curLabel s) `leq` (curClearance s) = error "Context label exceeds clearance"
+                                     | not $ l `leq` (curClearance s) = error "Trying to create labeled value above current clearance"
+                                     | otherwise = LvalueTCB l s x
+
+-- For completeness:
+newtype (Label l, Monoid s) => LIOstate' l s = LIOstate' (LabeledState l s)
+
+labelState' :: (Label l, Monoid s) => LIOstate' l s -> s
+labelState' (LIOstate' s) = labelS s
+
+lioL' :: (Label l, Monoid s) => LIOstate' l s -> l
+lioL' (LIOstate' s) = curLabel s
+
+lioC' :: (Label l, Monoid s) => LIOstate' l s -> l
+lioC' (LIOstate' s) = curClearance s
+
+-- Unchanged definition:
+newtype (Label l, Monoid s) => LIO' l s a = LIO' (StateT (LIOstate' l s) IO a)
+
+instance (Label l, Monoid s) => Monad (LIO' l s) where
+  return x = LIO' (return x)
+  (LIO' (StateT x)) >>= f = LIO' . StateT $ \s -> do
+    (v, s') <- x s
+    let (LIO' (StateT x')) = (f v)
+    (v',s'') <- x' s'
+    let cL = (lioL' s') `lub` (lioL' s'')
+        cC = lioC' s''
+        cS = labelState' s''
+    if not $ cL `leq` cC
+      then error "Context label exceeds clearance"
+      else return (v', LIOstate' $ LabeledState cS cL cC)
+
+get' :: (Label l, Monoid s) => LIO' l s (LIOstate' l s)
+get' = LIO' . StateT $ \s -> return (s, s)
+
+put' :: (Label l, Monoid s) => LIOstate' l s -> LIO' l s ()
+put' s = LIO' . StateT $ \_ -> return (() , s)
+
+lref' :: (Label l, Monoid s) => l -> a -> LIO' l s (Lvalue l s a)
+lref' l a = get' >>= doit
+    where doit s@(LIOstate' ls) | not $ l `leq` lioC' s = error "Requested label exceed clearance" --later: throwIO LerrClearance
+                                | not $ lioL' s `leq` l = error "Requested label is below label" --later: throwIO LerrLow
+                                | otherwise             = return $ LvalueTCB l ls a
+-}
+
+data (Label l) => Lv l t = LvTCB l t -- same as Lref
+newtype (Label l) => Lvalue l s t = LvalueTCB (LIO l s (Lv l t)) -- the exported Lvalue
+
+instance (Label l) => Monad (Lvalue l s) where
+  return x = LvalueTCB $ get >>= \s -> return $ LvTCB (lioL s) x
+  (LvalueTCB lx) >>= f = LvalueTCB $ do
+    (LvTCB l x) <- lx
+    s <- get
+
+    let (LvalueTCB lx') = f x
+    (LvTCB l' x') <- lx'
+    s' <- get
+
+    let lc = (lioL s) `lub` (lioL s') -- upperbound of two contexts
+        cc = lioC s' -- clearance of the second action
+        lnew = l `lub` l' `lub` lc -- do not throw exception if label < context labe, raise it instead
+    clearGuard lc cc     -- check that context label < context clearance
+    clearGuard lnew cc   -- check that Lv label is < context clearance
+
+    put s' { lioL = lc }
+    return $ LvTCB lnew x'
+
+      where clearGuard l c | not $ l `leq` c = throwIO LerrClearance
+                           | otherwise       = return ()
+
+lvalue :: (Label l) => l -> t -> LIO l s (Lvalue l s t)
+lvalue l a = return . LvalueTCB $ get >>= doit
+    where doit s | not $ l `leq` lioC s = throwIO LerrClearance
+                 | otherwise            = return $ LvTCB (l `lub` lioL s) a
+
+openRv :: (Label l) => Lvalue l s t -> LIO l s t
+openRv (LvalueTCB lx) = do
+  (LvTCB l x) <- lx
+  taintL l
+  return x

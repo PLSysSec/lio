@@ -20,7 +20,7 @@ module LIO.Base (
                , lrefD, lrefPD, unlrefPD, labelOfRD
                , taintRD, openRD, openRPD
                , LabelFault(..)
-               , catchP, onExceptionP, bracketP
+               , catchP, onExceptionP, bracketP, handleP
                , evalLIO
                 ) where
 

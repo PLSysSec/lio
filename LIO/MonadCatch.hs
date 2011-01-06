@@ -19,6 +19,8 @@ class (Monad m) => MonadCatch m where
     unblock          :: m a -> m a
     throwIO          :: (Exception e) => e -> m a
     catch            :: (Exception e) => m a -> (e -> m a) -> m a
+    handle           :: (Exception e) => (e -> m a) -> m a -> m a
+    handle           = flip catch
     onException      :: m a -> m b -> m a
     onException io h = io `catch` \e -> h >> throwIO (e :: SomeException)
     bracket          :: m b -> (b -> m c) -> (b -> m a) -> m a
