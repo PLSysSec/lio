@@ -50,6 +50,7 @@ module LIO.DCLabel.Label
 
 import LIO.TCB
 
+import Control.DeepSeq
 import Control.Applicative
 import Data.List
 import Data.Maybe
@@ -59,6 +60,9 @@ import qualified Data.Set as Set
 import Data.Typeable
 
 newtype Principal = Principal String deriving (Eq, Ord)
+
+instance NFData Principal where
+  rnf (Principal p) = p `seq` ()
 
 instance Show Principal where
     showsPrec d (Principal s) = showsPrec d s
@@ -73,8 +77,10 @@ instance Read Principal where
 class (Show t) => DCType t where dcType :: t -> String
 data Secrecy = Secrecy deriving (Eq, Show)
 instance DCType Secrecy where dcType _ = "S"
+instance NFData Secrecy
 data Integrity = Integrity deriving (Eq, Show)
 instance DCType Integrity where dcType _ = "I"
+instance NFData Integrity
 
 -- | @DCat@ is the generalized type for disjunction categories.  A
 -- @DCat@ is a set of the 'Principals who own the category and can
@@ -85,6 +91,8 @@ instance DCType Integrity where dcType _ = "I"
 newtype (DCType t) => DCat t = DCat (Set Principal) deriving (Eq, Ord)
 type DCatS = DCat Secrecy
 type DCatI = DCat Integrity
+instance NFData (DCat t) where
+  rnf (DCat pSet) = pSet `deepseq` ()
 
 instance (DCType t) => Show (DCat t) where
     showsPrec _ (DCat c) = shows (Set.toList c)
@@ -146,6 +154,10 @@ data (DCType t) => DCSet t = DCSet (Set (DCat t))
                            | DCAll
                            -- ^ Theset of all possible categories
                              deriving (Eq, Typeable)
+
+instance (DCType t) => NFData (DCSet t) where
+  rnf (DCSet cSet) = cSet `deepseq` ()
+  rnf DCAll = ()
 
 dcsEmpty :: (DCType t) => DCSet t
 dcsEmpty = DCSet Set.empty
@@ -286,6 +298,9 @@ instance POrd DCLabel where
         s2 `dcsSubsumes` s1 && i1 `dcsSubsumes` i2
         -- i2 `dcsSubsetOf` i1 && s1 `dcsSubsetOf` s2
 
+instance NFData DCLabel where
+  rnf (DCLabel sSet iSet) = sSet `deepseq` iSet `deepseq` ()
+
 -- | Removes any categories that can be removed from a label without
 -- changing its security implications.  Specifically, any category is
 -- removed if it is subsumed by a different category that the label
@@ -314,6 +329,9 @@ instance MintTCB DCPrivs Principal where
 instance Monoid DCPrivs where
     mempty = DCPrivsTCB Set.empty
     mappend (DCPrivsTCB s1) (DCPrivsTCB s2) = DCPrivsTCB $ Set.union s1 s2
+
+instance NFData DCPrivs where
+  rnf (DCPrivsTCB pSet ) = pSet `deepseq` ()
 
 -- | Extract the set of 'Principal's from a 'DCPrivs' object.
 dcprivs                :: DCPrivs -> Set Principal

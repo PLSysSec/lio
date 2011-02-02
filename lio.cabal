@@ -35,7 +35,8 @@ Library
                  mtl >= 1.1.0.2 && < 2,
                  old-time >= 1 && < 2,
                  unix >= 2.3 && < 3,
-                 SHA >= 1.4.1.1 && < 2
+                 SHA >= 1.4.1.1 && < 2,
+                 deepseq >= 1.1.0.2 && < 2
 
   Exposed-modules:
     LIO.Armor,
