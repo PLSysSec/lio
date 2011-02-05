@@ -1,0 +1,357 @@
+\documentclass[10pt]{article} 
+\usepackage[margin=.5in]{geometry} 
+\usepackage{amsmath,amssymb,amsfonts,amsthm,stmaryrd,txfonts, mathabx}
+\usepackage{float}
+\usepackage{mathpartir}
+
+\date{\today}
+ 
+\newcommand{\Label}{\ell}
+\newcommand{\fix}{\texttt{fix}}
+\newcommand{\lvalue}{\texttt{lvalue}}
+\newcommand{\return}{\texttt{return}}
+\newcommand{\bind}{\texttt{>>=}}
+\newcommand{\seq}{\texttt{>>}}
+\newcommand{\Lvalue}{\texttt{Lvalue}}
+\newcommand{\Bool}{\texttt{Bool}}
+\newcommand{\true}{\texttt{true}}
+\newcommand{\false}{\texttt{false}}
+\newcommand{\ifel}[3]{\texttt{if}\ #1\ \texttt{then}\ #2\ \texttt{else}\ #3}
+\newcommand{\Lv}{\texttt{Lv}}
+\newcommand{\lub}{\sqcup}
+\newcommand{\glb}{\sqcap}
+\newcommand{\labelOf}{\mathcal{L}}
+\newcommand{\lL}{\texttt{L}}
+\newcommand{\lH}{\texttt{H}}
+\newcommand{\Adv}{\mathcal{A}}
+\newcommand{\open}{\texttt{open}}
+\newcommand{\nolabel}{\obslash}
+
+\floatstyle{ruled}
+\newfloat{typerules}{htbp}{lop} \floatname{typerules}{Typing Rule}
+\newfloat{labelrules}{htbp}{lop} \floatname{labelrules}{Labeling Rule}
+\newfloat{sos}{htbp}{lop} \floatname{sos}{Operational Semantics}
+\newfloat{language}{htbp}{lop} \floatname{language}{Language}
+
+\theoremstyle{plain}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+
+\begin{document} 
+%\setlength{\columnseprule}{.25pt}
+
+\begin{language}
+\begin{align*}
+\textrm{Lattice:}             && \mathbb{L} &= (L, \sqsubseteq, \lub, \glb, \bot, \top)                 \\
+\\
+\textrm{Label:}               && l &\\
+\\
+\textrm{Value:}               && v    &\Coloneqq   x                    \\ % variable
+                              &&      &\ |\  \lambda x.e                \\ % abstraction
+                              &&      &\ |\  (e, e)                     \\ % tuple
+                              &&      &\ |\  \Lv\ e\ e                  \\ % value of type Lvalue
+                              &&      &\ |\  \true                      \\ % value of type Bool
+                              &&      &\ |\  \false                     \\ % value of type Bool
+                              &&      &\ |\  l                          \\ % label
+                              &&      &\ |\  \fix\ e                    \\ % recursion
+\\
+\textrm{Term:}                && e    &\Coloneqq  v                     \\ % values
+                              &&      &\ |\  e\ e                       \\ % application
+                              &&      &\ |\  \ifel{e}{e}{e}             \\ % recursion
+                              &&      &\ |\  \pi_i\ e                   \\ % \pi_1 = fst, \pi_2 = snd
+                              &&      &\ |\  \return\ e                 \\ % return
+                              &&      &\ |\  \return^\prime\ e\ e       \\ % return
+                              &&      &\ |\  e\ \bind\ e                \\ % bind two expressions
+                              &&      &\ |\  e\ \seq\ e                 \\ % sequence two expressions
+                              &&      &\ |\  \open\ e                   \\ % open
+                              &&      &\ |\  e\ \lub\ e                 \\ % lub
+                              &&      &\ |\  e\ \glb\ e                 \\ % glb
+\\
+\textrm{Type:}                && \tau &\Coloneqq  \tau\rightarrow\tau   \\ % function
+                              &&      &\ |\  (\tau,\tau)                \\ % tuple
+                              &&      &\ |\  \Bool                      \\ % bool
+                              &&      &\ |\  \Label                     \\ % Label
+                              &&      &\ |\  \Lvalue\ \ell\ e           \\ % Lvalue
+\end{align*}
+\caption{Simple language, hiding underlying state label and clearance}
+\end{language}
+\begin{enumerate}
+\item $\Lv\ e\ e$ is the runtime representation of a labeled value and it does not appear in the source.
+\item The typing judgements are standard, $\Gamma : \textrm{Term} \rightarrow \textrm{Type}$.
+\item A term may have no label, e.g., $\vdash \true : \nolabel$. We define $\Delta : \textrm{Term} \rightarrow \textrm{Label}\cup \{\nolabel\}$. We use the meta-variables $k$ and $l$ in labelingrules, where $k\in\textrm{Label}\cup \{\nolabel\}$ and $l \in\textrm{Label}$.
+\item The function $\mathcal{L} : \textrm{Label} \rightarrow \mathbb{L}$ maps a labels to elements of latice $\mathbb{L}$, i.e., $\mathcal{L}\llbracket l\rrbracket \in \mathbb{L}\cup\{\bot,\top\}$. The label and lattice definitions may be definited arbitrarily as long as $\mathcal{L}$ is bijective.
+\end{enumerate}
+
+
+\begin{typerules}
+\begin{align}
+\inferrule{\Gamma(x)=\tau} 
+     {\Gamma \vdash x : \tau}\tag{T-Var}
+\\
+\inferrule{\Gamma[x \mapsto \tau_1] \vdash e : \tau_2} 
+     {\Gamma \vdash \lambda x.e : \tau_1 \rightarrow \tau_2}\tag{T-Abs}
+\\
+\inferrule{\Gamma \vdash e_1 : \tau_1 \\ \Gamma \vdash e_2 : \tau_2 }
+     {\Gamma \vdash (e_1,e_2) : (\tau_1, \tau_2)}\tag{T-Tup}
+\\
+\inferrule{\Gamma \vdash e_1 : \ell \\ \Gamma \vdash e_2 : \tau}
+     {\Gamma \vdash \Lv\ e_1\ e_2 : \Lvalue\ \ell\ \tau}\tag{T-Lv}
+\\
+\inferrule{}{\vdash \true : \Bool}\tag{T-True}
+\\
+\inferrule{}{\vdash \false : \Bool}\tag{T-False}
+\\
+\inferrule{}{\vdash l : \Label}\tag{T-Label}
+\\
+\inferrule{\Gamma \vdash e : \tau \rightarrow \tau}
+     {\Gamma \vdash \fix\ e : \tau}\tag{T-Fix}
+\\
+\inferrule{\Gamma \vdash e_1 : \tau_1 \rightarrow \tau_2 \\ \Gamma \vdash e_2 : \tau_1}
+     {\Gamma \vdash e_1\ e_2 : \tau_2}\tag{T-App}
+\\
+\inferrule{\Gamma \vdash e_1 : \Bool \\ \Gamma \vdash e_2 : \tau \\ \Gamma \vdash e_3 : \tau}
+     {\Gamma \vdash \ifel{e_1}{e_2}{e_3} : \tau}\tag{T-IfEl}
+\\
+\inferrule{\Gamma \vdash e : (\tau_1, \tau_2)}
+     {\Gamma \vdash \pi_i\ e : \tau_i}
+     {(i\in\{0,2\})}\tag{T-Proj}
+\\
+\inferrule{\Gamma[l_\bot \mapsto \ell]\vdash e : \tau}
+     {\Gamma \vdash \return\ e : \Lvalue\ \ell\ \tau}\tag{T-Ret?}
+\\
+\inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \Label}
+     {\Gamma \vdash \return^\prime\ e_1\ e_2: \Lvalue\ \ell\ \tau}\tag{T-Ret$^\prime$}
+\\
+\inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
+     {\Gamma \vdash e_1\ \bind\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Bind}
+\\
+\inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \Lvalue\ \ell\ \tau_2}
+     {\Gamma \vdash e_1\ \seq\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Seq}
+\\
+\inferrule{\Gamma \vdash e : \Lvalue\ \ell\ \tau}
+     {\Gamma \vdash \open\ e : \tau}\tag{T-Open}
+\\
+\inferrule{\Gamma \vdash e_1 : \Label\\ \Gamma \vdash e_2 : \Label}
+     {\Gamma \vdash e_1\ \lub\ e_2 : \Label}\tag{T-Join}
+\\
+\inferrule{\Gamma \vdash e_1 : \Label\\ \Gamma \vdash e_2 : \Label}
+     {\Gamma \vdash e_1\ \glb\ e_2 : \Label}\tag{T-Meet}
+\end{align}
+\caption{Simple type rules, hiding underlying state label and clearance}
+\end{typerules}
+
+
+
+
+\begin{labelrules}
+\begin{align}
+\inferrule{\Delta(x) = k}
+     {\Delta \vdash x : k}
+     \tag{L-Var}
+\\
+\inferrule{\Delta[x \mapsto k_1] \vdash e : k_2}
+     {\Delta \vdash \lambda x.e : k_2}\tag{L-Abs}
+\\
+\inferrule{\Delta \vdash e_1 : k_1 \\ \Delta \vdash e_2 : k_2}
+     {\Delta \vdash (e_1,e_2) : (k_1, k_2)}
+     \tag{L-Tup}
+\\
+\inferrule{\Delta \vdash e : k} {\Delta\vdash \Lv\ l\ e : l} \tag{L-Lv}
+\\
+\inferrule{}{\vdash \true : \nolabel}\tag{L-True}
+\\
+\inferrule{}{\vdash \false : \nolabel}\tag{L-False}
+\\
+\inferrule{}{\vdash l : \nolabel}\tag{L-Label}
+\\
+\inferrule{\Delta \vdash e : k}
+     {\Delta \vdash \fix\ e : k}\tag{L-Fix}
+\\
+\inferrule{\Delta \vdash e_2 : k_1 \\ \Delta [e_2 \mapsto k_1] \vdash e_1 : k_2}
+     {\Delta \vdash e_1\ e_2 : k_2}\tag{L-App}
+\\
+\inferrule{\pi_i (\true,\false) = c_i \\ \Delta \vdash e_i : k_i}
+     {\Delta \vdash \ifel{c_i}{e_1}{e_2} : k_i}
+     {(i\in\{0,2\})}\tag{L-IfElse}
+\\
+\inferrule{\Delta \vdash e_i : k_i}
+     {\Delta \vdash \pi_i\ (e_1, e_2) : k_i}
+     {(i\in\{0,2\})}\tag{L-Proj}
+\\
+\inferrule{\Delta \vdash e : k} {\Delta\vdash \return\ e : l_\bot} \tag{L-Ret?}
+\\
+\inferrule{\Delta \vdash e : k} {\Delta\vdash \return^\prime\ e\ l : l} \tag{L-Ret$^\prime$}
+\\
+\inferrule{\Delta \vdash e_1 : l_1\ \\ \Delta \vdash e_2 : l_2}
+     {\Delta \vdash e_1\ \bind\ e_2 : l_1\lub l_2}
+     \tag{L-Bind}
+\\
+\inferrule{\Delta \vdash e_1 : l_1\ \\ \Delta \vdash e_2 : l_2}
+     {\Delta \vdash e_1\ \seq\ e_2 : l_2}
+     \tag{L-Seq}
+\\
+\inferrule{\Delta \vdash e : l}
+     {\Delta \vdash \open\ e : k}\tag{L-Open}
+\\
+\inferrule{\Delta \vdash e_1 : \nolabel\\ \Delta \vdash e_2 : \nolabel}
+     {\Delta \vdash e_1\ \lub\ e_2 : \nolabel}\tag{L-Join}
+\\
+\inferrule{\Delta \vdash e_1 : \nolabel\\ \Delta \vdash e_2 : \nolabel}
+     {\Delta \vdash e_1\ \glb\ e_2 : \nolabel}\tag{L-Meet}
+\end{align}
+\caption{Unlabeled state labeling rules}
+\end{labelrules}
+
+
+\begin{sos}
+\begin{align*}
+&E     ::=  [\cdot]                    
+       \ |\  E\ e                       
+       \ |\  (E, e)                     
+       \ |\  (v, E)                     
+       \ |\  \ifel{E}{e}{e}
+       \ |\  \pi_i\ E                     
+       \ |\  \return\ E                 
+       \ |\  \return^\prime\ E\ l          
+       \ |\  E\ \diamond\ e                
+       \ |\  v\ \diamond\ E,\\&\textrm{where }\diamond = \{\bind, \seq, \lub, \glb\}
+       \\
+\\                                                                                                    
+&E[(\lambda x.e_1)\ e_2]                         \longrightarrow E[[e_2/x]e_1]          \tag{E-App}    \\
+&E[\fix\ e]                                      \longrightarrow E[e\ \fix\ e]          \tag{E-Fix}    \\
+&E[\ifel{\true}{e_1}{e_2}]                       \longrightarrow E[e_1]                 \tag{E-IfTrue} \\
+&E[\ifel{\false}{e_1}{e_2}]                      \longrightarrow E[e_2]                 \tag{E-IfFalse}\\
+&E[\pi_i\ (e_1,e_2)]                             \longrightarrow E[e_i]                 \tag{E-Proj}   \\
+&E[\return\ e]                                   \longrightarrow E[\return^\prime\ e\ l_\bot] \tag{E-Ret}    \\
+&E[\return^\prime\ e\ l]                         \longrightarrow E[\Lv\ l\ e]           \tag{E-Ret$^\prime$}  \\
+&\inferrule{[e_1/x]e_2 \longrightarrow^* \Lv\ l_2\ {e_2}^\prime}
+      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2] \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ (l_1\lub l_2)]}\tag{E-Bind} \\
+&E[\Lv\ l_1\ e_1\ \seq\ \lambda x.e_2] \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
+&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ e_1]\tag{E-Runit}\\
+&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1\rrbracket \lub\mathcal{L}\llbracket l_2\rrbracket}
+           {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]} \tag{E-Join}\\
+&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1\rrbracket \glb\mathcal{L}\llbracket l_2\rrbracket}
+           {E[l_1\ \glb\ l_2] \longrightarrow E[l_3]} \tag{E-Meet}\\
+\end{align*}
+\caption{Unlabeled state evaluation context}
+\end{sos}
+
+
+\pagebreak
+
+\subsection{Labeled state}
+We use the StateT monad with the underlying monad being IO and the state consisting of the current label and current clearance.
+Hence, the new labeled IO has type $ (\Label,\Label) \rightarrow \texttt{IO} (a, (\Label,\Label))$. Additionally, we parametrize $\Delta$ with a label and clearance transition: $\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime}$. An unparametrized label context $\Delta$ indicates that the labeling rule is valid regardless of the state label/clearance.
+  
+\begin{labelrules}
+\begin{align}
+\inferrule{\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash e : k \\ l \sqsubseteq l_1 \sqsubseteq c}
+     {\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash \return^\prime\ e\ l_1 : l_1}
+     \tag{L-Ret$^\prime$}
+\\
+\inferrule{\Delta^{c \rightarrow c}_{l \rightarrow l} \vdash e : l_1 \\ l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
+     {\Delta^{c\rightarrow c}_{l\rightarrow l^\prime} \vdash \open\ e : k}
+     \tag{L-Open}
+\end{align}
+\caption{Labeled state: \texttt{Lref}, showing only the changes form the unlabeled state rules}
+\end{labelrules}
+
+\begin{labelrules}
+\begin{align}
+\inferrule{\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash e : k}
+     {\Delta^{c \rightarrow c}_{l \rightarrow l} \vdash \return\ e : l}
+     \tag{L-Ret}
+\\
+\inferrule{\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash e : k \\ {l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
+     {\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash \return^\prime\ e\ l_1 : {l_1}^\prime}
+     \tag{L-Ret$^\prime$}
+\\
+\inferrule{\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime} \vdash e_1 : l_1\ \\ \Delta^{c^\prime\rightarrow c^\second}_{l^\prime\rightarrow l^\second} \vdash e_2 : l_2 \\ {l_2}^\prime=l_1\lub l_2 \lub l^\second \\ {l_2}^\prime\sqsubseteq c^\second}
+     {\Delta^{c\rightarrow c^\second}_{l\rightarrow l^\second} \vdash e_1\ \bind\ e_2 : {l_2}^\prime}
+     \tag{L-Bind}
+\\
+\inferrule{\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime} \vdash e_1 : l_1\ \\ \Delta^{c^\prime\rightarrow c^\second}_{l^\prime\rightarrow l^\second} \vdash e_2 : l_2 \\ {l_2}^\prime=l_2 \lub l^\second \\ {l_2}^\prime\sqsubseteq c^\second}
+     {\Delta^{c\rightarrow c^\second}_{l\rightarrow l^\second} \vdash e_1\ \seq\ e_2 : {l_2}^\prime}
+     \tag{L-Seq}
+\\
+\inferrule{\Delta^{c \rightarrow c}_{l \rightarrow l} \vdash e : l_1 \\ l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
+     {\Delta^{c\rightarrow c}_{l\rightarrow l^\prime} \vdash \open\ e : k}
+     \tag{L-Open}
+\end{align}
+\caption{Labeled state: \texttt{Lvalue}, showing only the changes form the unlabeled state rules}
+\end{labelrules}
+
+\pagebreak
+\subsection{OLD: Language properties}
+\begin{lemma}[Preservation]
+If $\vdash e : \tau$ and $e \longrightarrow e'$ then $\vdash e' : \tau$.
+\end{lemma}
+In other words, a well-typed term taking an evaluation step results in a term that is also well-typed.
+
+\begin{lemma}[Progress]
+If $\vdash e : \tau$ then $e \longrightarrow v$ or there exists $e'$ such that $e \longrightarrow e'$.
+\end{lemma}
+In other words, a closed and well-typed term is not stuck.
+
+\begin{theorem}[Type safety]
+If $\vdash e : \tau$ and $e \longrightarrow^* e'$ then $e'$ is not stuck.
+\end{theorem}
+
+\begin{lemma}[Type preservation under substitution]
+If $\Gamma[x \mapsto \tau] \vdash e : \tau'$ and $\Gamma \vdash v : \tau$ then $\Gamma \vdash [v/x]e : \tau'$.
+\end{lemma}
+
+\begin{definition}[Low-equivalence]
+Two inputs, each consisting of a pair of values with labels $\ell, \ell'$ such that $ \ell' \not\sqsubseteq\ell$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, for inputs $e_1, e_2$:
+\begin{equation*}
+\inferrule{(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i, \Lvalue\ \ell\ \tau_i))_{j=1,2} \\ (e_j\longrightarrow^* v_j)_{j=1,2}\\ \pi_2\ v_1 = \pi_2\ v_2}
+{e_1 =_L e_2}
+\end{equation*}
+\end{definition}
+
+\begin{theorem}[Non-interference]
+Given labels $\ell, \ell'$ such that $ \ell' \not\sqsubseteq\ell$, an attacker $\Adv$ with clearance $c_\Adv$ such that $\ell \sqsubseteq c_\Adv$ and $\ell' \not\sqsubseteq c_\Adv$, and a pure computation $e$ such that $\Gamma \vdash e : (\Lvalue\ \ell'\ \tau'_i, \Lvalue\ \ell\ \tau_i) \rightarrow (\Lvalue\ \ell'\ \tau'_o, \Lvalue\ \ell\ \tau_o)$, then
+\begin{equation*}
+\forall e_1 e_2.(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i,\Lvalue\ \ell\ \tau_i))_{j=1,2}
+\wedge e_1 =_L e_2 \wedge  e\ e_1 \longrightarrow^* v_1 \wedge e\ e_2 \longrightarrow^* v_2\ \Rightarrow v_1 =_L v_2.
+\end{equation*}
+\end{theorem}
+
+In other words, given two inputs, each consisting of a pair of values with a public and secret labels, the result of the computation as observed by the attacker (at label level $c_\Adv$) is not distinguishable.
+
+
+\subsection{Example:} 
+\begin{equation*}
+                 \Lv\ \lL\ 1\ \bind\ \lambda x.
+                  \Lv\ \lH\ 2\ \bind\ \lambda y.
+                  \return\ (x + y), \textrm{for }\ell_\bot \sqsubseteq \lL \sqsubseteq \lH \sqsubseteq \top\\
+\end{equation*}
+{\bf Solution: }
+\begin{align*}
+                & \Lv\ \lL\ 1\ \bind\ \lambda x.
+                  \Lv\ \lH\ 2\ \bind\ \lambda y.
+                  \return\ (x + y) \\
+\longrightarrow &\Lv\ \lH\ 2\ \bind\ \lambda y.  \return\ (1 + y)\longrightarrow^* \Lv\ \lH\ 3 
+    \Rightarrow   \Lv\ \lH\ 2\ \bind\ \lambda y.
+                  \return\ (1 + y)\
+                  \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\\
+\longrightarrow & \return\ (1 + 2)\ \bind\ \lambda x.\return'\ x\ (\lL\lub\lH) \longrightarrow^* \Lv\ \lH\ 3 
+    \Rightarrow   \return\ (1 + 2)\
+                  \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\
+                  \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
+\longrightarrow & \return'\ (1 + 2)\ \ell_\bot\
+                  \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\
+                  \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
+\longrightarrow & \Lv\ \ell_\bot\ (1 + 2)\ 
+                  \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\
+                  \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
+\longrightarrow & \Lv\ (\ell_\bot\lub\lL\lub\lH)\ (1 + 2)\ 
+                  \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
+\longrightarrow & \Lv\ (\ell_\bot\lub\lL\lub\lH\lub\lH)\ (1 + 2)\\
+\longrightarrow & \Lv\ \lH\ (1 + 2)\\
+\longrightarrow & \Lv\ \lH\ 3\\
+\end{align*}
+\end{document} 
