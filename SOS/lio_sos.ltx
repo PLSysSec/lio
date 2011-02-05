@@ -82,7 +82,8 @@
 \item $\Lv\ e\ e$ is the runtime representation of a labeled value and it does not appear in the source.
 \item The typing judgements are standard, $\Gamma : \textrm{Term} \rightarrow \textrm{Type}$.
 \item A term may have no label, e.g., $\vdash \true : \nolabel$. We define $\Delta : \textrm{Term} \rightarrow \textrm{Label}\cup \{\nolabel\}$. We use the meta-variables $k$ and $l$ in labelingrules, where $k\in\textrm{Label}\cup \{\nolabel\}$ and $l \in\textrm{Label}$.
-\item The function $\mathcal{L} : \textrm{Label} \rightarrow \mathbb{L}$ maps a labels to elements of latice $\mathbb{L}$, i.e., $\mathcal{L}\llbracket l\rrbracket \in \mathbb{L}\cup\{\bot,\top\}$. The label and lattice definitions may be definited arbitrarily as long as $\mathcal{L}$ is bijective.
+\item The function $\mathcal{L} : \textrm{Label} \rightarrow \mathbb{L}$ maps a labels to elements of latice $\mathbb{L}$, i.e., $\mathcal{L}\llbracket l\rrbracket \in \mathbb{L}\cup\{\bot,\top\}$. The label and lattice definitions may be definited arbitrarily as long as $\mathcal{L}$ is bijective. Additionally, $\mathcal{L}$ is homorphically be defined over label operations, so 
+$\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \lub \mathcal{L} \llbracket l_2\rrbracket$, and similarly $\mathcal{L}\llbracket l_1 \glb\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \glb \mathcal{L} \llbracket l_2\rrbracket$.
 \end{enumerate}
 
 
@@ -231,9 +232,9 @@
       {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2] \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ (l_1\lub l_2)]}\tag{E-Bind} \\
 &E[\Lv\ l_1\ e_1\ \seq\ \lambda x.e_2] \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
 &E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ e_1]\tag{E-Runit}\\
-&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1\rrbracket \lub\mathcal{L}\llbracket l_2\rrbracket}
+&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \lub l_2\rrbracket}
            {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]} \tag{E-Join}\\
-&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1\rrbracket \glb\mathcal{L}\llbracket l_2\rrbracket}
+&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \glb l_2\rrbracket}
            {E[l_1\ \glb\ l_2] \longrightarrow E[l_3]} \tag{E-Meet}\\
 \end{align*}
 \caption{Unlabeled state evaluation context}
