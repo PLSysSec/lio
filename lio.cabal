@@ -44,6 +44,7 @@ Library
     LIO.DCLabel,
     LIO.DCLabel.Label,
     LIO.DCLabel.PrivStore,
+    LIO.DCLabel.NanoEDSL,
     LIO.FS,
     LIO.Handle,
     LIO.HiStar,

@@ -88,27 +88,65 @@ dcsetToPExpr (DCSet cs) = let es = map dcatToPExpr $ Set.toList cs
                           in foldr1 (BinPExpr And) es
 -}
 
--- | Given two expressions, one for secrecy and another for integrity, convert it to a 'DCLabel'.
-exprToDCLabel :: PExpr -- ^ Secrecy expression
-              -> PExpr -- ^ Integrity expression
-              -> DCLabel
-exprToDCLabel e1 e2 = DCLabel (exprToDCSet Secrecy e1) (exprToDCSet Integrity e2)
+-- | Given two expressions (or 'String's or 'Principal's), one for secrecy and
+-- another for integrity, convert it to a 'DCLabel'.
+class ExprOrStringToDCLabel a b where
+  exprToDCLabel :: a -- ^ Secrecy expression
+                -> b -- ^ Integrity expression
+                -> DCLabel
 
--- | Given a 'DCType' and expression turn it into a category-set.
-exprToDCSet :: (DCType t)
-            => t        -- ^ Type of category-set
-            -> PExpr    -- ^ Expression to convert
-            -> DCSet t
-exprToDCSet _ AllPrincipals = dcsAll
-exprToDCSet _ NoPrincipal = dcsEmpty
-exprToDCSet t (PrincipalPExpr p) = dcsSingleton $ dcFromList t [p]
-exprToDCSet t expr = if isAllPrincipals expr
-                       then dcsAll
-                       else binExprToDCSet t expr
-  where isAllPrincipals AllPrincipals = True
-        isAllPrincipals NoPrincipal = False
-        isAllPrincipals (PrincipalPExpr _) = False
-        isAllPrincipals (BinPExpr _ e1 e2) = isAllPrincipals e1 || isAllPrincipals e2
+instance ExprOrStringToDCLabel PExpr PExpr where
+  exprToDCLabel e1 e2 = DCLabel (exprToDCSet Secrecy e1) (exprToDCSet Integrity e2)
+
+instance ExprOrStringToDCLabel Principal PExpr where
+  exprToDCLabel p e = DCLabel (dcsFromPList [p]) (exprToDCSet Integrity e)
+
+instance ExprOrStringToDCLabel PExpr Principal where
+  exprToDCLabel e p = DCLabel (exprToDCSet Secrecy e) (dcsFromPList [p]) 
+
+instance ExprOrStringToDCLabel Principal Principal where
+  exprToDCLabel p1 p2 = DCLabel (dcsFromPList [p1]) (dcsFromPList [p2]) 
+
+-- | On Strings:
+instance ExprOrStringToDCLabel String PExpr where
+  exprToDCLabel p e = DCLabel (dcsFromPList [Principal p]) (exprToDCSet Integrity e)
+
+instance ExprOrStringToDCLabel PExpr String where
+  exprToDCLabel e p = DCLabel (exprToDCSet Secrecy e) (dcsFromPList [Principal p]) 
+
+instance ExprOrStringToDCLabel String String where
+  exprToDCLabel p1 p2 = DCLabel (dcsFromPList [Principal p1]) (dcsFromPList [Principal p2]) 
+
+instance ExprOrStringToDCLabel String Principal where
+  exprToDCLabel p1 p2 = DCLabel (dcsFromPList [Principal p1]) (dcsFromPList [p2]) 
+
+instance ExprOrStringToDCLabel Principal String where
+  exprToDCLabel p1 p2 = DCLabel (dcsFromPList [p1]) (dcsFromPList [Principal p2]) 
+
+-- | Given a 'DCType' and expression, 'String', or 'Principal' turn it into a category-set.
+class ExprOrStringToDCSet a where
+  exprToDCSet :: (DCType t)
+              => t -- ^ Type of category-set
+              -> a -- ^ Expression to convert
+              -> DCSet t
+
+instance ExprOrStringToDCSet Principal where
+  exprToDCSet t p = dcsSingleton $ dcFromList t [p]
+
+instance ExprOrStringToDCSet String where
+  exprToDCSet t p = dcsSingleton $ dcFromList t [Principal p]
+
+instance ExprOrStringToDCSet PExpr where
+  exprToDCSet _ AllPrincipals = dcsAll
+  exprToDCSet _ NoPrincipal = dcsEmpty
+  exprToDCSet t (PrincipalPExpr p) = dcsSingleton $ dcFromList t [p]
+  exprToDCSet t expr = if isAllPrincipals expr
+                         then dcsAll
+                         else binExprToDCSet t expr
+    where isAllPrincipals AllPrincipals = True
+          isAllPrincipals NoPrincipal = False
+          isAllPrincipals (PrincipalPExpr _) = False
+          isAllPrincipals (BinPExpr _ e1 e2) = isAllPrincipals e1 || isAllPrincipals e2
 
 -- | Convert a binary expression that does not have 'AllPrincipals' into a 'DCSet'.
 binExprToDCSet :: (DCType t) => t -> PExpr -> DCSet t
