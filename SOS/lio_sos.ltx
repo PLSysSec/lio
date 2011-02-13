@@ -226,16 +226,18 @@ where bind and return operate on the underlying monad, and the error function re
 
 \begin{sos}
 \begin{align*}
-&&&E[\return\ e] \xrightarrow[l\rightarrow l]{c\rightarrow c} E[\Lv\ l\ e] \tag{E-Ret}  \\
+&&&E_l^c[\return\ e] \longrightarrow E_l^c[\Lv\ l\ e] \tag{E-Ret}  \\
 &&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
-      {E[\return^\prime\ e\ l_1] \xrightarrow[l\rightarrow l]{c\rightarrow c} E[\Lv\ l_1\ e]} \tag{E-Ret$^\prime$}  \\
-&&&\inferrule{[e_1/x]e_2 \xrightarrow[l\rightarrow l^\second]{c\rightarrow c^\second}^* \Lv\ l_2\ {e_2}^\prime\\ {l_2}^\prime=l_1\lub l_2 \lub l^\second \\ {l_2}^\prime\sqsubseteq c^\second}
-      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]      \xrightarrow[l\rightarrow l^\second]{c\rightarrow c^\second} E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ {l_2}^\prime)}\tag{E-Bind} \\
-&&&\inferrule{{l_1}^\prime = l_1\lub l_2 \\ {l_1}^\prime \subseteq c}{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \xrightarrow[l\rightarrow l]{c\rightarrow c} E[\Lv\ l_1^\prime\ e_1]}\tag{E-Runit}\\
+      {E_l^c[\return^\prime\ e\ l_1] \longrightarrow E_l^c[\Lv\ l_1\ e]} \tag{E-Ret$^\prime$}  \\
+&&&\inferrule{E_l^c[[e_1/x]e_2] \longrightarrow^* E_{l^\prime}^c[\Lv\ l_2\ {e_2}^\prime]\\ {l_2}^\prime=l_1\lub l_2 \lub l^\prime \\ {l_2}^\prime\sqsubseteq c}
+      {E_l^c[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]   \longrightarrow E_{l^\prime}^c[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ {l_2}^\prime]}\tag{E-Bind} \\
+&&&\inferrule{{l_1}^\prime = l_1\lub l_2 \\ {l_1}^\prime \sqsubseteq c}{E_l^c[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \longrightarrow E_l^c[\Lv\ l_1^\prime\ e_1]}\tag{E-Runit}\\
+&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
+      {E_l^c[\seal\ e\ l_1] \longrightarrow E_l^c[\Lv\ l_1\ e]} \tag{E-Seal}  \\
 &&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
       {E[\open\ \Lv\ l_1\ e_1] \xrightarrow[l\rightarrow l^\prime]{c\rightarrow c} E[e_1]} \tag{E-Open}  \\
 \end{align*}
-\caption{Labeled state: \texttt{Lvalue}, showing only the changes from non-parametrized evaluation relation.}
+\caption{Semantics for terms with side effects; \texttt{Lvalue} case}
 \end{sos}
 
 
