@@ -17,6 +17,7 @@
 \newcommand{\true}{\texttt{true}}
 \newcommand{\false}{\texttt{false}}
 \newcommand{\ifel}[3]{\texttt{if}\ #1\ \texttt{then}\ #2\ \texttt{else}\ #3}
+\newcommand{\letbind}[3]{\texttt{let}\ #1=#2\ \texttt{in}\ #3}
 \newcommand{\Lv}{\texttt{Lv}}
 \newcommand{\lub}{\sqcup}
 \newcommand{\glb}{\sqcap}
@@ -41,7 +42,6 @@
 \newtheorem{definition}{Definition}
 
 \begin{document} 
-%\setlength{\columnseprule}{.25pt}
 
 \begin{language}
 \begin{align*}
@@ -61,6 +61,7 @@
 \textrm{Term:}                && e    &\Coloneqq  v                     \\ % values
                               &&      &\ |\  e\ e                       \\ % application
                               &&      &\ |\  \ifel{e}{e}{e}             \\ % recursion
+                              &&      &\ |\  \letbind{x}{e}{e}          \\ % let-bindings
                               &&      &\ |\  \pi_i\ e                   \\ % \pi_1 = fst, \pi_2 = snd
                               &&      &\ |\  \return\ e                 \\ % return
                               &&      &\ |\  \return^\prime\ e\ e       \\ % return
@@ -116,6 +117,9 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
 \inferrule{\Gamma \vdash e_1 : \Bool \\ \Gamma \vdash e_2 : \tau \\ \Gamma \vdash e_3 : \tau}
      {\Gamma \vdash \ifel{e_1}{e_2}{e_3} : \tau}\tag{T-IfEl}
 \\
+\inferrule{\Gamma \vdash e_1 : \tau_1 \\ \Gamma [x \mapsto \tau_1] \vdash e_2 : \tau_2}
+     {\Gamma \vdash \letbind{x}{e_1}{e_2} : \tau_2}\tag{T-Let}
+\\
 \inferrule{\Gamma \vdash e : (\tau_1, \tau_2)}
      {\Gamma \vdash \pi_i\ e : \tau_i}
      {(i\in\{0,2\})}\tag{T-Proj}
@@ -143,8 +147,6 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
 \end{align}
 \caption{Simple type rules, hiding underlying state label and clearance}
 \end{typerules}
-
-
 
 
 \begin{labelrules}
@@ -178,6 +180,9 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
      {\Delta \vdash \ifel{c_i}{e_1}{e_2} : k_i}
      {(i\in\{0,2\})}\tag{L-IfElse}
 \\
+\inferrule{\Delta \vdash e_1 : k_1 \\ \Delta [x \mapsto k_1] \vdash e_2 : k_2}
+     {\Delta \vdash \letbind{x}{e_1}{e_2} : k_2}\tag{L-Let}
+\\
 \inferrule{\Delta \vdash e_i : k_i}
      {\Delta \vdash \pi_i\ (e_1, e_2) : k_i}
      {(i\in\{0,2\})}\tag{L-Proj}
@@ -209,32 +214,39 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
 
 \begin{sos}
 \begin{align*}
-&E     ::=  [\cdot]                    
+&&E&   ::=  [\cdot]                    
        \ |\  E\ e                       
        \ |\  (E, e)                     
        \ |\  (v, E)                     
        \ |\  \ifel{E}{e}{e}
+       \ |\  \letbind{x}{E}{e}
        \ |\  \pi_i\ E                     
-       \ |\  \return\ E                 
+       \ |\  \open\ E                 
+       \\
+&&&    \ |\  \return\ E                 
        \ |\  \return^\prime\ E\ l          
        \ |\  E\ \diamond\ e                
-       \ |\  v\ \diamond\ E,\\&\textrm{where }\diamond = \{\bind, \seq, \lub, \glb\}
+       \ |\  v\ \diamond\ E, \textrm{where }\diamond = \{\bind, \seq, \lub, \glb\}
        \\
 \\                                                                                                    
-&E[(\lambda x.e_1)\ e_2]                         \longrightarrow E[[e_2/x]e_1]          \tag{E-App}    \\
-&E[\fix\ e]                                      \longrightarrow E[e\ \fix\ e]          \tag{E-Fix}    \\
-&E[\ifel{\true}{e_1}{e_2}]                       \longrightarrow E[e_1]                 \tag{E-IfTrue} \\
-&E[\ifel{\false}{e_1}{e_2}]                      \longrightarrow E[e_2]                 \tag{E-IfFalse}\\
-&E[\pi_i\ (e_1,e_2)]                             \longrightarrow E[e_i]                 \tag{E-Proj}   \\
-&E[\return\ e]                                   \longrightarrow E[\return^\prime\ e\ l_\bot] \tag{E-Ret}    \\
-&E[\return^\prime\ e\ l]                         \longrightarrow E[\Lv\ l\ e]           \tag{E-Ret$^\prime$}  \\
-&\inferrule{[e_1/x]e_2 \longrightarrow^* \Lv\ l_2\ {e_2}^\prime}
-      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2] \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ (l_1\lub l_2)]}\tag{E-Bind} \\
-&E[\Lv\ l_1\ e_1\ \seq\ \lambda x.e_2] \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
-&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ e_1]\tag{E-Runit}\\
-&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \lub l_2\rrbracket}
-           {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]} \tag{E-Join}\\
-&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \glb l_2\rrbracket}
+&&&E[(\lambda x.e_1)\ e_2]                         \longrightarrow E[[e_2/x]e_1]          \tag{E-App}    \\
+&&&E[\fix\ e]                                      \longrightarrow E[e\ \fix\ e]          \tag{E-Fix}    \\
+&&&E[\ifel{\true}{e_1}{e_2}]                       \longrightarrow E[e_1]                 \tag{E-IfTrue} \\
+&&&E[\ifel{\false}{e_1}{e_2}]                      \longrightarrow E[e_2]                 \tag{E-IfFalse}\\
+&&&\inferrule{e_1 \longrightarrow {e_1}^\prime}
+   {E[\letbind{x}{e_1}{e_2}]                       \longrightarrow E[\letbind{x}{{e_1}^\prime}{e_2}]}         \tag{E-Let}    \\
+&&&E[\letbind{x}{v}{e}]                            \longrightarrow E[[v/x]e]                                  \tag{E-LetVal} \\
+&&&E[\pi_i\ (e_1,e_2)]                             \longrightarrow E[e_i]                 \tag{E-Proj}   \\
+&&&E[\return\ e]                                   \longrightarrow E[\return^\prime\ e\ l_\bot] \tag{E-Ret}    \\
+&&&E[\return^\prime\ e\ l]                         \longrightarrow E[\Lv\ l\ e]           \tag{E-Ret$^\prime$}  \\
+&&&\inferrule{[e_1/x]e_2 \longrightarrow^* \Lv\ l_2\ {e_2}^\prime}
+      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]      \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ (l_1\lub l_2)]}\tag{E-Bind} \\
+&&&E[\Lv\ l_1\ e_1\ \seq\ e_2]                     \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
+&&&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ e_1]\tag{E-Runit}\\
+&&& E[\open\ \Lv\ l\ e]                            \longrightarrow E[e]                    \tag{E-Open}  \\
+&&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \lub l_2\rrbracket}
+            {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]} \tag{E-Join}\\
+&&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \glb l_2\rrbracket}
            {E[l_1\ \glb\ l_2] \longrightarrow E[l_3]} \tag{E-Meet}\\
 \end{align*}
 \caption{Unlabeled state evaluation context}
@@ -245,11 +257,12 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
 
 \subsection{Labeled state}
 We use the StateT monad with the underlying monad being IO and the state consisting of the current label and current clearance.
-Hence, the new labeled IO has type $ (\Label,\Label) \rightarrow \texttt{IO} (a, (\Label,\Label))$. Additionally, we parametrize $\Delta$ with a label and clearance transition: $\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime}$. An unparametrized label context $\Delta$ indicates that the labeling rule is valid regardless of the state label/clearance.
+Hence, the new labeled IO has type $ (\Label,\Label) \rightarrow \texttt{IO} (\tau, (\Label,\Label))$. Additionally, we parametrize $\Delta$ with a label and clearance transition: $\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime}$, where $l \sqsubseteq l^\prime \land c^\prime \sqsubseteq c \land l^\prime \sqsubseteq c^\prime$. An unparametrized label context $\Delta$ indicates that the labeling rule is valid regardless of the state label/clearance transition.
+
   
 \begin{labelrules}
 \begin{align}
-\inferrule{\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash e : k \\ l \sqsubseteq l_1 \sqsubseteq c}
+\inferrule{\Delta \vdash e : k \\ l \sqsubseteq l_1 \sqsubseteq c}
      {\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash \return^\prime\ e\ l_1 : l_1}
      \tag{L-Ret$^\prime$}
 \\
@@ -260,13 +273,14 @@ Hence, the new labeled IO has type $ (\Label,\Label) \rightarrow \texttt{IO} (a,
 \caption{Labeled state: \texttt{Lref}, showing only the changes form the unlabeled state rules}
 \end{labelrules}
 
+
 \begin{labelrules}
 \begin{align}
-\inferrule{\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash e : k}
+\inferrule{\Delta \vdash e : k}
      {\Delta^{c \rightarrow c}_{l \rightarrow l} \vdash \return\ e : l}
      \tag{L-Ret}
 \\
-\inferrule{\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash e : k \\ {l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
+\inferrule{\Delta \vdash e : k \\ {l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
      {\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash \return^\prime\ e\ l_1 : {l_1}^\prime}
      \tag{L-Ret$^\prime$}
 \\
@@ -286,25 +300,66 @@ Hence, the new labeled IO has type $ (\Label,\Label) \rightarrow \texttt{IO} (a,
 \end{labelrules}
 
 \pagebreak
-\subsection{OLD: Language properties}
+Alternatively, we parametrize the evaluation relation with a label and clearance transition: $\xrightarrow[l\rightarrow l^\prime]{c\rightarrow c^\prime}$.
+\begin{sos}
+\begin{align*}
+&&&\inferrule{l \sqsubseteq l_1 \sqsubseteq c}
+      {E[\return^\prime\ e\ l_1] \xrightarrow[l\rightarrow l]{c\rightarrow c} E[\Lv\ l\ e]} \tag{E-Ret$^\prime$}  \\
+&&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
+      {E[\open\ \Lv\ l_1\ e_1] \xrightarrow[l\rightarrow l^\prime]{c\rightarrow c} E[e_1]} \tag{E-Open}  \\
+\end{align*}
+\caption{Labeled state: \texttt{Lref}, showing only the changes from non-parametrized evaluation relation.}
+\end{sos}
+
+\begin{sos}
+\begin{align*}
+&&&E[\return\ e] \xrightarrow[l\rightarrow l]{c\rightarrow c} E[\Lv\ l\ e] \tag{E-Ret}  \\
+&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
+      {E[\return^\prime\ e\ l_1] \xrightarrow[l\rightarrow l]{c\rightarrow c} E[\Lv\ l_1\ e]} \tag{E-Ret$^\prime$}  \\
+&&&\inferrule{[e_1/x]e_2 \xrightarrow[l\rightarrow l^\second]{c\rightarrow c^\second}^* \Lv\ l_2\ {e_2}^\prime\\ {l_2}^\prime=l_1\lub l_2 \lub l^\second \\ {l_2}^\prime\sqsubseteq c^\second}
+      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]      \xrightarrow[l\rightarrow l^\second]{c\rightarrow c^\second} E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ {l_2}^\prime)}\tag{E-Bind} \\
+&&&\inferrule{{l_1}^\prime = l_1\lub l_2 \\ {l_1}^\prime \subseteq c}{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \xrightarrow[l\rightarrow l]{c\rightarrow c} E[\Lv\ l_1^\prime\ e_1]}\tag{E-Runit}\\
+&&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
+      {E[\open\ \Lv\ l_1\ e_1] \xrightarrow[l\rightarrow l^\prime]{c\rightarrow c} E[e_1]} \tag{E-Open}  \\
+\end{align*}
+\caption{Labeled state: \texttt{Lvalue}, showing only the changes from non-parametrized evaluation relation.}
+\end{sos}
+
+
+\pagebreak
+\subsection{Language properties}
+
 \begin{lemma}[Preservation]
-If $\vdash e : \tau$ and $e \longrightarrow e'$ then $\vdash e' : \tau$.
+If $\vdash e : \tau$ and $\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime} \vdash e : l$ and $e \longrightarrow e^\prime$ then $\vdash e^\prime : \tau$ and $\Delta^{c^\prime\rightarrow c^\second}_{l^\prime\rightarrow l^\second} \vdash e^\prime : l$.
+\end{lemma}
+
+\begin{lemma}[Preservation-Alt]
+If $\vdash e : \tau$ and $e \xrightarrow[l\rightarrow l^\prime]{c\rightarrow c^\prime} e^\prime$ then $\vdash e^\prime : \tau$.
 \end{lemma}
 In other words, a well-typed term taking an evaluation step results in a term that is also well-typed.
 
 \begin{lemma}[Progress]
-If $\vdash e : \tau$ then $e \longrightarrow v$ or there exists $e'$ such that $e \longrightarrow e'$.
+If $\vdash e : \tau$ and $\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime} \vdash e : l$, then $e \longrightarrow v$ and $\Delta^{c^\prime\rightarrow c^\second}_{l^\prime\rightarrow l^\second} \vdash v : l$, or there exists $e^\prime$ such that $e \longrightarrow e^\prime$.
+\end{lemma}
+
+\begin{lemma}[Progress-Alt]
+If $\vdash e : \tau$ then $e \xrightarrow[l\rightarrow l^\prime]{c\rightarrow c^\prime} v$, or there exists $e^\prime$ such that $e \xrightarrow[l\rightarrow l^\prime]{c\rightarrow c^\prime} e^\prime$.
 \end{lemma}
 In other words, a closed and well-typed term is not stuck.
 
 \begin{theorem}[Type safety]
-If $\vdash e : \tau$ and $e \longrightarrow^* e'$ then $e'$ is not stuck.
+If $\vdash e : \tau$ and $\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime} \vdash e : l$ and $e \longrightarrow^* e^\prime$ then $e^\prime$ is not stuck.
+\end{theorem}
+
+\begin{theorem}[Type safety-Alt]
+If $\vdash e : \tau$ and $e \xrightarrow[l\rightarrow l^\prime]{c\rightarrow c^\prime}^* e^\prime$ then $e^\prime$ is not stuck.
 \end{theorem}
 
 \begin{lemma}[Type preservation under substitution]
 If $\Gamma[x \mapsto \tau] \vdash e : \tau'$ and $\Gamma \vdash v : \tau$ then $\Gamma \vdash [v/x]e : \tau'$.
 \end{lemma}
 
+\textbf{OLD:}
 \begin{definition}[Low-equivalence]
 Two inputs, each consisting of a pair of values with labels $\ell, \ell'$ such that $ \ell' \not\sqsubseteq\ell$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, for inputs $e_1, e_2$:
 \begin{equation*}
@@ -317,7 +372,7 @@ Two inputs, each consisting of a pair of values with labels $\ell, \ell'$ such t
 Given labels $\ell, \ell'$ such that $ \ell' \not\sqsubseteq\ell$, an attacker $\Adv$ with clearance $c_\Adv$ such that $\ell \sqsubseteq c_\Adv$ and $\ell' \not\sqsubseteq c_\Adv$, and a pure computation $e$ such that $\Gamma \vdash e : (\Lvalue\ \ell'\ \tau'_i, \Lvalue\ \ell\ \tau_i) \rightarrow (\Lvalue\ \ell'\ \tau'_o, \Lvalue\ \ell\ \tau_o)$, then
 \begin{equation*}
 \forall e_1 e_2.(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i,\Lvalue\ \ell\ \tau_i))_{j=1,2}
-\wedge e_1 =_L e_2 \wedge  e\ e_1 \longrightarrow^* v_1 \wedge e\ e_2 \longrightarrow^* v_2\ \Rightarrow v_1 =_L v_2.
+\land e_1 =_L e_2 \land  e\ e_1 \longrightarrow^* v_1 \land e\ e_2 \longrightarrow^* v_2\ \Rightarrow v_1 =_L v_2.
 \end{equation*}
 \end{theorem}
 
