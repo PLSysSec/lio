@@ -6,7 +6,6 @@
 
 \date{\today}
  
-\newcommand{\Label}{\ell}
 \newcommand{\fix}{\texttt{fix}}
 \newcommand{\lvalue}{\texttt{lvalue}}
 \newcommand{\return}{\texttt{return}}
@@ -25,12 +24,14 @@
 \newcommand{\lL}{\texttt{L}}
 \newcommand{\lH}{\texttt{H}}
 \newcommand{\Adv}{\mathcal{A}}
+\newcommand{\seal}{\texttt{seal}}
 \newcommand{\open}{\texttt{open}}
 \newcommand{\nolabel}{\obslash}
+\newcommand{\unit}{\texttt{()}}
+\newcommand{\get}{\texttt{get}}
 
 \floatstyle{ruled}
 \newfloat{typerules}{htbp}{lop} \floatname{typerules}{Typing Rule}
-\newfloat{labelrules}{htbp}{lop} \floatname{labelrules}{Labeling Rule}
 \newfloat{sos}{htbp}{lop} \floatname{sos}{Operational Semantics}
 \newfloat{language}{htbp}{lop} \floatname{language}{Language}
 
@@ -67,6 +68,7 @@
                               &&      &\ |\  \return^\prime\ e\ e       \\ % return
                               &&      &\ |\  e\ \bind\ e                \\ % bind two expressions
                               &&      &\ |\  e\ \seq\ e                 \\ % sequence two expressions
+                              &&      &\ |\  \seal\ e\ e                \\ % seal
                               &&      &\ |\  \open\ e                   \\ % open
                               &&      &\ |\  e\ \lub\ e                 \\ % lub
                               &&      &\ |\  e\ \glb\ e                 \\ % glb
@@ -74,15 +76,15 @@
 \textrm{Type:}                && \tau &\Coloneqq  \tau\rightarrow\tau   \\ % function
                               &&      &\ |\  (\tau,\tau)                \\ % tuple
                               &&      &\ |\  \Bool                      \\ % bool
-                              &&      &\ |\  \Label                     \\ % Label
+                              &&      &\ |\  \ell                     \\ % Label
                               &&      &\ |\  \Lvalue\ \ell\ e           \\ % Lvalue
+                              &&      &\ |\  \unit                      \\ % Unit
 \end{align*}
 \caption{Simple language, hiding underlying state label and clearance}
 \end{language}
 \begin{enumerate}
 \item $\Lv\ e\ e$ is the runtime representation of a labeled value and it does not appear in the source.
 \item The typing judgements are standard, $\Gamma : \textrm{Term} \rightarrow \textrm{Type}$.
-\item A term may have no label, e.g., $\vdash \true : \nolabel$. We define $\Delta : \textrm{Term} \rightarrow \textrm{Label}\cup \{\nolabel\}$. We use the meta-variables $k$ and $l$ in labelingrules, where $k\in\textrm{Label}\cup \{\nolabel\}$ and $l \in\textrm{Label}$.
 \item The function $\mathcal{L} : \textrm{Label} \rightarrow \mathbb{L}$ maps a labels to elements of latice $\mathbb{L}$, i.e., $\mathcal{L}\llbracket l\rrbracket \in \mathbb{L}\cup\{\bot,\top\}$. The label and lattice definitions may be definited arbitrarily as long as $\mathcal{L}$ is bijective. Additionally, $\mathcal{L}$ is homorphically be defined over label operations, so 
 $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \lub \mathcal{L} \llbracket l_2\rrbracket$, and similarly $\mathcal{L}\llbracket l_1 \glb\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \glb \mathcal{L} \llbracket l_2\rrbracket$.
 \end{enumerate}
@@ -106,7 +108,7 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
 \\
 \inferrule{}{\vdash \false : \Bool}\tag{T-False}
 \\
-\inferrule{}{\vdash l : \Label}\tag{T-Label}
+\inferrule{}{\vdash l : \ell}\tag{T-Label}
 \\
 \inferrule{\Gamma \vdash e : \tau \rightarrow \tau}
      {\Gamma \vdash \fix\ e : \tau}\tag{T-Fix}
@@ -122,12 +124,12 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
 \\
 \inferrule{\Gamma \vdash e : (\tau_1, \tau_2)}
      {\Gamma \vdash \pi_i\ e : \tau_i}
-     {(i\in\{0,2\})}\tag{T-Proj}
+     {(i\in\{1,2\})}\tag{T-Proj}
 \\
-\inferrule{\Gamma[l_\bot \mapsto \ell]\vdash e : \tau}
+\inferrule{\Gamma \vdash e : \tau}
      {\Gamma \vdash \return\ e : \Lvalue\ \ell\ \tau}\tag{T-Ret?}
 \\
-\inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \Label}
+\inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \ell}
      {\Gamma \vdash \return^\prime\ e_1\ e_2: \Lvalue\ \ell\ \tau}\tag{T-Ret$^\prime$}
 \\
 \inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
@@ -136,81 +138,22 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
 \inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \Lvalue\ \ell\ \tau_2}
      {\Gamma \vdash e_1\ \seq\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Seq}
 \\
+\inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \ell}
+     {\Gamma \vdash \seal\ e_1\ e_2: \Lvalue\ \ell\ \tau}\tag{T-Seal}
+\\
 \inferrule{\Gamma \vdash e : \Lvalue\ \ell\ \tau}
      {\Gamma \vdash \open\ e : \tau}\tag{T-Open}
 \\
-\inferrule{\Gamma \vdash e_1 : \Label\\ \Gamma \vdash e_2 : \Label}
-     {\Gamma \vdash e_1\ \lub\ e_2 : \Label}\tag{T-Join}
+\inferrule{\Gamma \vdash e_1 : \ell\\ \Gamma \vdash e_2 : \ell}
+     {\Gamma \vdash e_1\ \lub\ e_2 : \ell}\tag{T-Join}
 \\
-\inferrule{\Gamma \vdash e_1 : \Label\\ \Gamma \vdash e_2 : \Label}
-     {\Gamma \vdash e_1\ \glb\ e_2 : \Label}\tag{T-Meet}
+\inferrule{\Gamma \vdash e_1 : \ell\\ \Gamma \vdash e_2 : \ell}
+     {\Gamma \vdash e_1\ \glb\ e_2 : \ell}\tag{T-Meet}
 \end{align}
 \caption{Simple type rules, hiding underlying state label and clearance}
 \end{typerules}
 
-
-\begin{labelrules}
-\begin{align}
-\inferrule{\Delta(x) = k}
-     {\Delta \vdash x : k}
-     \tag{L-Var}
-\\
-\inferrule{\Delta[x \mapsto k_1] \vdash e : k_2}
-     {\Delta \vdash \lambda x.e : k_2}\tag{L-Abs}
-\\
-\inferrule{\Delta \vdash e_1 : k_1 \\ \Delta \vdash e_2 : k_2}
-     {\Delta \vdash (e_1,e_2) : (k_1, k_2)}
-     \tag{L-Tup}
-\\
-\inferrule{\Delta \vdash e : k} {\Delta\vdash \Lv\ l\ e : l} \tag{L-Lv}
-\\
-\inferrule{}{\vdash \true : \nolabel}\tag{L-True}
-\\
-\inferrule{}{\vdash \false : \nolabel}\tag{L-False}
-\\
-\inferrule{}{\vdash l : \nolabel}\tag{L-Label}
-\\
-\inferrule{\Delta \vdash e : k}
-     {\Delta \vdash \fix\ e : k}\tag{L-Fix}
-\\
-\inferrule{\Delta \vdash e_2 : k_1 \\ \Delta [e_2 \mapsto k_1] \vdash e_1 : k_2}
-     {\Delta \vdash e_1\ e_2 : k_2}\tag{L-App}
-\\
-\inferrule{\pi_i (\true,\false) = c_i \\ \Delta \vdash e_i : k_i}
-     {\Delta \vdash \ifel{c_i}{e_1}{e_2} : k_i}
-     {(i\in\{0,2\})}\tag{L-IfElse}
-\\
-\inferrule{\Delta \vdash e_1 : k_1 \\ \Delta [x \mapsto k_1] \vdash e_2 : k_2}
-     {\Delta \vdash \letbind{x}{e_1}{e_2} : k_2}\tag{L-Let}
-\\
-\inferrule{\Delta \vdash e_i : k_i}
-     {\Delta \vdash \pi_i\ (e_1, e_2) : k_i}
-     {(i\in\{0,2\})}\tag{L-Proj}
-\\
-\inferrule{\Delta \vdash e : k} {\Delta\vdash \return\ e : l_\bot} \tag{L-Ret?}
-\\
-\inferrule{\Delta \vdash e : k} {\Delta\vdash \return^\prime\ e\ l : l} \tag{L-Ret$^\prime$}
-\\
-\inferrule{\Delta \vdash e_1 : l_1\ \\ \Delta \vdash e_2 : l_2}
-     {\Delta \vdash e_1\ \bind\ e_2 : l_1\lub l_2}
-     \tag{L-Bind}
-\\
-\inferrule{\Delta \vdash e_1 : l_1\ \\ \Delta \vdash e_2 : l_2}
-     {\Delta \vdash e_1\ \seq\ e_2 : l_2}
-     \tag{L-Seq}
-\\
-\inferrule{\Delta \vdash e : l}
-     {\Delta \vdash \open\ e : k}\tag{L-Open}
-\\
-\inferrule{\Delta \vdash e_1 : \nolabel\\ \Delta \vdash e_2 : \nolabel}
-     {\Delta \vdash e_1\ \lub\ e_2 : \nolabel}\tag{L-Join}
-\\
-\inferrule{\Delta \vdash e_1 : \nolabel\\ \Delta \vdash e_2 : \nolabel}
-     {\Delta \vdash e_1\ \glb\ e_2 : \nolabel}\tag{L-Meet}
-\end{align}
-\caption{Unlabeled state labeling rules}
-\end{labelrules}
-
+\pagebreak
 
 \begin{sos}
 \begin{align*}
@@ -221,6 +164,7 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
        \ |\  \ifel{E}{e}{e}
        \ |\  \letbind{x}{E}{e}
        \ |\  \pi_i\ E                     
+       \ |\  \seal\ E\ l                
        \ |\  \open\ E                 
        \\
 &&&    \ |\  \return\ E                 
@@ -241,75 +185,44 @@ $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbr
 &&&E[\return^\prime\ e\ l]                         \longrightarrow E[\Lv\ l\ e]           \tag{E-Ret$^\prime$}  \\
 &&&\inferrule{[e_1/x]e_2 \longrightarrow^* \Lv\ l_2\ {e_2}^\prime}
       {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]      \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ (l_1\lub l_2)]}\tag{E-Bind} \\
-&&&E[\Lv\ l_1\ e_1\ \seq\ e_2]                     \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
 &&&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ e_1]\tag{E-Runit}\\
-&&& E[\open\ \Lv\ l\ e]                            \longrightarrow E[e]                    \tag{E-Open}  \\
+&&&E[\Lv\ l_1\ e_1\ \seq\ e_2]                     \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
 &&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \lub l_2\rrbracket}
             {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]} \tag{E-Join}\\
 &&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \glb l_2\rrbracket}
            {E[l_1\ \glb\ l_2] \longrightarrow E[l_3]} \tag{E-Meet}\\
 \end{align*}
-\caption{Unlabeled state evaluation context}
+\caption{Semantics for pure terms.}
 \end{sos}
 
-
 \pagebreak
 
-\subsection{Labeled state}
-We use the StateT monad with the underlying monad being IO and the state consisting of the current label and current clearance.
-Hence, the new labeled IO has type $ (\Label,\Label) \rightarrow \texttt{IO} (\tau, (\Label,\Label))$. Additionally, we parametrize $\Delta$ with a label and clearance transition: $\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime}$, where $l \sqsubseteq l^\prime \land c^\prime \sqsubseteq c \land l^\prime \sqsubseteq c^\prime$. An unparametrized label context $\Delta$ indicates that the labeling rule is valid regardless of the state label/clearance transition.
-
-  
-\begin{labelrules}
-\begin{align}
-\inferrule{\Delta \vdash e : k \\ l \sqsubseteq l_1 \sqsubseteq c}
-     {\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash \return^\prime\ e\ l_1 : l_1}
-     \tag{L-Ret$^\prime$}
-\\
-\inferrule{\Delta^{c \rightarrow c}_{l \rightarrow l} \vdash e : l_1 \\ l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
-     {\Delta^{c\rightarrow c}_{l\rightarrow l^\prime} \vdash \open\ e : k}
-     \tag{L-Open}
-\end{align}
-\caption{Labeled state: \texttt{Lref}, showing only the changes form the unlabeled state rules}
-\end{labelrules}
-
-
-\begin{labelrules}
-\begin{align}
-\inferrule{\Delta \vdash e : k}
-     {\Delta^{c \rightarrow c}_{l \rightarrow l} \vdash \return\ e : l}
-     \tag{L-Ret}
-\\
-\inferrule{\Delta \vdash e : k \\ {l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
-     {\Delta^{c\rightarrow c}_{l\rightarrow l} \vdash \return^\prime\ e\ l_1 : {l_1}^\prime}
-     \tag{L-Ret$^\prime$}
-\\
-\inferrule{\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime} \vdash e_1 : l_1\ \\ \Delta^{c^\prime\rightarrow c^\second}_{l^\prime\rightarrow l^\second} \vdash e_2 : l_2 \\ {l_2}^\prime=l_1\lub l_2 \lub l^\second \\ {l_2}^\prime\sqsubseteq c^\second}
-     {\Delta^{c\rightarrow c^\second}_{l\rightarrow l^\second} \vdash e_1\ \bind\ e_2 : {l_2}^\prime}
-     \tag{L-Bind}
-\\
-\inferrule{\Delta^{c\rightarrow c^\prime}_{l\rightarrow l^\prime} \vdash e_1 : l_1\ \\ \Delta^{c^\prime\rightarrow c^\second}_{l^\prime\rightarrow l^\second} \vdash e_2 : l_2 \\ {l_2}^\prime=l_2 \lub l^\second \\ {l_2}^\prime\sqsubseteq c^\second}
-     {\Delta^{c\rightarrow c^\second}_{l\rightarrow l^\second} \vdash e_1\ \seq\ e_2 : {l_2}^\prime}
-     \tag{L-Seq}
-\\
-\inferrule{\Delta^{c \rightarrow c}_{l \rightarrow l} \vdash e : l_1 \\ l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
-     {\Delta^{c\rightarrow c}_{l\rightarrow l^\prime} \vdash \open\ e : k}
-     \tag{L-Open}
-\end{align}
-\caption{Labeled state: \texttt{Lvalue}, showing only the changes form the unlabeled state rules}
-\end{labelrules}
-
-\pagebreak
-Alternatively, we parametrize the evaluation relation with a label and clearance transition: $\xrightarrow[l\rightarrow l^\prime]{c\rightarrow c^\prime}$.
 \begin{sos}
 \begin{align*}
 &&&\inferrule{l \sqsubseteq l_1 \sqsubseteq c}
-      {E[\return^\prime\ e\ l_1] \xrightarrow[l\rightarrow l]{c\rightarrow c} E[\Lv\ l\ e]} \tag{E-Ret$^\prime$}  \\
+      {E_l^c[\seal\ e\ l_1] \longrightarrow E_l^c[\Lv\ l\ e]} \tag{E-Seal}  \\
 &&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
-      {E[\open\ \Lv\ l_1\ e_1] \xrightarrow[l\rightarrow l^\prime]{c\rightarrow c} E[e_1]} \tag{E-Open}  \\
+      {E_l^c[\open\ \Lv\ l_1\ e_1] \longrightarrow E_{l^\prime}^c[e_1]} \tag{E-Open} 
 \end{align*}
-\caption{Labeled state: \texttt{Lref}, showing only the changes from non-parametrized evaluation relation.}
+\caption{Semantics for terms with side effects; \texttt{Lref} case}
 \end{sos}
+
+The parametrized evaluation contexts directly translate to non-parametrized evalution contexts.
+For example,
+\begin{equation*}
+\inferrule{l \sqsubseteq l_1 \sqsubseteq c}{E_l^c[\seal\ e\ l_1] \longrightarrow E_l^c[\Lv\ l\ e]}
+\end{equation*}
+can be rewritten to
+\begin{equation*}
+E_l^c[\seal\ e\ l_1] \longrightarrow E_l^c[\get\ \bind \lambda(l,c).\ifel{ l \sqsubseteq l_1 }{
+(\ifel{l_1 \sqsubseteq c}{\return\ \Lv\ l\ e}{\texttt{lerror}\ l \textrm{``$\ldots$''}})
+}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}]
+\end{equation*}
+where bind and return operate on the underlying monad, and the error function returns a labeled error.
+
+
+
+
 
 \begin{sos}
 \begin{align*}
