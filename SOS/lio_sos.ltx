@@ -1,8 +1,9 @@
 \documentclass[10pt]{article} 
-\usepackage[margin=.5in]{geometry} 
+%\usepackage[margin=.5in]{geometry} 
 \usepackage{amsmath,amssymb,amsfonts,amsthm,stmaryrd,txfonts, mathabx}
 \usepackage{float}
 \usepackage{mathpartir}
+\pagestyle{empty}
 
 \date{\today}
  
@@ -30,14 +31,20 @@
 \newcommand{\unit}{\texttt{()}}
 \newcommand{\getS}{\texttt{get}}
 \newcommand{\putS}{\texttt{put}}
-\newcommand{\setState}{\texttt{setState}}
+\newcommand{\evalLIO}{\texttt{evalLIO}}
 %\newcommand{\evalrel}[4]{{}^_{#1}^{#2}{\longrightarrow}_{#3}^{#4}\ } %#3\xrightarrow[{#1 \quad #3}]{{#2 \quad #4}}}
 \newcommand{\evalrel}[4]{\xrightarrow[{#1 \quad #3}]{{#2 \quad #4}}}
 \newcommand{\transevalrel}[4]{{\xrightarrow[{#1 \quad #3}]{{#2 \quad #4}}}^{*}}
 
+\newcommand{\LIO}{\texttt{LIO}}
+\newcommand{\IO}{\texttt{IO}}
 \newcommand{\returnLIO}{\texttt{return}^\texttt{\tiny LIO}}
 \newcommand{\bindLIO}{\texttt{>>=}^\texttt{\tiny LIO}}
 \newcommand{\seqLIO}{\texttt{>>}^\texttt{\tiny LIO}}
+\newcommand{\lioVal}[5]{{}_{#1}^{#2}\langle\ #5\ \rangle_{#3}^{#4}}
+\newcommand{\ioVal}[1]{\langle\ #1\ \rangle}
+
+\newcommand{\tref}[1]{\textrm{#1}}
 
 \floatstyle{ruled}
 \newfloat{typerules}{htbp}{lop} \floatname{typerules}{Typing Rule}
@@ -59,12 +66,11 @@ Hence, $\Gamma : \textrm{Term} \rightarrow \textrm{Type}$.
 Furthermore, $\mathcal{L}$ is homorphically defined over label operations, so 
 $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \lub \mathcal{L} \llbracket l_2\rrbracket$, and similarly $\mathcal{L}\llbracket l_1 \glb\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \glb \mathcal{L} \llbracket l_2\rrbracket$.
 Note that the label kind and lattice may be arbitrary defined as long as $\mathcal{L}$ is bijective.
-\item The evaluation contexts $E$ are terms with a hole, where $E[e]$ is a term with the whole being replaced by $e$.
+\item The evaluation contexts $E$ are terms with a hole; where $E[e]$ is a term with the hole being replaced by $e$.
       It is important to note that, for a unique $E$,
       \begin{equation*}
       \inferrule{e\longrightarrow e^\prime}{E[e]\longrightarrow E[e^\prime]}
       \end{equation*}
-\item The evaluation relation $e \evalrel{l}{c}{l^\prime}{c^\prime} e'$ can be read as ``starting in state with label $l$ and clearance $c$ term $e$ is reduced to term $e^\prime$ in a state with label $l^\prime$ and clearance $c^\prime$.
 \end{enumerate}
 
 \begin{language}
@@ -77,6 +83,8 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
                               &&      &\ |\  \lambda x.e                \\ % abstraction
                               &&      &\ |\  (e, e)                     \\ % tuple
                               &&      &\ |\  \Lv\ e\ e                  \\ % value of type Lvalue
+                              &&      &\ |\  \lioVal{e}{e}{e}{e}{e}     \\ % value of type LIO
+                              &&      &\ |\  \ioVal{e}                  \\ % value of type IO
                               &&      &\ |\  \true                      \\ % value of type Bool
                               &&      &\ |\  \false                     \\ % value of type Bool
                               &&      &\ |\  l                          \\ % label
@@ -91,24 +99,27 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
                               &&      &\ |\  \return^\prime\ e\ e       \\ % return
                               &&      &\ |\  e\ \bind\ e                \\ % bind two expressions
                               &&      &\ |\  e\ \seq\ e                 \\ % sequence two expressions
+                              &&      &\ |\  \returnLIO\ e\             \\ % returnLIO
+                              &&      &\ |\  e\ \bindLIO\ e             \\ % bind two expressions
                               &&      &\ |\  \seal\ e\ e                \\ % seal
                               &&      &\ |\  \open\ e                   \\ % open
-                              &&      &\ |\  \setState\ e               \\ % setState
+                              &&      &\ |\  \evalLIO\ e\ e             \\ % evalLIO
                               &&      &\ |\  e\ \lub\ e                 \\ % lub
                               &&      &\ |\  e\ \glb\ e                 \\ % glb
 \\
 \textrm{Type:}                && \tau &\Coloneqq  \tau\rightarrow\tau   \\ % function
                               &&      &\ |\  (\tau,\tau)                \\ % tuple
                               &&      &\ |\  \Bool                      \\ % bool
-                              &&      &\ |\  \ell                     \\ % Label
+                              &&      &\ |\  \ell                       \\ % Label
                               &&      &\ |\  \Lvalue\ \ell\ e           \\ % Lvalue
-                              &&      &\ |\  \unit                      \\ % Unit
+                              &&      &\ |\  \LIO\ \ell\ e              \\ % Lvalue
+                              &&      &\ |\  \IO                        \\ % Unit
+\\
+\textrm{Program:}             && p    &\Coloneqq  (\letbind{x}{e}{})^*(\evalLIO\ e\ e)
 \end{align*}
 \caption{Haskell embeded information flow control language. $\Lv\ e\ e$ is the runtime representation of a labeled value and it does not appear in the source.}
 \label{language:lvalue}
 \end{language}
-
-
 
 \begin{typerules}
 \begin{align}
@@ -147,33 +158,51 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
      {(i\in\{1,2\})}\tag{T-Proj}
 \\
 \inferrule{\Gamma[l_\bot \mapsto \ell] \vdash e : \tau}
-     {\Gamma \vdash \return\ e : \Lvalue\ \ell\ \tau}\tag{\bf T-Ret?}
+     {\Gamma \vdash \return\ e : \Lvalue\ \ell\ \tau}\tag{T-Ret}
 \\
 \inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \ell}
-     {\Gamma \vdash \return^\prime\ e_1\ e_2: \Lvalue\ \ell\ \tau}\tag{\bf T-Ret$^\prime$}
+     {\Gamma \vdash \return^\prime\ e_1\ e_2: \Lvalue\ \ell\ \tau}\tag{T-Ret$^\prime$}
 \\
 \inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
-     {\Gamma \vdash e_1\ \bind\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{\bf T-Bind}
+     {\Gamma \vdash e_1\ \bind\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Bind}
 \\
 \inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \Lvalue\ \ell\ \tau_2}
-     {\Gamma \vdash e_1\ \seq\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{\bf T-Seq}
-\\
-\inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \ell}
-     {\Gamma \vdash \seal\ e_1\ e_2: \Lvalue\ \ell\ \tau}\tag{\bf T-Seal}
-\\
-\inferrule{\Gamma \vdash e : \Lvalue\ \ell\ \tau}
-     {\Gamma \vdash \open\ e : \tau}\tag{\bf T-Open}
-\\
-\inferrule{\Gamma \vdash e : (\ell, \ell)}
-     {\Gamma \vdash \setState\ e: \unit}\tag{\bf T-SetState}
+     {\Gamma \vdash e_1\ \seq\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Seq}
 \\
 \inferrule{\Gamma \vdash e_1 : \ell\\ \Gamma \vdash e_2 : \ell}
-     {\Gamma \vdash e_1\ \lub\ e_2 : \ell}\tag{\bf T-Join}
+     {\Gamma \vdash e_1\ \lub\ e_2 : \ell}\tag{T-Join}
 \\
 \inferrule{\Gamma \vdash e_1 : \ell\\ \Gamma \vdash e_2 : \ell}
-     {\Gamma \vdash e_1\ \glb\ e_2 : \ell}\tag{\bf T-Meet}
+     {\Gamma \vdash e_1\ \glb\ e_2 : \ell}\tag{T-Meet}
 \end{align}
 \caption{Type rules where the monadic bind and return are solely given for \Lvalue{} types.}
+\end{typerules}
+
+\begin{typerules}
+\begin{align}
+\inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \ell}
+     {\Gamma \vdash \seal\ e_1\ e_2: \LIO\ \ell\ (\Lvalue\ \ell\ \tau)}\tag{T-Seal}
+\\
+\inferrule{\Gamma \vdash e : \Lvalue\ \ell\ \tau}
+     {\Gamma \vdash \open\ e : \LIO\ \ell\ \tau}\tag{T-Open}
+\\
+\inferrule{\Gamma \vdash e_i : \ell \\ \Gamma \vdash e : \tau}
+     {\Gamma \vdash \lioVal{e_1}{e_2}{e_3}{e_4}{e}: \LIO\ \ell\ (\tau)}\tag{T-LIO-Val}
+\\
+\inferrule{\Gamma \vdash e : \tau}
+     {\Gamma \vdash \ioVal{e}: \IO\ \tau}\tag{T-IO-Val}
+\\
+\inferrule{\Gamma \vdash e : \tau}
+     {\Gamma \vdash \returnLIO\ e  : \LIO\ \ell\ \tau}\tag{T-LIO-Ret}
+\\
+\inferrule{\Gamma \vdash e_1 : \LIO\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \LIO\ \ell\ \tau_2}
+     {\Gamma \vdash e_1\ \bind\ e_2 : \LIO\ \ell\ \tau_2}\tag{T-LIO-Bind}
+\\
+\inferrule{\Gamma \vdash e_1 : (\ell,\ell) \\ \Gamma \vdash e_2 : \LIO\ \ell\ \tau_1}
+     {\Gamma \vdash \evalLIO\ e_1\ e_2: \IO\ \tau_1}\tag{T-EvalLIO}
+\end{align}
+\caption{Type rules where the monadic bind and return are solely given for \Lvalue{} types.}
+\caption{Type rules for terms with side-effects.}
 \end{typerules}
 
 \pagebreak
@@ -187,8 +216,6 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
        \ |\  \ifel{E}{e}{e}
        \ |\  \letbind{x}{E}{e}
        \ |\  \pi_i\ E                     
-       \ |\  \seal\ E\ l                
-       \ |\  \open\ E                 
        \\
 &&&    \ |\  \return\ E                 
        \ |\  \return^\prime\ E\ l          
@@ -221,88 +248,112 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
 
 \begin{sos}
 \begin{align*}
+&&E&   ::=  \cdots
+       \ |\  \seal\ E\ l                
+       \ |\  \open\ E                 
+       \ |\  \returnLIO\ E
+       \ |\  E\ \bindLIO\ e
+       \ |\  v\ \bindLIO\ E
+       \ |\  \lioVal{e}{e}{e}{e}{E}
+       \ |\  \ioVal{E}
+       \ |\  \evalLIO\ v\ E
+       \\
 &&&\inferrule{l \sqsubseteq l_1 \sqsubseteq c}
-      {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e]} \tag{E-Seal}  \\
+      {E[\seal\ e\ l_1] \longrightarrow E[\lioVal{l}{c}{l}{c}{\Lv\ l_1\ e}]} \tag{E-Seal}  \\
 &&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
-      {E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]} \tag{E-Open} \\
-&&&E[\setState\ (l, c)] \evalrel{}{}{l}{c} E[\unit] \tag{E-SetState} 
+      {E[\open\ (\Lv\ l_1\ e_1)] \longrightarrow E[\lioVal{l}{c}{l^\prime}{c}{e_1}]} \tag{E-Open} \\
+&&&E[\returnLIO\ e] \longrightarrow E[\lioVal{l}{c}{l}{c}{e}] \tag{E-LIO-Ret}\\
+&&&\inferrule{e_1 \longrightarrow v_1 \\ [v_1/x]e_2 \longrightarrow \lioVal{l^\prime}{c^\prime}{l^\second}{c^\second}{e_2^\prime}}
+             {E[\lioVal{l}{c}{l^\prime}{c^\prime}{e_1}\ \bindLIO\ \lambda x.e_2]\longrightarrow E[\lioVal{l}{c}{l^\second}{c^\second}{e_2^\prime}]} \tag{E-LIO-Bind} \\
+&&&E[\evalLIO\ (l, c)\ \lioVal{l}{c}{l^\prime}{c^\prime}{e}] \longrightarrow E[\ioVal{e}] \tag{E-EvalLIO}
 \end{align*}
 \caption{Semantics for terms with side effects; \texttt{Lref} case}
 \end{sos}
 
-The parametrized evaluation relations directly translate to non-parametrized evalution relations in a state transformer monad (with the underlying monad being {\tt IO} and the state being the label $l$ and clearance $c$); this monad is the Labeled IO monad---{\tt LIO}.
-More specifically, ${\tt LIO} :: (\ell,\ell)\rightarrow {\tt IO}\ (\tau,(\ell,\ell))$, which can be read as ``starting from an initial state $(l,c)::(\ell,\ell)$ an {\tt LIO} action is executed in the {\tt IO} monad and produces a value of type $\tau$ and a new state $(l',c')$''.
 
-Consider the semantics of \seal{} with non-paremetric evaluation context:
-\begin{equation*}
-\inferrule{l \sqsubseteq l_1 \sqsubseteq c} {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e]}
-\end{equation*}
-can be rewritten to
-\begin{equation*}
-E[\seal\ e\ l_1] \longrightarrow E[\getS\ \bindLIO\ \lambda(l,c).\ifel{ l \sqsubseteq l_1 }{
-(\ifel{l_1 \sqsubseteq c}{\returnLIO\ (\Lv\ l\ e)}{\texttt{lerror}\ l\ \textrm{``$\ldots$''}})
-}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}]
-\end{equation*}
-where bind and return are lift to and sequence {\tt LIO} actions and not \Lvalue{}s. 
-Additionally the error function {\tt lerror} returns a labeled error in {\tt IO}.
-Finally, \getS{} and \putS{} are functions of the MonadState type class (of which {\tt LIO} is an instance).
+\subsection{Example} 
+For the following examples we assume the following lattice elements: $\{\lL, \lH\}$ with the partial order $\bot \sqsubseteq \lL \sqsubseteq \lH \sqsubseteq \top$, and $\cdot \lub \lH = \lH$ and $\cdot \glb \lL = \lL$.
+For simplicity, we refer to \lL{} as the ``public label'' and \lH{} as the ``secret label''.
+Additionally, we define $l_\bot = \lL$ and $l_\top = \lH$.
 
-Similarly,
-\begin{equation*}
-\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}{E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]}
-\end{equation*}
-can be rewritten to:
-\begin{equation*}
-E[\open\ \Lv\ l_1\ e_1] \longrightarrow E[\getS\ \bindLIO\ \lambda(l,c).\letbind{l^\prime}{l\lub l_1}{
-\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIO\ e_1})}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}]
-\end{equation*}
-and,
-\begin{equation*}
-E[\setState\ (l, c)] \evalrel{}{}{l}{c} E[\unit]
-\end{equation*}
-can be rewritten to:
-\begin{equation*}
-E[\setState\ (l, c)] \longrightarrow E[\putS\ (l, c)]
-\end{equation*}
+Furthermore we assume the language is extended to support integer types and integer operations, e.g., addition.
 
+\subsubsection{Example on terms with no side-effects.} 
+Let us consider a simple example, working only on pure terms. In this example we are given two labeled values, one with a public label \lL{} and another with a secret label \lH. Adding the two we expect the resulting value to be a labeled value with the secret label the secret label.
 
-We note that any program using the \seal{}, \open{} functions must be executed as an {\tt LIO} action, using \setState{} to set the initial state.
-
-\pagebreak
-
-
-\begin{sos}
 \begin{align*}
-&&&E[\return\ e] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e] \tag{E-Ret}  \\
-&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
-      {E[\return^\prime\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l_1\ e]} \tag{E-Ret$^\prime$}  \\
-&&&\inferrule{E[[e_1/x]e_2] \transevalrel{l}{c}{l^\prime}{c} E[\Lv\ l_2\ {e_2}^\prime]\\ {l_2}^\prime=l_1\lub l_2 \lub l^\prime \\ {l_2}^\prime\sqsubseteq c}
-      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]   \evalrel{l}{c}{l^\prime}{c} E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ {l_2}^\prime]}\tag{E-Bind} \\
-&&&\inferrule{{l_1}^\prime = l_1\lub l_2 \\ {l_1}^\prime \sqsubseteq c}{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \evalrel{l}{c}{l}{c} E[\Lv\ l_1^\prime\ e_1]}\tag{E-Runit}\\
-&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
-      {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l_1\ e]} \tag{E-Seal}  \\
-&&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
-      {E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]} \tag{E-Open}  \\
+&                     && \Lv\ \lL\ 1\ \bind\ \lambda x.\
+                         \Lv\ \lH\ 2\ \bind\ \lambda y.\
+                         \return\ (x + y) \\
+&\tref{E-Bind}:        & \longrightarrow &
+                         \Lv\ \lH\ 2\ \bind\ \lambda y.  \return\ (1 + y)\longrightarrow^* \Lv\ \lH\ 3\\
+&                      & \Rightarrow&
+                         \fbox{$\Lv\ \lH\ 2\ \bind\ \lambda y.
+                         \return\ (1 + y)\
+                         \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)$}\\
+&\tref{E-Bind}:        & \longrightarrow &
+                         \return\ (1 + 2)\ \bind\ \lambda x.\return'\ x\ (\lL\lub\lH) \longrightarrow^* \Lv\ \lH\ 3 \\
+&                      & \Rightarrow &
+                         \fbox{$\return\ (1 + 2)\
+                         \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)
+                         \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)$}\\
+&\tref{E-Ret}:         & \longrightarrow &
+                         \return'\ (1 + 2)\ l_\bot\
+                         \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\
+                         \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
+&\tref{E-Ret$^\prime$} & \longrightarrow &
+                         \Lv\ l_\bot\ (1 + 2)\ 
+                         \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\
+                         \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
+&\tref{E-Runit}:       & \longrightarrow &
+                         \Lv\ (l_\bot\lub\lL\lub\lH)\ (1 + 2)\ 
+                         \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
+&\tref{E-Runit}:       & \longrightarrow &
+                         \Lv\ (l_\bot\lub\lL\lub\lH\lub\lH)\ (1 + 2)\\
+&\tref{E-Join}:        & \longrightarrow &
+                         \Lv\ \lH\ (1 + 2)\\
+&                      & \longrightarrow &
+                        \Lv\ \lH\ 3\\
 \end{align*}
-\caption{Semantics for terms with side effects; \texttt{Lvalue} case}
-\end{sos}
+
+\subsubsection{Example on terms with side-effects.} 
+Let us consider a more complex example, a full program, that has side-effects in the {\tt LIO} monad.
+\begin{align*}
+&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
+                                                  y_l\ \bind\ \lambda y.
+                                                  \return\ (x + y)\\
+&                     && {\tt in}\ \evalLIO (\lL, \lH)\ \$\ \\
+&                     && \quad\ \seal\ 1\ \lL\ \bindLIO\ \lambda x.  \\
+&                     && \quad\ \seal\ 2\ \lH\ \bindLIO\ \lambda y.  \\
+&                     && \quad\ \open\ (f\ x\ y)
+\end{align*}
+
+
+
+
+
+
+
+
 
 
 \pagebreak
+
+
 \subsection{Language properties}
 
 \begin{lemma}[Preservation]
-If $\vdash e : \tau$ and $e \evalrel{l}{c}{l^\prime}{c^\prime} e^\prime$ or $e\longrightarrow e^\prime$ then $\vdash e^\prime : \tau$.
+If $\vdash e : \tau$ and $e \longrightarrow e^\prime$ then $\vdash e^\prime : \tau$.
 \end{lemma}
 In other words, a well-typed term taking an evaluation step results in a term that is also well-typed.
 
 \begin{lemma}[Progress]
-If $\vdash e : \tau$ then either $e \evalrel{l}{c}{l^\prime}{c^\prime} v$ or $e \longrightarrow v$, or there exists $e^\prime$ such that $e \evalrel{l}{c}{l^\prime}{c^\prime} e^\prime$ or $e^\prime$ such that $e \longrightarrow e^\prime$.
+If $\vdash e : \tau$ then $e \longrightarrow v$, or there exists $e^\prime$ such that $e \longrightarrow e^\prime$.
 \end{lemma}
 In other words, a closed and well-typed term is not stuck.
 
 \begin{theorem}[Type safety]
-If $\vdash e : \tau$ and either $e \transevalrel{l}{c}{l^\prime}{c^\prime} e^\prime$ or $e \longrightarrow e^\prime$, then $e^\prime$ is not stuck.
+If $\vdash e : \tau$ and $e \longrightarrow e^\prime$, then $e^\prime$ is not stuck.
 \end{theorem}
 
 \begin{lemma}[Type preservation under substitution]
@@ -329,35 +380,80 @@ Given labels $\ell, \ell'$ such that $ \ell' \not\sqsubseteq\ell$, an attacker $
 In other words, given two inputs, each consisting of a pair of values with a public and secret labels, the result of the computation as observed by the attacker (at label level $c_\Adv$) is not distinguishable.
 
 
-\subsection{Example:} 
-\begin{equation*}
-                 \Lv\ \lL\ 1\ \bind\ \lambda x.
-                  \Lv\ \lH\ 2\ \bind\ \lambda y.
-                  \return\ (x + y), \textrm{for }\ell_\bot \sqsubseteq \lL \sqsubseteq \lH \sqsubseteq \top\\
-\end{equation*}
-{\bf Solution: }
-\begin{align*}
-                & \Lv\ \lL\ 1\ \bind\ \lambda x.
-                  \Lv\ \lH\ 2\ \bind\ \lambda y.
-                  \return\ (x + y) \\
-\longrightarrow &\Lv\ \lH\ 2\ \bind\ \lambda y.  \return\ (1 + y)\longrightarrow^* \Lv\ \lH\ 3 
-    \Rightarrow   \Lv\ \lH\ 2\ \bind\ \lambda y.
-                  \return\ (1 + y)\
-                  \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\\
-\longrightarrow & \return\ (1 + 2)\ \bind\ \lambda x.\return'\ x\ (\lL\lub\lH) \longrightarrow^* \Lv\ \lH\ 3 
-    \Rightarrow   \return\ (1 + 2)\
-                  \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\
-                  \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
-\longrightarrow & \return'\ (1 + 2)\ \ell_\bot\
-                  \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\
-                  \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
-\longrightarrow & \Lv\ \ell_\bot\ (1 + 2)\ 
-                  \bind\ \lambda x.\return'\ x\ (\lL\lub\lH)\
-                  \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
-\longrightarrow & \Lv\ (\ell_\bot\lub\lL\lub\lH)\ (1 + 2)\ 
-                  \bind\ \lambda x.\return'\ x\ (\lH\lub\lH)\\
-\longrightarrow & \Lv\ (\ell_\bot\lub\lL\lub\lH\lub\lH)\ (1 + 2)\\
-\longrightarrow & \Lv\ \lH\ (1 + 2)\\
-\longrightarrow & \Lv\ \lH\ 3\\
-\end{align*}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 \end{document} 
+The parametrized evaluation relations directly translate to non-parametrized evalution relations in a state transformer monad (with the underlying monad being {\tt IO} and the state being the label $l$ and clearance $c$); this monad is the Labeled IO monad---{\tt LIO}.
+More specifically, ${\tt LIO} :: (\ell,\ell)\rightarrow {\tt IO}\ (\tau,(\ell,\ell))$, which can be read as ``starting from an initial state haviung label and clearance $(l,c)::(\ell,\ell)$ an {\tt LIO} action is executed in the {\tt IO} monad and produces a value of type $\tau$ and a new state $(l',c')$''.
+
+Consider the semantics of \seal{} with non-paremetric evaluation context:
+\begin{equation*}
+\inferrule{l \sqsubseteq l_1 \sqsubseteq c} {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e]}
+\end{equation*}
+can be rewritten to
+\begin{align*}
+E[\seal\ e\ l_1] \longrightarrow E[&\getS\ \bindLIO\ \lambda(l,c).\\
+                                   &{\tt if}\ { l \sqsubseteq l_1 }\\
+                                   &{\tt then}\ \ifel{l_1 \sqsubseteq c}{\returnLIO\ (\Lv\ l\ e)}{\texttt{lerror}\ l\ \textrm{``$\ldots$''}}\\
+                                   &{\tt else}\ {\texttt{lerror}\ l\ \textrm{``$\ldots$''}}]
+\end{align*}
+where bind and return are lift to and sequence {\tt LIO} actions and not \Lvalue{}s. 
+Additionally the error function {\tt lerror} returns a labeled error in {\tt IO}.
+Finally, \getS{} and \putS{} are functions of the MonadState type class (of which {\tt LIO} is an instance).
+
+Similarly,
+\begin{equation*}
+\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}{E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]}
+\end{equation*}
+can be rewritten to:
+\begin{align*}
+E[\open\ \Lv\ l_1\ e_1] \longrightarrow
+E[&\getS\ \bindLIO\ \lambda(l,c).\\
+  &{\tt let}\ {l^\prime}={l\lub l_1}\\
+  &{\tt in }\ {\tt if}\ {l^\prime \sqsubseteq c}\\
+  &\quad\quad {\tt then}\ {\putS\ (l^\prime,c)\ \seqLIO\ \returnLIO\ e_1}\\
+  &\quad\quad {\tt else}\ {\texttt{lerror}\ l\ \textrm{``$\ldots$''}}]
+%  {\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIO\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
+%\letbind{l^\prime}{l\lub l_1}{\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIO\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
+\end{align*}
+%\begin{equation*}
+%E[\open\ \Lv\ l_1\ e_1] \longrightarrow E[\getS\ \bindLIO\ \lambda(l,c).\letbind{l^\prime}{l\lub l_1}{
+%\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIO\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
+%\end{equation*}
+
+
+We note that any program using the \seal{}, \open{} functions must be executed as an {\tt LIO} action, using to set the initial state.
+\pagebreak
+
+\begin{sos}
+\begin{align*}
+&&&E[\return\ e] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e] \tag{E-Ret}  \\
+&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
+      {E[\return^\prime\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l_1\ e]} \tag{E-Ret$^\prime$}  \\
+&&&\inferrule{E[[e_1/x]e_2] \transevalrel{l}{c}{l^\prime}{c} E[\Lv\ l_2\ {e_2}^\prime]\\ {l_2}^\prime=l_1\lub l_2 \lub l^\prime \\ {l_2}^\prime\sqsubseteq c}
+      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]   \evalrel{l}{c}{l^\prime}{c} E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ {l_2}^\prime]}\tag{E-Bind} \\
+&&&\inferrule{{l_1}^\prime = l_1\lub l_2 \\ {l_1}^\prime \sqsubseteq c}{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \evalrel{l}{c}{l}{c} E[\Lv\ l_1^\prime\ e_1]}\tag{E-Runit}\\
+&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
+      {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l_1\ e]} \tag{E-Seal}  \\
+&&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
+      {E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]} \tag{E-Open}  \\
+\end{align*}
+\caption{Semantics for terms with side effects; \texttt{Lvalue} case}
+\end{sos}
