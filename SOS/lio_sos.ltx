@@ -71,6 +71,15 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
       \begin{equation*}
       \inferrule{e\longrightarrow e^\prime}{E[e]\longrightarrow E[e^\prime]}
       \end{equation*}
+\item We do not model the \IO{} monad, however to evaluate a \LIO{} action the programmer must use \evalLIO{} which executes the \LIO{} action with a given initial state and returns the result in \IO{}. In other words a program is a single \IO{} action, since we do not definte a way to compose them.
+
+\item \LIO{} is a state transformer, with the underlying monad being \IO{} and the state being a tuple consisting of the label and clrearance. In other words,
+\begin{equation*}
+\LIO{}\ \ell\ a :: (\ell, \ell) \rightarrow \IO{}\ (\tau,(\ell,\ell))
+\end{equation*}
+We can read this as ``given a label and a clearance the \LIO{} action is executed, producing a value and a new label and clearance in \IO{}''.
+\item To simplify notation, we use $\lioVal{l}{c}{l^\prime}{c^\prime}{e}$ to denote a \LIO{} value which can be read as ``given a label and clearance $(l,c)$, $e$ is executed with the produced label and clearance being $(l^\prime,c^\prime)$''.
+
 \end{enumerate}
 
 \begin{language}
@@ -96,7 +105,6 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
                               &&      &\ |\  \letbind{x}{e}{e}          \\ % let-bindings
                               &&      &\ |\  \pi_i\ e                   \\ % \pi_1 = fst, \pi_2 = snd
                               &&      &\ |\  \return\ e                 \\ % return
-                              &&      &\ |\  \return^\prime\ e\ e       \\ % return
                               &&      &\ |\  e\ \bind\ e                \\ % bind two expressions
                               &&      &\ |\  e\ \seq\ e                 \\ % sequence two expressions
                               &&      &\ |\  \returnLIO\ e\             \\ % returnLIO
@@ -160,9 +168,6 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
 \inferrule{\Gamma[l_\bot \mapsto \ell] \vdash e : \tau}
      {\Gamma \vdash \return\ e : \Lvalue\ \ell\ \tau}\tag{T-Ret}
 \\
-\inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \ell}
-     {\Gamma \vdash \return^\prime\ e_1\ e_2: \Lvalue\ \ell\ \tau}\tag{T-Ret$^\prime$}
-\\
 \inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
      {\Gamma \vdash e_1\ \bind\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Bind}
 \\
@@ -187,7 +192,7 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
      {\Gamma \vdash \open\ e : \LIO\ \ell\ \tau}\tag{T-Open}
 \\
 \inferrule{\Gamma \vdash e_i : \ell \\ \Gamma \vdash e : \tau}
-     {\Gamma \vdash \lioVal{e_1}{e_2}{e_3}{e_4}{e}: \LIO\ \ell\ (\tau)}\tag{T-LIO-Val}
+     {\Gamma \vdash \lioVal{e_1}{e_2}{e_3}{e_4}{e}: \LIO\ \ell\ \tau}\tag{T-LIO-Val}
 \\
 \inferrule{\Gamma \vdash e : \tau}
      {\Gamma \vdash \ioVal{e}: \IO\ \tau}\tag{T-IO-Val}
@@ -205,7 +210,6 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
 \caption{Type rules for terms with side-effects.}
 \end{typerules}
 
-\pagebreak
 
 \begin{sos}
 \begin{align*}
@@ -218,7 +222,6 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
        \ |\  \pi_i\ E                     
        \\
 &&&    \ |\  \return\ E                 
-       \ |\  \return^\prime\ E\ l          
        \ |\  E\ \diamond\ e                
        \ |\  v\ \diamond\ E, \textrm{where }\diamond = \{\bind, \seq, \lub, \glb\}
        \\
@@ -231,11 +234,11 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
    {E[\letbind{x}{e_1}{e_2}]                       \longrightarrow E[\letbind{x}{{e_1}^\prime}{e_2}]}         \tag{E-Let}    \\
 &&&E[\letbind{x}{v}{e}]                            \longrightarrow E[[v/x]e]                                  \tag{E-LetVal} \\
 &&&E[\pi_i\ (e_1,e_2)]                             \longrightarrow E[e_i]                 \tag{E-Proj}   \\
-&&&E[\return\ e]                                   \longrightarrow E[\return^\prime\ e\ l_\bot] \tag{E-Ret}    \\
+&&&E[\return\ e]                                   \longrightarrow E[\Lv\ l_\bot\ e] \tag{E-Ret}    \\
 &&&E[\return^\prime\ e\ l]                         \longrightarrow E[\Lv\ l\ e]           \tag{E-Ret$^\prime$}  \\
-&&&\inferrule{[e_1/x]e_2 \longrightarrow^* \Lv\ l_2\ {e_2}^\prime}
-      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]      \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ (l_1\lub l_2)]}\tag{E-Bind} \\
-&&&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ e_1]\tag{E-Runit}\\
+&&&\inferrule{e_2 \ne \Lv\ l\ e_2^\prime}
+      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]      \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}\tag{E-Bind} \\
+&&&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]\tag{E-Runit}\\
 &&&E[\Lv\ l_1\ e_1\ \seq\ e_2]                     \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
 &&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \lub l_2\rrbracket}
             {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]} \tag{E-Join}\\
@@ -263,13 +266,15 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
 &&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
       {E[\open\ (\Lv\ l_1\ e_1)] \longrightarrow E[\lioVal{l}{c}{l^\prime}{c}{e_1}]} \tag{E-Open} \\
 &&&E[\returnLIO\ e] \longrightarrow E[\lioVal{l}{c}{l}{c}{e}] \tag{E-LIO-Ret}\\
-&&&\inferrule{e_1 \longrightarrow v_1 \\ [v_1/x]e_2 \longrightarrow \lioVal{l^\prime}{c^\prime}{l^\second}{c^\second}{e_2^\prime}}
-             {E[\lioVal{l}{c}{l^\prime}{c^\prime}{e_1}\ \bindLIO\ \lambda x.e_2]\longrightarrow E[\lioVal{l}{c}{l^\second}{c^\second}{e_2^\prime}]} \tag{E-LIO-Bind} \\
+&&&E[{\returnLIO}^\prime\ e\ (l_1,c_1)\ (l_2,c_2)] \longrightarrow E[\lioVal{l_1}{c_1}{l_2}{c_2}{e}] \tag{E-LIO-Ret'}\\
+&&&\inferrule{[e_1/x]e_2 \longrightarrow \lioVal{l^\prime}{c^\prime}{l^\second}{c^\second}{e_2^\prime}}
+      {E[\lioVal{l}{c}{l^\prime}{c^\prime}{e_1}\ \bindLIO\ \lambda x.e_2]\longrightarrow E[[e_1/x]e_2\ \bindLIO\ \lambda x.{\returnLIO}^\prime\ (l,c)\ (l^\second, c^\second)]} \tag{E-LIO-Bind} \\
 &&&E[\evalLIO\ (l, c)\ \lioVal{l}{c}{l^\prime}{c^\prime}{e}] \longrightarrow E[\ioVal{e}] \tag{E-EvalLIO}
 \end{align*}
 \caption{Semantics for terms with side effects; \texttt{Lref} case}
 \end{sos}
 
+\newpage
 
 \subsection{Example} 
 For the following examples we assume the following lattice elements: $\{\lL, \lH\}$ with the partial order $\bot \sqsubseteq \lL \sqsubseteq \lH \sqsubseteq \top$, and $\cdot \lub \lH = \lH$ and $\cdot \glb \lL = \lL$.
@@ -327,6 +332,43 @@ Let us consider a more complex example, a full program, that has side-effects in
 &                     && \quad\ \seal\ 2\ \lH\ \bindLIO\ \lambda y.  \\
 &                     && \quad\ \open\ (f\ x\ y)
 \end{align*}
+\subsubsection{Example on terms with side-effects that violates information flow.} 
+Let us consider a more complex example, a full program, that has side-effects in the {\tt LIO} monad.
+\begin{align*}
+&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
+                                                  y_l\ \bind\ \lambda y.
+                                                  \return\ (x + y)\\
+&                     && {\tt in}\ \evalLIO (\lL, \lH)\ \$\ \\
+&                     && \quad\ \seal\ 1\ \lH\ \bindLIO\ \lambda x.  \\
+&                     && \quad\ \open\ x\ \bindLIO\ \lambda x^\prime.\\
+&                     && \quad\ \seal\ 2\ \lL
+\end{align*}
+%{\small
+%\begin{align*}
+%&                     && \evalLIO (\lL, \lH)\ (\ 
+%                         \seal\ 1\ \lL\ \bindLIO\ \lambda x_l.  
+%                         \seal\ 2\ \lH\ \bindLIO\ \lambda y_l.  
+%                         \open\ (x_l\ \bind\ \lambda x.  y_l\ \bind\ \lambda y.  \return\ (x + y)) \ )\\
+%&\tref{E-Seal}:        & \longrightarrow &
+%                         l_0 \sqsubseteq \lL \sqsubseteq c_0 \\
+%&                      & \Rightarrow &
+%                         \evalLIO (\lL, \lH)\ (\ 
+%                         \lioVal{l_0}{c_0}{l_0}{c_0}{\Lv\ \lL\ 1}\ \bindLIO\ \lambda x_l.  
+%                         \seal\ 2\ \lH\ \bindLIO\ \lambda y_l.  
+%                         \open\ (x_l\ \bind\ \lambda x.  y_l\ \bind\ \lambda y.  \return\ (x + y)) \ )\\
+%&\tref{E-LIO-Bind}:    & \longrightarrow &
+%                         l_0 \sqsubseteq \lL \sqsubseteq c_0 \\
+%&                      & \wedge &
+%                         \seal\ 2\ \lH\ \bindLIO\ \lambda y_l.  
+%                         \open\ ((\Lv\ \lL 1)\ \bind\ \lambda x.  y_l\ \bind\ \lambda y.  \return\ (x + y)) \ ) \rightarrow\ \lioVal{l_0}{c_0}{l_1}{c_1}{e}\\
+%&                      & \Rightarrow &
+%                         \evalLIO (\lL, \lH)\ (\ 
+%                         \lioVal{l_0}{c_0}{l_0}{c_0}{\Lv\ \lL\ 1}\ \bindLIO\ \lambda x_l.  
+%                         \seal\ 2\ \lH\ \bindLIO\ \lambda y_l.  
+%                         \open\ (x_l\ \bind\ \lambda x.  y_l\ \bind\ \lambda y.  \return\ (x + y)) \ )\\
+%                                          \\
+%\end{align*}
+%}
 
 
 
