@@ -235,7 +235,6 @@ We can read this as ``given a label and a clearance the \LIO{} action is execute
 &&&E[\letbind{x}{v}{e}]                            \longrightarrow E[[v/x]e]                                  \tag{E-LetVal} \\
 &&&E[\pi_i\ (e_1,e_2)]                             \longrightarrow E[e_i]                 \tag{E-Proj}   \\
 &&&E[\return\ e]                                   \longrightarrow E[\Lv\ l_\bot\ e] \tag{E-Ret}    \\
-&&&E[\return^\prime\ e\ l]                         \longrightarrow E[\Lv\ l\ e]           \tag{E-Ret$^\prime$}  \\
 &&&\inferrule{e_2 \ne \Lv\ e_l\ e_2^\prime}
       {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]      \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}\tag{E-Bind} \\
 &&&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]\tag{E-Runit}\\
