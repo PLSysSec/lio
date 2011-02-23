@@ -38,15 +38,17 @@
 \newcommand{\transevalrel}[4]{{\xrightarrow[{#1 \quad #3}]{{#2 \quad #4}}}^{*}}
 
 \newcommand{\LIO}{\texttt{LIO}}
+\newcommand{\LIOp}{\texttt{LIO'}}
 \newcommand{\IO}{\texttt{IO}}
-\newcommand{\returnLIO}{\texttt{return}^\texttt{\tiny LIO'}}
-\newcommand{\bindLIO}{\texttt{>>=}^\texttt{\tiny LIO'}}
+\newcommand{\returnLIOp}{\texttt{return}^\texttt{\tiny LIO'}}
+\newcommand{\bindLIOp}{\texttt{>>=}^\texttt{\tiny LIO'}}
 \newcommand{\seqLIO}{\texttt{>>}^\texttt{\tiny LIO'}}
-\newcommand{\lioVal}[1]{(#1)^\texttt{\tiny LIO'}}
+\newcommand{\lioValp}[1]{(#1)^\texttt{\tiny LIO'}}
 
 \newcommand{\tref}[1]{\textrm{#1}}
 
 \newcommand{\withLblClr}{\texttt{withLblClr}}
+\newcommand{\store}{\sigma_\ell}
 \newcommand{\lbl}{\texttt{lbl}}
 \newcommand{\clr}{\texttt{clr}}
 
@@ -75,7 +77,15 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
       \begin{equation*}
       \inferrule{e\longrightarrow e^\prime}{E[e]\longrightarrow E[e^\prime]}
       \end{equation*}
-
+\item We use the notion of an environment $\store$ that maps \lbl{} to the current label, and \clr{} to the current clearance \clr{} as to keep track of and enforce information flow control. The function \withLblClr{} is used to initialize the environment, which may be updated by functions such as \open{}.
+Note that, in practice, this may be implemented using a state transformer monad that threads the label and clearance through the computations.
+\item We define a wrapper monad, \LIOp{}, that is simply used to prevent the escaping of wrapped values (which could violate information flow).
+\item The evaluation relation consisting that may have side-effects in the environment is
+      \begin{equation*}
+      \inferrule{e\longrightarrow e^\prime}{\langle \store, e\rangle \longrightarrow \langle \store^\prime, e^\prime\rangle }
+      \end{equation*}
+      which may be read as ``term $e$ in environment $\store$ evaluates to $e^\prime$ in environment $\store^\prime$''.
+\item We say that a term is ``stuck'' (at run-time) if it violates information flow control.
 \end{enumerate}
 
 \begin{language}
@@ -88,7 +98,7 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
                               &&      &\ |\  \lambda x.e                \\ % abstraction
                               &&      &\ |\  (e, e)                     \\ % tuple
                               &&      &\ |\  \Lv\ e\ e                  \\ % value of type Lvalue
-                              &&      &\ |\  \lioVal{e}                 \\ % value of type IO
+                              &&      &\ |\  \lioValp{e}                \\ % value of type LIO'
                               &&      &\ |\  \true                      \\ % value of type Bool
                               &&      &\ |\  \false                     \\ % value of type Bool
                               &&      &\ |\  l                          \\ % label
@@ -102,11 +112,12 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
                               &&      &\ |\  \return\ e                 \\ % return
                               &&      &\ |\  e\ \bind\ e                \\ % bind two expressions
                               &&      &\ |\  e\ \seq\ e                 \\ % sequence two expressions
-                              &&      &\ |\  \withLblClr\ e\ e              \\ % withLblClr
+                              &&      &\ |\  \withLblClr\ e\ e          \\ % withLblClr
+%                              &&      &\ |\  \langle \store, \ e\rangle   \\ % LIO value
                               &&      &\ |\  \seal\ e\ e                \\ % seal
                               &&      &\ |\  \open\ e                   \\ % open
-                              &&      &\ |\  \returnLIO\ e\             \\ % returnLIO
-                              &&      &\ |\  e\ \bindLIO\ e             \\ % bind two expressions
+                              &&      &\ |\  \returnLIOp\ e\             \\ % returnLIOp
+                              &&      &\ |\  e\ \bindLIOp\ e             \\ % bind two expressions
 %                              &&      &\ |\  \evalLIO\ e\ e             \\ % evalLIO
                               &&      &\ |\  e\ \lub\ e                 \\ % lub
                               &&      &\ |\  e\ \glb\ e                 \\ % glb
@@ -116,12 +127,15 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
                               &&      &\ |\  \Bool                      \\ % bool
                               &&      &\ |\  \ell                       \\ % Label
                               &&      &\ |\  \Lvalue\ \ell\ e           \\ % Lvalue
-                              &&      &\ |\  \LIO\ \ell\ e              \\ % Lvalue
-                              &&      &\ |\  \IO                        \\ % Unit
+%                              &&      &\ |\  \LIO\ \ell\ e              \\ % LIO
+                              &&      &\ |\  \LIOp\ \ell\ e             \\ % LIO'
+%                              &&      &\ |\  \IO                        \\ % IO
 \\
-\textrm{Program:}             && p    &\Coloneqq  (\letbind{x}{e}{})^*(\evalLIO\ e\ e)
+\textrm{Environment:}         && \store & : \{\lbl,\clr\} \rightarrow \textrm{Label}   \\
+\\
+\textrm{Program:}             && p    &\Coloneqq  (\letbind{x}{e}{})^*(\withLblClr\ e\ e)
 \end{align*}
-\caption{Haskell embeded information flow control language. $\Lv\ e\ e$ is the runtime representation of a labeled value and it does not appear in the source.}
+\caption{Haskell embeded information flow control language. $\Lv\ e\ e$ is the runtime representation of a labeled value and it does not appear in the source. Similarly $\lioValp{e}$ is the runtime representation of a \LIOp{} value.}
 \label{language:lvalue}
 \end{language}
 
@@ -181,23 +195,26 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
 
 \begin{typerules}
 \begin{align}
+\inferrule{\Gamma \vdash e : \tau}
+     {\Gamma \vdash \lioValp{e} : \LIOp\ \tau}\tag{T-LIO'-Val}
+\\
 \inferrule{\Gamma \vdash e_1 : (\ell,\ell) \\ \Gamma \vdash e_2 : \tau}
-     {\Gamma \vdash \withLblClr\ e_1\ e_2: \LIO\ \ell\ \tau}\tag{T-WithLblClr}
+     {\Gamma \vdash \withLblClr\ e_1\ e_2: \tau}\tag{T-WithLblClr}
+%\\
+%\inferrule{\Gamma \vdash e : \tau}
+%     {\Gamma \vdash \langle \store, e \rangle: \LIO\ \ell\ \tau}\tag{T-LIO-Val}
 \\
 \inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \ell}
-     {\Gamma \vdash \seal\ e_1\ e_2: \LIO'\ \ell\ (\Lvalue\ \ell\ \tau)}\tag{T-Seal}
+     {\Gamma \vdash \seal\ e_1\ e_2: \LIOp\ (\Lvalue\ \ell\ \tau)}\tag{T-Seal}
 \\
 \inferrule{\Gamma \vdash e : \Lvalue\ \ell\ \tau}
-     {\Gamma \vdash \open\ e : \LIO'\ \ell\ \tau}\tag{T-Open}
+     {\Gamma \vdash \open\ e : \LIOp\ \tau}\tag{T-Open}
 \\
 \inferrule{\Gamma \vdash e : \tau}
-     {\Gamma \vdash \lioVal{e}: \LIO'\ \tau}\tag{T-LIO'-Val}
+     {\Gamma \vdash \returnLIOp\ e  : \LIOp\ \tau}\tag{T-LIO'-Ret}
 \\
-\inferrule{\Gamma \vdash e : \tau}
-     {\Gamma \vdash \returnLIO\ e  : \LIO'\ \ell\ \tau}\tag{T-LIO'-Ret}
-\\
-\inferrule{\Gamma \vdash e_1 : \LIO'\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \LIO'\ \ell\ \tau_2}
-     {\Gamma \vdash e_1\ \bindLIO\ e_2 : \LIO'\ \ell\ \tau_2}\tag{T-LIO'-Bind}
+\inferrule{\Gamma \vdash e_1 : \LIOp\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \LIOp\ \tau_2}
+     {\Gamma \vdash e_1\ \bindLIOp\ e_2 : \LIOp\ \tau_2}\tag{T-LIO'-Bind}
 \end{align}
 \caption{Type rules where the monadic bind and return are solely given for \Lvalue{} types.}
 \caption{Type rules for terms with side-effects.}
@@ -245,22 +262,22 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
 &&E&   ::=  \cdots
        \ |\  \seal\ E\ l                
        \ |\  \open\ E                 
-       \ |\  \returnLIO\ E
-       \ |\  E\ \bindLIO\ e
-       \ |\  v\ \bindLIO\ E
-       \ |\  \langle \sigma, E \rangle
-       \ |\  \lioVal{E}
+       \ |\  \returnLIOp\ E
+       \ |\  E\ \bindLIOp\ e
+       \ |\  v\ \bindLIOp\ E
+%       \ |\  \langle \store, E \rangle
+       \ |\  \lioValp{E}
        \\
 &&&
-\inferrule{\sigma(\lbl)=l \\ \sigma(\clr)=c}
-{\withLblClr\ (l, c)\ e \longrightarrow \langle \sigma, e\rangle} \tag{E-WithLblClr}\\
-&&&\inferrule{\sigma(\lbl) \sqsubseteq l_1 \sqsubseteq \sigma(\clr)}
-      {\langle \sigma, E[\seal\ e\ l_1]\rangle \longrightarrow \langle \sigma, E[\lioVal{\Lv\ l_1\ e}]\rangle} \tag{E-LIO-Seal}  \\
-&&&\inferrule{l^\prime = \sigma(\lbl) \lub l_1 \\ l^\prime \sqsubseteq \sigma(\clr) \\ \sigma^\prime = \sigma[\lbl \mapsto l^\prime]}
-      {\langle \sigma, E[\open\ (\Lv\ l_1\ e_1)]\rangle \longrightarrow \langle \sigma^\prime, E[\lioVal{e_1}]\rangle} \tag{E-LIO-Open} \\
-&&&E[\returnLIO\ e] \longrightarrow E[\lioVal{e}] \tag{E-LIO'-Ret}\\
-&&&E[\lioVal{e_1}\ \bindLIO\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2] \tag{E-LIO'-Bind}\\
-&&&E[\lioVal{e_1}\ \bindLIO\ \lambda x. \returnLIO\ x] \longrightarrow E[\lioVal{e_1}] \tag{E-LIO'-Runit}\\
+\inferrule{\store(\lbl)=l \\ \store(\clr)=c}
+{\langle \emptyset, \withLblClr\ (l, c)\ e \rangle \longrightarrow \langle \store, e\rangle} \tag{E-WithLblClr}\\
+&&&\inferrule{\store(\lbl) \sqsubseteq l_1 \sqsubseteq \store(\clr)}
+      {\langle \store, E[\seal\ e\ l_1]\rangle \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle} \tag{E-LIO-Seal}  \\
+&&&\inferrule{l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \sqsubseteq \store(\clr) \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
+      {\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle} \tag{E-LIO-Open} \\
+&&&E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}] \tag{E-LIO'-Ret}\\
+&&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2] \tag{E-LIO'-Bind}\\
+&&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. \returnLIOp\ x] \longrightarrow E[\lioValp{e_1}] \tag{E-LIO'-Runit}
 \end{align*}
 \caption{Semantics for terms with side effects; \texttt{Lref} case}
 \end{sos}
@@ -274,7 +291,7 @@ Additionally, we define $l_\bot = \lL$ and $l_\top = \lH$.
 
 Furthermore we assume the language is extended to support integer types and integer operations, e.g., addition.
 
-\subsubsection{Example on terms with no side-effects.} 
+\subsubsection{Example with no side-effects.} 
 Let us consider a simple example, working only on pure terms. In this example we are given two labeled values, one with a public label \lL{} and another with a secret label \lH. Adding the two we expect the resulting value to be a labeled value with the secret label the secret label.
 
 \begin{align*}
@@ -301,30 +318,69 @@ Let us consider a simple example, working only on pure terms. In this example we
 &\tref{E-Join}:        & \longrightarrow &
                          \Lv\ \lH\ (1 + 2)\\
 &                      & \longrightarrow &
-                        \Lv\ \lH\ 3\\
+                        \Lv\ \lH\ 3
 \end{align*}
 
-\subsubsection{Example on terms with side-effects.} 
-Let us consider a more complex example, a full program, that has side-effects in the {\tt LIO} monad.
+\subsubsection{Example with side-effects.} 
+Let us consider a more complex example, a full program, that has type checks and does not violate the information flow constraints.
+For simplicity, we do not expand $f$.
 \begin{align*}
 &                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
                                                   y_l\ \bind\ \lambda y.
                                                   \return\ (x + y)\\
-&                     && {\tt in}\ \evalLIO (\lL, \lH)\ \$\ \\
-&                     && \quad\ \seal\ 1\ \lL\ \bindLIO\ \lambda x.  \\
-&                     && \quad\ \seal\ 2\ \lH\ \bindLIO\ \lambda y.  \\
-&                     && \quad\ \open\ (f\ x\ y)
+&                     && {\tt in}\ \withLblClr (\lL, \lH)\ (\
+                                \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
+                                \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                \open\ (f\ x\ y)\ )\\
+&\tref{E-LetVal}      & \longrightarrow & \withLblClr (\lL, \lH)\ (\
+                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y)\ )\\
+&\tref{E-WithLblClr}  & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y) \rangle\\
+&\tref{E-LIO-Seal}    & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.  
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y) \rangle\\
+&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
+&\tref{E-LIO-Seal}    & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \lioValp{\Lv\ \lH\ 2}\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
+&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \open\ (f\ (\Lv\ \lL\ 1)\ (\Lv\ \lH\ 2)) \rangle\\
+&\textrm{Evaluate $f$}& \longrightarrow^* & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \open\ (\Lv\ \lH\ 3) \rangle\\
+&\tref{E-LIO-Open}    & \longrightarrow & \langle \store=\{(\lbl,\lH),(\clr,\lH)\}, 
+                                          \lioValp{3} \rangle\\
 \end{align*}
-\subsubsection{Example on terms with side-effects that violates information flow.} 
-Let us consider a more complex example, a full program, that has side-effects in the {\tt LIO} monad.
+\subsubsection{Example with side-effects that violates information flow.} 
+As above, we consider a full program, but in this case one that would violates information flow (flow from a secret value to a public value).
 \begin{align*}
-&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
-                                                  y_l\ \bind\ \lambda y.
-                                                  \return\ (x + y)\\
-&                     && {\tt in}\ \evalLIO (\lL, \lH)\ \$\ \\
-&                     && \quad\ \seal\ 1\ \lH\ \bindLIO\ \lambda x.  \\
-&                     && \quad\ \open\ x\ \bindLIO\ \lambda x^\prime.\\
-&                     && \quad\ \seal\ 2\ \lL
+&                     && \withLblClr (\lL, \lH)\ (\
+                         \seal\ 1\ \lH\ \bindLIOp\ \lambda x.  
+                         \open\ x\ \bindLIOp\ \lambda y. 
+                         \seal\ y\ \lL)\\
+&\tref{E-WithLblClr}  & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+                                          \seal\ 1\ \lH\ \bindLIOp\ \lambda x.  
+                                          \open\ x\ \bindLIOp\ \lambda y. 
+                                          \seal\ y\ \lL)\rangle\\
+&\tref{E-LIO-Seal}    & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+                                          \lioValp{\Lv\ \lH\ 1}\ \bindLIOp\ \lambda x.  
+                                          \open\ x\ \bindLIOp\ \lambda y. 
+                                          \seal\ y\ \lL\rangle\\
+&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+                                          \open\ (\Lv\ \lH\ 1)\ \bindLIOp\ \lambda y. 
+                                          \seal\ y\ \lL\rangle\\
+&\tref{E-LIO-Open}    & \longrightarrow & \langle \store=\{(\lbl,\lH),(\clr,\lH)\},
+                                          \lioValp{1}\ \bindLIOp\ \lambda y. 
+                                          \seal\ y\ \lL\rangle\\
+&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \store=\{(\lbl,\lH),(\clr,\lH)\},
+                                          \seal\ 1\ \lL\rangle\\
+&\tref{E-LIO-Seal}    & \texttt{STUCK: }& \textrm{Premise for rule is not satisfied: $\store(\lbl)=\lH \not\sqsubseteq \lL$.}
 \end{align*}
 
 
@@ -339,23 +395,31 @@ Let us consider a more complex example, a full program, that has side-effects in
 
 \subsection{Language properties}
 
-\begin{lemma}[Preservation]
+\begin{lemma}[Preservation of pure terms]
 If $\vdash e : \tau$ and $e \longrightarrow e^\prime$ then $\vdash e^\prime : \tau$.
 \end{lemma}
 In other words, a well-typed term taking an evaluation step results in a term that is also well-typed.
 
-\begin{lemma}[Progress]
+\begin{lemma}[Type and information flow preservation]
+If $\vdash e : \tau$ and $\langle \store, e\rangle \longrightarrow \langle \store^\prime, e^\prime \rangle$ then $\vdash e^\prime : \tau$.
+\end{lemma}
+A well-typed and well-behaved term taking an evaluation step results in a term that is also well-typed.
+
+\begin{lemma}[Progress of pure terms]
 If $\vdash e : \tau$ then $e \longrightarrow v$, or there exists $e^\prime$ such that $e \longrightarrow e^\prime$.
 \end{lemma}
 In other words, a closed and well-typed term is not stuck.
 
-\begin{theorem}[Type safety]
+\begin{lemma}[Progress of well-typed and well-behaved terms]
+If $\vdash e : \tau$ then either $\langle \store, e\rangle \longrightarrow \langle \store^\prime, v\rangle$ or $e$ is stuck having violated an information flow premise, or there exists $\store^\second$ and $e^\prime$ such that $\langle \store, e \rangle \longrightarrow \langle \store^\second, e^\prime \rangle$.
+More concretely, a term gets stuck iff it violates an information flow premise.
+\end{lemma}
+This lemma states that a well-typed term may get ``stuck'' if it not well behaved, i.e., violates information flow.
+
+\begin{theorem}[Type safety of pure terms]
 If $\vdash e : \tau$ and $e \longrightarrow e^\prime$, then $e^\prime$ is not stuck.
 \end{theorem}
 
-\begin{lemma}[Type preservation under substitution]
-If $\Gamma[x \mapsto \tau] \vdash e : \tau'$ and $\Gamma \vdash v : \tau$ then $\Gamma \vdash [v/x]e : \tau'$.
-\end{lemma}
 
 \textbf{OLD:}
 \begin{definition}[Low-equivalence]
@@ -406,9 +470,9 @@ Consider the semantics of \seal{} with non-paremetric evaluation context:
 \end{equation*}
 can be rewritten to
 \begin{align*}
-E[\seal\ e\ l_1] \longrightarrow E[&\getS\ \bindLIO\ \lambda(l,c).\\
+E[\seal\ e\ l_1] \longrightarrow E[&\getS\ \bindLIOp\ \lambda(l,c).\\
                                    &{\tt if}\ { l \sqsubseteq l_1 }\\
-                                   &{\tt then}\ \ifel{l_1 \sqsubseteq c}{\returnLIO\ (\Lv\ l\ e)}{\texttt{lerror}\ l\ \textrm{``$\ldots$''}}\\
+                                   &{\tt then}\ \ifel{l_1 \sqsubseteq c}{\returnLIOp\ (\Lv\ l\ e)}{\texttt{lerror}\ l\ \textrm{``$\ldots$''}}\\
                                    &{\tt else}\ {\texttt{lerror}\ l\ \textrm{``$\ldots$''}}]
 \end{align*}
 where bind and return are lift to and sequence {\tt LIO} actions and not \Lvalue{}s. 
@@ -422,17 +486,17 @@ Similarly,
 can be rewritten to:
 \begin{align*}
 E[\open\ \Lv\ l_1\ e_1] \longrightarrow
-E[&\getS\ \bindLIO\ \lambda(l,c).\\
+E[&\getS\ \bindLIOp\ \lambda(l,c).\\
   &{\tt let}\ {l^\prime}={l\lub l_1}\\
   &{\tt in }\ {\tt if}\ {l^\prime \sqsubseteq c}\\
-  &\quad\quad {\tt then}\ {\putS\ (l^\prime,c)\ \seqLIO\ \returnLIO\ e_1}\\
+  &\quad\quad {\tt then}\ {\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1}\\
   &\quad\quad {\tt else}\ {\texttt{lerror}\ l\ \textrm{``$\ldots$''}}]
-%  {\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIO\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
-%\letbind{l^\prime}{l\lub l_1}{\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIO\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
+%  {\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
+%\letbind{l^\prime}{l\lub l_1}{\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
 \end{align*}
 %\begin{equation*}
-%E[\open\ \Lv\ l_1\ e_1] \longrightarrow E[\getS\ \bindLIO\ \lambda(l,c).\letbind{l^\prime}{l\lub l_1}{
-%\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIO\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
+%E[\open\ \Lv\ l_1\ e_1] \longrightarrow E[\getS\ \bindLIOp\ \lambda(l,c).\letbind{l^\prime}{l\lub l_1}{
+%\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
 %\end{equation*}
 
 
@@ -450,7 +514,10 @@ We note that any program using the \seal{}, \open{} functions must be executed a
 &&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
       {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l_1\ e]} \tag{E-Seal}  \\
 &&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
-      {E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]} \tag{E-Open}  \\
+      {E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]} \tag{E-Open} 
 \end{align*}
 \caption{Semantics for terms with side effects; \texttt{Lvalue} case}
 \end{sos}
+\begin{lemma}[Type preservation under substitution]
+If $\Gamma[x \mapsto \tau] \vdash e : \tau'$ and $\Gamma \vdash v : \tau$ then $\Gamma \vdash [v/x]e : \tau'$.
+\end{lemma}
