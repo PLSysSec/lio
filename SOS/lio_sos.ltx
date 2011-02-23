@@ -1,5 +1,6 @@
 \documentclass[10pt]{article} 
 %\usepackage[margin=.5in]{geometry} 
+\usepackage{float}
 \usepackage{amsmath,amssymb,amsfonts,amsthm,stmaryrd,txfonts, mathabx}
 \usepackage{float}
 \usepackage{mathpartir}
@@ -38,13 +39,16 @@
 
 \newcommand{\LIO}{\texttt{LIO}}
 \newcommand{\IO}{\texttt{IO}}
-\newcommand{\returnLIO}{\texttt{return}^\texttt{\tiny LIO}}
-\newcommand{\bindLIO}{\texttt{>>=}^\texttt{\tiny LIO}}
-\newcommand{\seqLIO}{\texttt{>>}^\texttt{\tiny LIO}}
-\newcommand{\lioVal}[5]{{}_{#1}^{#2}\langle\ #5\ \rangle_{#3}^{#4}}
-\newcommand{\ioVal}[1]{\langle\ #1\ \rangle}
+\newcommand{\returnLIO}{\texttt{return}^\texttt{\tiny LIO'}}
+\newcommand{\bindLIO}{\texttt{>>=}^\texttt{\tiny LIO'}}
+\newcommand{\seqLIO}{\texttt{>>}^\texttt{\tiny LIO'}}
+\newcommand{\lioVal}[1]{(#1)^\texttt{\tiny LIO'}}
 
 \newcommand{\tref}[1]{\textrm{#1}}
+
+\newcommand{\withLblClr}{\texttt{withLblClr}}
+\newcommand{\lbl}{\texttt{lbl}}
+\newcommand{\clr}{\texttt{clr}}
 
 \floatstyle{ruled}
 \newfloat{typerules}{htbp}{lop} \floatname{typerules}{Typing Rule}
@@ -71,14 +75,6 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
       \begin{equation*}
       \inferrule{e\longrightarrow e^\prime}{E[e]\longrightarrow E[e^\prime]}
       \end{equation*}
-\item We do not model the \IO{} monad, however to evaluate a \LIO{} action the programmer must use \evalLIO{} which executes the \LIO{} action with a given initial state and returns the result in \IO{}. In other words a program is a single \IO{} action, since we do not definte a way to compose them.
-
-\item \LIO{} is a state transformer, with the underlying monad being \IO{} and the state being a tuple consisting of the label and clrearance. In other words,
-\begin{equation*}
-\LIO{}\ \ell\ a :: (\ell, \ell) \rightarrow \IO{}\ (\tau,(\ell,\ell))
-\end{equation*}
-We can read this as ``given a label and a clearance the \LIO{} action is executed, producing a value and a new label and clearance in \IO{}''.
-\item To simplify notation, we use $\lioVal{l}{c}{l^\prime}{c^\prime}{e}$ to denote a \LIO{} value which can be read as ``given a label and clearance $(l,c)$, $e$ is executed with the produced label and clearance being $(l^\prime,c^\prime)$''.
 
 \end{enumerate}
 
@@ -92,8 +88,7 @@ We can read this as ``given a label and a clearance the \LIO{} action is execute
                               &&      &\ |\  \lambda x.e                \\ % abstraction
                               &&      &\ |\  (e, e)                     \\ % tuple
                               &&      &\ |\  \Lv\ e\ e                  \\ % value of type Lvalue
-                              &&      &\ |\  \lioVal{e}{e}{e}{e}{e}     \\ % value of type LIO
-                              &&      &\ |\  \ioVal{e}                  \\ % value of type IO
+                              &&      &\ |\  \lioVal{e}                 \\ % value of type IO
                               &&      &\ |\  \true                      \\ % value of type Bool
                               &&      &\ |\  \false                     \\ % value of type Bool
                               &&      &\ |\  l                          \\ % label
@@ -107,11 +102,12 @@ We can read this as ``given a label and a clearance the \LIO{} action is execute
                               &&      &\ |\  \return\ e                 \\ % return
                               &&      &\ |\  e\ \bind\ e                \\ % bind two expressions
                               &&      &\ |\  e\ \seq\ e                 \\ % sequence two expressions
-                              &&      &\ |\  \returnLIO\ e\             \\ % returnLIO
-                              &&      &\ |\  e\ \bindLIO\ e             \\ % bind two expressions
+                              &&      &\ |\  \withLblClr\ e\ e              \\ % withLblClr
                               &&      &\ |\  \seal\ e\ e                \\ % seal
                               &&      &\ |\  \open\ e                   \\ % open
-                              &&      &\ |\  \evalLIO\ e\ e             \\ % evalLIO
+                              &&      &\ |\  \returnLIO\ e\             \\ % returnLIO
+                              &&      &\ |\  e\ \bindLIO\ e             \\ % bind two expressions
+%                              &&      &\ |\  \evalLIO\ e\ e             \\ % evalLIO
                               &&      &\ |\  e\ \lub\ e                 \\ % lub
                               &&      &\ |\  e\ \glb\ e                 \\ % glb
 \\
@@ -185,26 +181,23 @@ We can read this as ``given a label and a clearance the \LIO{} action is execute
 
 \begin{typerules}
 \begin{align}
+\inferrule{\Gamma \vdash e_1 : (\ell,\ell) \\ \Gamma \vdash e_2 : \tau}
+     {\Gamma \vdash \withLblClr\ e_1\ e_2: \LIO\ \ell\ \tau}\tag{T-WithLblClr}
+\\
 \inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \ell}
-     {\Gamma \vdash \seal\ e_1\ e_2: \LIO\ \ell\ (\Lvalue\ \ell\ \tau)}\tag{T-Seal}
+     {\Gamma \vdash \seal\ e_1\ e_2: \LIO'\ \ell\ (\Lvalue\ \ell\ \tau)}\tag{T-Seal}
 \\
 \inferrule{\Gamma \vdash e : \Lvalue\ \ell\ \tau}
-     {\Gamma \vdash \open\ e : \LIO\ \ell\ \tau}\tag{T-Open}
-\\
-\inferrule{\Gamma \vdash e_i : \ell \\ \Gamma \vdash e : \tau}
-     {\Gamma \vdash \lioVal{e_1}{e_2}{e_3}{e_4}{e}: \LIO\ \ell\ \tau}\tag{T-LIO-Val}
+     {\Gamma \vdash \open\ e : \LIO'\ \ell\ \tau}\tag{T-Open}
 \\
 \inferrule{\Gamma \vdash e : \tau}
-     {\Gamma \vdash \ioVal{e}: \IO\ \tau}\tag{T-IO-Val}
+     {\Gamma \vdash \lioVal{e}: \LIO'\ \tau}\tag{T-LIO'-Val}
 \\
 \inferrule{\Gamma \vdash e : \tau}
-     {\Gamma \vdash \returnLIO\ e  : \LIO\ \ell\ \tau}\tag{T-LIO-Ret}
+     {\Gamma \vdash \returnLIO\ e  : \LIO'\ \ell\ \tau}\tag{T-LIO'-Ret}
 \\
-\inferrule{\Gamma \vdash e_1 : \LIO\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \LIO\ \ell\ \tau_2}
-     {\Gamma \vdash e_1\ \bind\ e_2 : \LIO\ \ell\ \tau_2}\tag{T-LIO-Bind}
-\\
-\inferrule{\Gamma \vdash e_1 : (\ell,\ell) \\ \Gamma \vdash e_2 : \LIO\ \ell\ \tau_1}
-     {\Gamma \vdash \evalLIO\ e_1\ e_2: \IO\ \tau_1}\tag{T-EvalLIO}
+\inferrule{\Gamma \vdash e_1 : \LIO'\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \LIO'\ \ell\ \tau_2}
+     {\Gamma \vdash e_1\ \bindLIO\ e_2 : \LIO'\ \ell\ \tau_2}\tag{T-LIO'-Bind}
 \end{align}
 \caption{Type rules where the monadic bind and return are solely given for \Lvalue{} types.}
 \caption{Type rules for terms with side-effects.}
@@ -247,7 +240,6 @@ We can read this as ``given a label and a clearance the \LIO{} action is execute
 \caption{Semantics for pure terms.}
 \end{sos}
 
-
 \begin{sos}
 \begin{align*}
 &&E&   ::=  \cdots
@@ -256,19 +248,19 @@ We can read this as ``given a label and a clearance the \LIO{} action is execute
        \ |\  \returnLIO\ E
        \ |\  E\ \bindLIO\ e
        \ |\  v\ \bindLIO\ E
-       \ |\  \lioVal{e}{e}{e}{e}{E}
-       \ |\  \ioVal{E}
-       \ |\  \evalLIO\ v\ E
+       \ |\  \langle \sigma, E \rangle
+       \ |\  \lioVal{E}
        \\
-&&&\inferrule{l \sqsubseteq l_1 \sqsubseteq c}
-      {E[\seal\ e\ l_1] \longrightarrow E[\lioVal{l}{c}{l}{c}{\Lv\ l_1\ e}]} \tag{E-Seal}  \\
-&&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
-      {E[\open\ (\Lv\ l_1\ e_1)] \longrightarrow E[\lioVal{l}{c}{l^\prime}{c}{e_1}]} \tag{E-Open} \\
-&&&E[\returnLIO\ e] \longrightarrow E[\lioVal{l}{c}{l}{c}{e}] \tag{E-LIO-Ret}\\
-&&&E[{\returnLIO}^\prime\ e\ (l_1,c_1)\ (l_2,c_2)] \longrightarrow E[\lioVal{l_1}{c_1}{l_2}{c_2}{e}] \tag{E-LIO-Ret'}\\
-&&&\inferrule{[e_1/x]e_2 \longrightarrow \lioVal{l^\prime}{c^\prime}{l^\second}{c^\second}{e_2^\prime}}
-      {E[\lioVal{l}{c}{l^\prime}{c^\prime}{e_1}\ \bindLIO\ \lambda x.e_2]\longrightarrow E[[e_1/x]e_2\ \bindLIO\ \lambda x.{\returnLIO}^\prime\ (l,c)\ (l^\second, c^\second)]} \tag{E-LIO-Bind} \\
-&&&E[\evalLIO\ (l, c)\ \lioVal{l}{c}{l^\prime}{c^\prime}{e}] \longrightarrow E[\ioVal{e}] \tag{E-EvalLIO}
+&&&
+\inferrule{\sigma(\lbl)=l \\ \sigma(\clr)=c}
+{\withLblClr\ (l, c)\ e \longrightarrow \langle \sigma, e\rangle} \tag{E-WithLblClr}\\
+&&&\inferrule{\sigma(\lbl) \sqsubseteq l_1 \sqsubseteq \sigma(\clr)}
+      {\langle \sigma, E[\seal\ e\ l_1]\rangle \longrightarrow \langle \sigma, E[\lioVal{\Lv\ l_1\ e}]\rangle} \tag{E-LIO-Seal}  \\
+&&&\inferrule{l^\prime = \sigma(\lbl) \lub l_1 \\ l^\prime \sqsubseteq \sigma(\clr) \\ \sigma^\prime = \sigma[\lbl \mapsto l^\prime]}
+      {\langle \sigma, E[\open\ (\Lv\ l_1\ e_1)]\rangle \longrightarrow \langle \sigma^\prime, E[\lioVal{e_1}]\rangle} \tag{E-LIO-Open} \\
+&&&E[\returnLIO\ e] \longrightarrow E[\lioVal{e}] \tag{E-LIO'-Ret}\\
+&&&E[\lioVal{e_1}\ \bindLIO\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2] \tag{E-LIO'-Bind}\\
+&&&E[\lioVal{e_1}\ \bindLIO\ \lambda x. \returnLIO\ x] \longrightarrow E[\lioVal{e_1}] \tag{E-LIO'-Runit}\\
 \end{align*}
 \caption{Semantics for terms with side effects; \texttt{Lref} case}
 \end{sos}
@@ -334,34 +326,6 @@ Let us consider a more complex example, a full program, that has side-effects in
 &                     && \quad\ \open\ x\ \bindLIO\ \lambda x^\prime.\\
 &                     && \quad\ \seal\ 2\ \lL
 \end{align*}
-%{\small
-%\begin{align*}
-%&                     && \evalLIO (\lL, \lH)\ (\ 
-%                         \seal\ 1\ \lL\ \bindLIO\ \lambda x_l.  
-%                         \seal\ 2\ \lH\ \bindLIO\ \lambda y_l.  
-%                         \open\ (x_l\ \bind\ \lambda x.  y_l\ \bind\ \lambda y.  \return\ (x + y)) \ )\\
-%&\tref{E-Seal}:        & \longrightarrow &
-%                         l_0 \sqsubseteq \lL \sqsubseteq c_0 \\
-%&                      & \Rightarrow &
-%                         \evalLIO (\lL, \lH)\ (\ 
-%                         \lioVal{l_0}{c_0}{l_0}{c_0}{\Lv\ \lL\ 1}\ \bindLIO\ \lambda x_l.  
-%                         \seal\ 2\ \lH\ \bindLIO\ \lambda y_l.  
-%                         \open\ (x_l\ \bind\ \lambda x.  y_l\ \bind\ \lambda y.  \return\ (x + y)) \ )\\
-%&\tref{E-LIO-Bind}:    & \longrightarrow &
-%                         l_0 \sqsubseteq \lL \sqsubseteq c_0 \\
-%&                      & \wedge &
-%                         \seal\ 2\ \lH\ \bindLIO\ \lambda y_l.  
-%                         \open\ ((\Lv\ \lL 1)\ \bind\ \lambda x.  y_l\ \bind\ \lambda y.  \return\ (x + y)) \ ) \rightarrow\ \lioVal{l_0}{c_0}{l_1}{c_1}{e}\\
-%&                      & \Rightarrow &
-%                         \evalLIO (\lL, \lH)\ (\ 
-%                         \lioVal{l_0}{c_0}{l_0}{c_0}{\Lv\ \lL\ 1}\ \bindLIO\ \lambda x_l.  
-%                         \seal\ 2\ \lH\ \bindLIO\ \lambda y_l.  
-%                         \open\ (x_l\ \bind\ \lambda x.  y_l\ \bind\ \lambda y.  \return\ (x + y)) \ )\\
-%                                          \\
-%\end{align*}
-%}
-
-
 
 
 
