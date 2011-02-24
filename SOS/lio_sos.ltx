@@ -24,6 +24,7 @@
 \newcommand{\glb}{\sqcap}
 \newcommand{\labelOf}{\mathcal{L}}
 \newcommand{\lL}{\texttt{L}}
+\newcommand{\lM}{\texttt{M}}
 \newcommand{\lH}{\texttt{H}}
 \newcommand{\Adv}{\mathcal{A}}
 \newcommand{\seal}{\texttt{seal}}
@@ -52,6 +53,10 @@
 \newcommand{\lbl}{\texttt{lbl}}
 \newcommand{\clr}{\texttt{clr}}
 
+\newcommand{\well}[2]{\mathcal{W}\llbracket #1,  #2 \rrbracket}
+\newcommand{\tT}{\mathbb{T}}
+\newcommand{\tF}{\mathbb{F}}
+
 \floatstyle{ruled}
 \newfloat{typerules}{htbp}{lop} \floatname{typerules}{Typing Rule}
 \newfloat{sos}{htbp}{lop} \floatname{sos}{Operational Semantics}
@@ -69,7 +74,7 @@
 \item The typing relation has the form $\Gamma \vdash e : \tau$, which can be read as ``term $e$ has type $\tau$ in the typing context $\Gamma$''; $\Gamma$ is the set of assumptions on the types of the free variables in term $e$.
 Hence, $\Gamma : \textrm{Term} \rightarrow \textrm{Type}$.
 \item The function $\mathcal{L} : \textrm{Label} \rightarrow \mathbb{L}$ maps labels to elements of latice $\mathbb{L}$, i.e., $\mathcal{L}\llbracket l\rrbracket \in \mathbb{L}\cup\{\bot,\top\}$.
-Furthermore, $\mathcal{L}$ is homorphically defined over label operations, so 
+Furthermore, $\mathcal{L}$ is homomorphically defined over label operations, so 
 $\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \lub \mathcal{L} \llbracket l_2\rrbracket$, and similarly $\mathcal{L}\llbracket l_1 \glb\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \glb \mathcal{L} \llbracket l_2\rrbracket$.
 Note that the label kind and lattice may be arbitrary defined as long as $\mathcal{L}$ is bijective.
 \item The evaluation contexts $E$ are terms with a hole; where $E[e]$ is a term with the hole being replaced by $e$.
@@ -77,7 +82,9 @@ Note that the label kind and lattice may be arbitrary defined as long as $\mathc
       \begin{equation*}
       \inferrule{e\longrightarrow e^\prime}{E[e]\longrightarrow E[e^\prime]}
       \end{equation*}
-\item We use the notion of an environment $\store$ that maps \lbl{} to the current label, and \clr{} to the current clearance \clr{} as to keep track of and enforce information flow control. The function \withLblClr{} is used to initialize the environment, which may be updated by functions such as \open{}.
+\item We use the notion of an environment $\store$ that maps \lbl{} to the current label, and \clr{} to the current clearance as to keep track of and enforce information flow control.
+The current label is the highest label of all the variables that we can name in the environment; for example, if we current label is high, then we can name variables that were labeled high, hose label was removed.
+The function \withLblClr{} is used to initialize the environment, which may be updated by functions such as \open{}.
 Note that, in practice, this may be implemented using a state transformer monad that threads the label and clearance through the computations.
 \item We define a wrapper monad, \LIOp{}, that is simply used to prevent the escaping of wrapped values (which could violate information flow).
 \item The evaluation relation consisting that may have side-effects in the environment is
@@ -282,7 +289,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
 \caption{Semantics for terms with side effects; \texttt{Lref} case}
 \end{sos}
 
-\newpage
+\pagebreak
 
 \subsection{Example} 
 For the following examples we assume the following lattice elements: $\{\lL, \lH\}$ with the partial order $\bot \sqsubseteq \lL \sqsubseteq \lH \sqsubseteq \top$, and $\cdot \lub \lH = \lH$ and $\cdot \glb \lL = \lL$.
@@ -392,6 +399,29 @@ As above, we consider a full program, but in this case one that would violates i
 
 \pagebreak
 
+\subsection{Well-behaved terms}
+We define a function ${\mathcal{W}\llbracket \rrbracket} : \textrm{Environment}\times\textrm{Term} \rightarrow \{\tT, \tF\}$, where $\tT{}$ denotes true, and $\tF{}$ denotes false.
+
+\begin{align*}
+\well{\store}{x} &= \tT\\
+\well{\store}{\lambda x. e} &= \well{\store}{e}\\
+\well{\store}{\lioValp{e}} &= \well{\store}{e}\\
+\well{\store}{\true} &= \tT\\
+\well{\store}{\false} &= \tT\\
+\well{\store}{l} &= \tT\\
+\well{\store}{\fix\ e} &= \well{\store}{e}\\
+\well{\store}{\Lv\ l\ e} &= \well{\store}{e}\\
+\well{\store}{e_1\ e_2} &= \well{\store}{e_1} \land \well{\store}{e_2}\\
+\well{\store}{\ifel{\true}{e_1}{e_2}} &= \well{\store}{e_1}\\
+\well{\store}{\ifel{\false}{e_1}{e_2}} &= \well{\store}{e_2}\\
+&\vdots\\
+\well{\store}{\seal\ e\ l_1}          &= (\store(\lbl) \sqsubseteq l_1 \sqsubseteq \store(\clr)) \land\ \well{\store}{e}\\
+\well{\store}{\open\ (\Lv\ l_1\ e_1)} &= (\store^\prime(\lbl) \sqsubseteq \store(\clr)) \land \well{\store^\prime}{e},\\
+                                      &\textrm{where } \store^\prime=\store[\lbl\mapsto l^\prime], \textrm{and } l^\prime = \store(\lbl)\lub l_1
+\end{align*}
+
+The remaining terms are similarly defined. We say that a term $e$ is well-behaved (at this point in the execution) in environment $\store$ if $\well{\store}{e}=\tT$.
+
 
 \subsection{Language properties}
 
@@ -406,39 +436,48 @@ If $\vdash e : \tau$ and $\langle \store, e\rangle \longrightarrow \langle \stor
 A well-typed and well-behaved term taking an evaluation step results in a term that is also well-typed.
 
 \begin{lemma}[Progress of pure terms]
-If $\vdash e : \tau$ then $e \longrightarrow v$, or there exists $e^\prime$ such that $e \longrightarrow e^\prime$.
+If $\vdash e : \tau$ and $e$ does not depend on an environment (i.e., $e$ does not contain \seal{} or \open{}), then $e \longrightarrow v$, or there exists $e^\prime$ such that $e \longrightarrow e^\prime$.
 \end{lemma}
-In other words, a closed and well-typed term is not stuck.
+In other words, a closed and well-typed pure term is not stuck.
 
 \begin{lemma}[Progress of well-typed and well-behaved terms]
-If $\vdash e : \tau$ then either $\langle \store, e\rangle \longrightarrow \langle \store^\prime, v\rangle$ or $e$ is stuck having violated an information flow premise, or there exists $\store^\second$ and $e^\prime$ such that $\langle \store, e \rangle \longrightarrow \langle \store^\second, e^\prime \rangle$.
-More concretely, a term gets stuck iff it violates an information flow premise.
+Given environment $\store$, if $\vdash e : \tau$ and $\well{\store}{e}$ then $\langle \store, e \rangle \longrightarrow \langle \store^\prime, v\rangle$, or there exists $e^\prime$ such that $\langle \store, e \rangle \longrightarrow \langle \store^\second, e^\prime\rangle$.
 \end{lemma}
-This lemma states that a well-typed term may get ``stuck'' if it not well behaved, i.e., violates information flow.
+This lemma states that a well-typed and well-behaved term is either a value or is not stuck. A well-typed term, however, may get``stuck'' if it not well-behaved, i.e., violates information flow.
 
-\begin{theorem}[Type safety of pure terms]
-If $\vdash e : \tau$ and $e \longrightarrow e^\prime$, then $e^\prime$ is not stuck.
-\end{theorem}
+%\begin{theorem}[Type safety of pure terms]
+%If $\vdash e : \tau$ and $e \longrightarrow e^\prime$, then $e^\prime$ is not stuck.
+%\end{theorem}
 
-
-\textbf{OLD:}
 \begin{definition}[Low-equivalence]
-Two inputs, each consisting of a pair of values with labels $\ell, \ell'$ such that $ \ell' \not\sqsubseteq\ell$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, for inputs $e_1, e_2$:
+Two values, each consisting of a pair of values with labels ${l}, {l}'$ such that $ {l}' \not\sqsubseteq{l}$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, 
 \begin{equation*}
-\inferrule{(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i, \Lvalue\ \ell\ \tau_i))_{j=1,2} \\ (e_j\longrightarrow^* v_j)_{j=1,2}\\ \pi_2\ v_1 = \pi_2\ v_2}
+\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i))_{j=1,2} \\ (e_j\longrightarrow^* v_j)_{j=1,2}\\ \pi_2\ v_1 = \pi_2\ v_2\\ l \sqsubseteq L\\ L\not\sqsubseteq l}
 {e_1 =_L e_2}
 \end{equation*}
 \end{definition}
 
+For example, $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lH\ 9,\Lv\ \lL\ 2)$, but 
+$(\Lv\ \lH\ 8,\Lv\ \lL\ 2) \not =_{\lL} (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$.
+Similarly, if we extend the lattice with element $\lM : \lL\sqsubseteq \lM \sqsubseteq \lH$, 
+$(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lM\ 9,\Lv\ \lL\ 2)$.
+
+The low-equivalence expresses the observing power of an attacker; an attacker may observe any values labeled with at most $L$.
+
 \begin{theorem}[Non-interference]
-Given labels $\ell, \ell'$ such that $ \ell' \not\sqsubseteq\ell$, an attacker $\Adv$ with clearance $c_\Adv$ such that $\ell \sqsubseteq c_\Adv$ and $\ell' \not\sqsubseteq c_\Adv$, and a pure computation $e$ such that $\Gamma \vdash e : (\Lvalue\ \ell'\ \tau'_i, \Lvalue\ \ell\ \tau_i) \rightarrow (\Lvalue\ \ell'\ \tau'_o, \Lvalue\ \ell\ \tau_o)$, then
-\begin{equation*}
-\forall e_1 e_2.(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i,\Lvalue\ \ell\ \tau_i))_{j=1,2}
-\land e_1 =_L e_2 \land  e\ e_1 \longrightarrow^* v_1 \land e\ e_2 \longrightarrow^* v_2\ \Rightarrow v_1 =_L v_2.
-\end{equation*}
+Given labels ${l}, {l}'$ such that $ {l}' \not\sqsubseteq{l}$,
+a computation $e$ such that $\Gamma \vdash e : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i) \rightarrow (\Lvalue\ {l}'\ \tau'_o, \Lvalue\ {l}\ \tau_o)$ in environment $\store$, such that $\store(\lbl)\sqsubseteq l_i \sqsubseteq \store(\clr)$ for $l_i = \{l,l'\}$,
+and an attacker $\Adv$ with clearance $c_\Adv$ such that ${l} \sqsubseteq c_\Adv$ and ${l}' \not\sqsubseteq c_\Adv$,
+\begin{align*}
+\forall e_1 e_2.&(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i,\Lvalue\ \ell\ \tau_i))_{j=1,2}\\
+&\land e_1 =_L e_2\\ 
+&\land \langle \store, e\ e_1\rangle \longrightarrow^* \langle \store^\prime, v_1\rangle\\
+&\land \langle \store, e\ e_2\rangle \longrightarrow^* \langle \store^\prime, v_2\rangle\\
+&\Rightarrow v_1 =_{c_\Adv} v_2.
+\end{align*}
 \end{theorem}
 
-In other words, given two inputs, each consisting of a pair of values with a public and secret labels, the result of the computation as observed by the attacker (at label level $c_\Adv$) is not distinguishable.
+In other words, given two inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as observed by the attacker (at label level up to $c_\Adv$) is indistinguishable.
 
 
 
