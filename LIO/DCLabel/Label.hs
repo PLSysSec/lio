@@ -46,9 +46,13 @@ module LIO.DCLabel.Label
     , DCPrivs, dcprivs, owns
     -- * Useful aliases for the LIO Monad
     , DC, evalDC
+    -- * Useful aliases for the IterIO Monad
+    , evalIterDC 
     ) where
 
 import LIO.TCB
+import LIO.IterLIO 
+import Data.IterIO 
 
 import Control.DeepSeq
 import Control.Applicative
@@ -379,3 +383,8 @@ type DC = LIO DCLabel ()
 -- computation's result and the label of the result.
 evalDC :: DC a -> IO (a, DCLabel)
 evalDC m = evalLIO m ()
+
+-- | Runs a 'LIO' 'Iter', returning the computation's result and
+-- label in an 'IO' 'Iter'.
+evalIterDC :: (ChunkData t) => Iter t DC a -> Iter t IO (a, DCLabel)
+evalIterDC iter = evalIterLIO iter ()

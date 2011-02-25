@@ -21,11 +21,15 @@ module LIO.Base (
                , taintRD, openRD, openRPD
                , LabelFault(..)
                , catchP, onExceptionP, bracketP, handleP
+               , evaluate
                , evalLIO
                 ) where
 
 import LIO.TCB hiding ( 
-                 ShowTCB(..)
+               LIOstate(..)
+               , runLIO
+               --
+               , ShowTCB(..)
                , ReadTCB(..)
                , lrefTCB
                , lrefDTCB

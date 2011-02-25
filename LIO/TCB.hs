@@ -76,9 +76,12 @@ module LIO.TCB (
                -- $lexception
                , MonadCatch(..), catchP, handleP, onExceptionP, bracketP
                -- * Executing computations
+               , evaluate
                , evalLIO
                -- Start TCB exports
                -- * Privileged operations
+               , LIOstate(..)
+               , runLIO
                , ShowTCB(..)
                , ReadTCB(..)
                , lrefTCB
@@ -93,8 +96,9 @@ module LIO.TCB (
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
                -- End TCB exports
-               , lvalue, Lvalue
+{-               , lvalue, Lvalue
                , openRv
+-}
                ) where
 
 import Prelude hiding (catch)
@@ -102,7 +106,7 @@ import Control.Applicative
 import Control.Monad.Error
 import Control.Monad.State.Lazy hiding (put, get)
 import Control.Exception hiding (catch, handle, throw, throwIO,
-                                 onException, block, unblock)
+                                 onException, block, unblock, evaluate)
 import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
@@ -1138,74 +1142,15 @@ instance (Label l) => MonadError IOException (LIO l s) where
     throwError = throwIO
     catchError = catch
 
--- | New LIO approach.
+-- | Evaluate in LIO.
+evaluate :: (Label l) => a -> LIO l s a
+evaluate = rtioTCB . E.evaluate
+
+
 {-
-data (Label l, Monoid s) => LabeledState l s =
-  LabeledState { labelS :: s
-               , curLabel :: l
-               , curClearance :: l
-               }
-
-emptyLabeledState :: (Label l, Monoid s) => LabeledState l s
-emptyLabeledState = LabeledState mempty lpure lclear
-
-data (Label l, Monoid s) => Lvalue l s t = LvalueTCB l (LabeledState l s) t
-
-instance (Label l, Monoid s) => Monad (Lvalue l s) where
-  return x = LvalueTCB lpure emptyLabeledState x
-  (LvalueTCB l s x) >>= f = let (LvalueTCB l' s' x') = f x
-                                cL  = lub (curLabel s) (curLabel s')
-                                cC  = curClearance s' -- no need for glb with (curClearance s)
-                                ls = (labelS s) `mappend` (labelS s')
-                                s'' = LabeledState ls cL cC
-                                l'' =  l `lub` l' `lub` cL
-                             in checkAndCreateLvalue s'' l'' x'
-                             --will not actually have 'error' in real code
-    where checkAndCreateLvalue s l x | not $ (curLabel s) `leq` (curClearance s) = error "Context label exceeds clearance"
-                                     | not $ l `leq` (curClearance s) = error "Trying to create labeled value above current clearance"
-                                     | otherwise = LvalueTCB l s x
-
--- For completeness:
-newtype (Label l, Monoid s) => LIOstate' l s = LIOstate' (LabeledState l s)
-
-labelState' :: (Label l, Monoid s) => LIOstate' l s -> s
-labelState' (LIOstate' s) = labelS s
-
-lioL' :: (Label l, Monoid s) => LIOstate' l s -> l
-lioL' (LIOstate' s) = curLabel s
-
-lioC' :: (Label l, Monoid s) => LIOstate' l s -> l
-lioC' (LIOstate' s) = curClearance s
-
--- Unchanged definition:
-newtype (Label l, Monoid s) => LIO' l s a = LIO' (StateT (LIOstate' l s) IO a)
-
-instance (Label l, Monoid s) => Monad (LIO' l s) where
-  return x = LIO' (return x)
-  (LIO' (StateT x)) >>= f = LIO' . StateT $ \s -> do
-    (v, s') <- x s
-    let (LIO' (StateT x')) = (f v)
-    (v',s'') <- x' s'
-    let cL = (lioL' s') `lub` (lioL' s'')
-        cC = lioC' s''
-        cS = labelState' s''
-    if not $ cL `leq` cC
-      then error "Context label exceeds clearance"
-      else return (v', LIOstate' $ LabeledState cS cL cC)
-
-get' :: (Label l, Monoid s) => LIO' l s (LIOstate' l s)
-get' = LIO' . StateT $ \s -> return (s, s)
-
-put' :: (Label l, Monoid s) => LIOstate' l s -> LIO' l s ()
-put' s = LIO' . StateT $ \_ -> return (() , s)
-
-lref' :: (Label l, Monoid s) => l -> a -> LIO' l s (Lvalue l s a)
-lref' l a = get' >>= doit
-    where doit s@(LIOstate' ls) | not $ l `leq` lioC' s = error "Requested label exceed clearance" --later: throwIO LerrClearance
-                                | not $ lioL' s `leq` l = error "Requested label is below label" --later: throwIO LerrLow
-                                | otherwise             = return $ LvalueTCB l ls a
--}
-
+--
+-- Lvalue
+--
 data (Label l) => Lv l t = LvTCB l t -- same as Lref
 newtype (Label l) => Lvalue l s t = LvalueTCB (LIO l s (Lv l t)) -- the exported Lvalue
 
@@ -1241,3 +1186,6 @@ openRv (LvalueTCB lx) = do
   (LvTCB l x) <- lx
   taintL l
   return x
+-}
+
+
