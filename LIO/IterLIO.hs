@@ -51,8 +51,8 @@ runIterLIO m0 s0 = adaptIter (\a -> (a, s0)) adapt m0
             runIterLIO m2 s
 
 evalIterLIO :: (ChunkData t, Label l) =>
-              Iter t (LIO l s) a -> s -> Iter t IO (a, l)
-evalIterLIO m0 s0 = do
+               s -> Iter t (LIO l s) a -> Iter t IO (a, l)
+evalIterLIO s0 m0 = do
   liftM (\(a,s) -> (a, lioL s)) $ runIterLIO m0 (newstate s0)
  where newstate s = LIOstate { labelState = s , lioL = lpure , lioC = lclear }
 

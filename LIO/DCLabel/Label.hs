@@ -387,4 +387,4 @@ evalDC m = evalLIO m ()
 -- | Runs a 'LIO' 'Iter', returning the computation's result and
 -- label in an 'IO' 'Iter'.
 evalIterDC :: (ChunkData t) => Iter t DC a -> Iter t IO (a, DCLabel)
-evalIterDC iter = evalIterLIO iter ()
+evalIterDC iter = evalIterLIO () iter
