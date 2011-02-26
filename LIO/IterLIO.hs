@@ -1,12 +1,14 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverlappingInstances #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 module LIO.IterLIO ( evalIterLIO
                    , liftIterLIO
                    , ioHttpServerLIO
                    , inumHttpServerLIO
+                   , enumNonBinHandleLIO 
                    -- * Trusted code
                    , mkIterLIOTCB
                    ) where
@@ -29,8 +31,13 @@ import qualified LIO.MonadCatch as LIO
 import qualified Data.ByteString.Lazy as L
 import Control.Applicative
 
+import qualified Data.ListLike as LL
+import Data.ByteString.Lazy.Internal (defaultChunkSize)
 
 type L = L.ByteString
+
+--instance (MonadLIO m l s, MonadTrans t, Monad (t m)) => MonadLIO (t m) l s where
+--    liftLIO = lift . liftLIO
 
 instance (ChunkData t, MonadLIO m l s, Label l) =>
     MonadLIO (Iter t m) l s where
@@ -96,3 +103,17 @@ inumHttpServerLIO server = mkInumM loop
       fatal e@(E.SomeException _) = do
         liftIterM $ srvLogger server $ "Reply error: " ++ show e
         return ()
+
+enumNonBinHandleLIO :: (Label l, MonadLIO m l s, ChunkData t, LL.ListLikeIO t e) =>
+                    SIO.Handle
+                 -> Onum t m a
+enumNonBinHandleLIO h = mkInumM $ do
+  setCtlHandler (fileCtlLIO h)
+  irepeat $ liftLIO (rtioTCB $ SIO.hWaitForInput h (-1) >>
+                    LL.hGetNonBlocking h defaultChunkSize) >>= ifeed1
+
+fileCtlLIO :: (ChunkData t, MonadLIO m l s, Label l) => SIO.Handle -> CtlHandler (Iter t m)
+fileCtlLIO h = (\(SeekC mode pos) -> liftLIO (rtioTCB $ SIO.hSeek h mode pos))
+            `consCtl` (\TellC -> liftLIO (rtioTCB $ SIO.hTell h))
+            `consCtl` (\SizeC -> liftLIO (rtioTCB $ SIO.hFileSize h))
+            `consCtl` passCtl

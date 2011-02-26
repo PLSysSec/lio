@@ -36,7 +36,9 @@ Library
                  old-time >= 1 && < 2,
                  unix >= 2.3 && < 3,
                  SHA >= 1.4.1.1 && < 2,
-                 deepseq >= 1.1.0.2 && < 2
+                 deepseq >= 1.1.0.2 && < 2,
+                 iterIO >= 0.0,
+                 time >= 1.1.4 && < 2
 
   Exposed-modules:
     LIO.Armor,
@@ -52,6 +54,7 @@ Library
     LIO.LIORef,
     LIO.MonadCatch,
     LIO.MonadLIO,
+    LIO.IterLIO,
     LIO.TCB,
     LIO.TmpFile
 
