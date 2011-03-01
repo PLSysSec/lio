@@ -467,19 +467,24 @@ The low-equivalence expresses the observing power of an attacker; an attacker ma
 \begin{theorem}[Non-interference]
 Given labels ${l}, {l}'$ such that $ {l}' \not\sqsubseteq{l}$,
 a computation $e$ such that $\Gamma \vdash e : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i) \rightarrow (\Lvalue\ {l}'\ \tau'_o, \Lvalue\ {l}\ \tau_o)$ in environment $\store$, such that $\store(\lbl)\sqsubseteq l_i \sqsubseteq \store(\clr)$ for $l_i = \{l,l'\}$,
-and an attacker $\Adv$ with clearance $c_\Adv$ such that ${l} \sqsubseteq c_\Adv$ and ${l}' \not\sqsubseteq c_\Adv$,
+and an attacker with clearance $L$ such that ${l} \sqsubseteq L$ and ${l}' \not\sqsubseteq L$,
 \begin{align*}
 \forall e_1 e_2.&(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i,\Lvalue\ \ell\ \tau_i))_{j=1,2}\\
 &\land e_1 =_L e_2\\ 
 &\land \langle \store, e\ e_1\rangle \longrightarrow^* \langle \store^\prime, v_1\rangle\\
 &\land \langle \store, e\ e_2\rangle \longrightarrow^* \langle \store^\prime, v_2\rangle\\
-&\Rightarrow v_1 =_{c_\Adv} v_2.
+&\Rightarrow v_1 =_{L} v_2.
 \end{align*}
 \end{theorem}
 
-In other words, given two inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as observed by the attacker (at label level up to $c_\Adv$) is indistinguishable.
+In other words, given two inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as observed by the attacker (at label level up to $L$) is indistinguishable.
 
 
+To prove non-interference we define an erasure functino $\erase{L}{\cdot}$ and a new evaluation relation $\longrightarrow_L$, such that
+\begin{equation*}
+\inferrule{e \longrightarrow e^\prime}
+          {e \longrightarrow \erase{L}{e^\prime}}
+\end{equation*}
 
 
 
