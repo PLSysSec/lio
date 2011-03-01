@@ -20,6 +20,7 @@
 \newcommand{\ifel}[3]{\texttt{if}\ #1\ \texttt{then}\ #2\ \texttt{else}\ #3}
 \newcommand{\letbind}[3]{\texttt{let}\ #1=#2\ \texttt{in}\ #3}
 \newcommand{\Lv}{\texttt{Lv}}
+\newcommand{\flows}{\sqsubseteq}
 \newcommand{\lub}{\sqcup}
 \newcommand{\glb}{\sqcap}
 \newcommand{\labelOf}{\mathcal{L}}
@@ -29,6 +30,7 @@
 \newcommand{\Adv}{\mathcal{A}}
 \newcommand{\seal}{\texttt{seal}}
 \newcommand{\open}{\texttt{open}}
+\newcommand{\close}{\texttt{close}}
 \newcommand{\nolabel}{\obslash}
 \newcommand{\unit}{\texttt{()}}
 \newcommand{\getS}{\texttt{get}}
@@ -39,7 +41,7 @@
 \newcommand{\transevalrel}[4]{{\xrightarrow[{#1 \quad #3}]{{#2 \quad #4}}}^{*}}
 
 \newcommand{\LIO}{\texttt{LIO}}
-\newcommand{\LIOp}{\texttt{LIO'}}
+\newcommand{\LIOp}{\texttt{LIO'$\ell$}}
 \newcommand{\IO}{\texttt{IO}}
 \newcommand{\returnLIOp}{\texttt{return}^\texttt{\tiny LIO'}}
 \newcommand{\bindLIOp}{\texttt{>>=}^\texttt{\tiny LIO'}}
@@ -56,6 +58,9 @@
 \newcommand{\well}[2]{\mathcal{W}\llbracket #1,  #2 \rrbracket}
 \newcommand{\tT}{\mathbb{T}}
 \newcommand{\tF}{\mathbb{F}}
+
+\newcommand{\hole}{\bullet}
+\newcommand{\erase}[2]{\varepsilon_{#1}(#2)}
 
 \floatstyle{ruled}
 \newfloat{typerules}{htbp}{lop} \floatname{typerules}{Typing Rule}
@@ -97,7 +102,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
 
 \begin{language}
 \begin{align*}
-\textrm{Lattice:}             && \mathbb{L} &= (L, \sqsubseteq, \lub, \glb, \bot, \top)                 \\
+\textrm{Lattice:}             && \mathbb{L} &= (L, \flows, \lub, \glb, \bot, \top)                 \\
 \\
 \textrm{Label:}               && l, c &\\
 \\
@@ -123,6 +128,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
 %                              &&      &\ |\  \langle \store, \ e\rangle   \\ % LIO value
                               &&      &\ |\  \seal\ e\ e                \\ % seal
                               &&      &\ |\  \open\ e                   \\ % open
+                              &&      &\ |\  \close\ e                   \\ % close
                               &&      &\ |\  \returnLIOp\ e\             \\ % returnLIOp
                               &&      &\ |\  e\ \bindLIOp\ e             \\ % bind two expressions
 %                              &&      &\ |\  \evalLIO\ e\ e             \\ % evalLIO
@@ -135,7 +141,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
                               &&      &\ |\  \ell                       \\ % Label
                               &&      &\ |\  \Lvalue\ \ell\ e           \\ % Lvalue
 %                              &&      &\ |\  \LIO\ \ell\ e              \\ % LIO
-                              &&      &\ |\  \LIOp\ \ell\ e             \\ % LIO'
+                              &&      &\ |\  \LIOp\ e             \\ % LIO'
 %                              &&      &\ |\  \IO                        \\ % IO
 \\
 \textrm{Environment:}         && \store & : \{\lbl,\clr\} \rightarrow \textrm{Label}   \\
@@ -217,6 +223,9 @@ Note that, in practice, this may be implemented using a state transformer monad 
 \inferrule{\Gamma \vdash e : \Lvalue\ \ell\ \tau}
      {\Gamma \vdash \open\ e : \LIOp\ \tau}\tag{T-Open}
 \\
+\inferrule{\Gamma \vdash e : \LIOp\ \tau}
+     {\Gamma \vdash \close\ e : \Lvalue\ \ell\ \tau}\tag{T-Close}
+\\
 \inferrule{\Gamma \vdash e : \tau}
      {\Gamma \vdash \returnLIOp\ e  : \LIOp\ \tau}\tag{T-LIO'-Ret}
 \\
@@ -269,6 +278,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
 &&E&   ::=  \cdots
        \ |\  \seal\ E\ l                
        \ |\  \open\ E                 
+       \ |\  \close\ E                 
        \ |\  \returnLIOp\ E
        \ |\  E\ \bindLIOp\ e
        \ |\  v\ \bindLIOp\ E
@@ -278,10 +288,12 @@ Note that, in practice, this may be implemented using a state transformer monad 
 &&&
 \inferrule{\store(\lbl)=l \\ \store(\clr)=c}
 {\langle \emptyset, \withLblClr\ (l, c)\ e \rangle \longrightarrow \langle \store, e\rangle} \tag{E-WithLblClr}\\
-&&&\inferrule{\store(\lbl) \sqsubseteq l_1 \sqsubseteq \store(\clr)}
+&&&\inferrule{\store(\lbl) \flows l_1 \flows \store(\clr)}
       {\langle \store, E[\seal\ e\ l_1]\rangle \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle} \tag{E-LIO-Seal}  \\
-&&&\inferrule{l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \sqsubseteq \store(\clr) \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
+&&&\inferrule{l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \flows \store(\clr) \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
       {\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle} \tag{E-LIO-Open} \\
+&&&\inferrule{\langle \store, \lioValp{e} \rangle \longrightarrow \langle \store^\prime, \lioValp{e^\prime} \rangle  \\ \store(\lbl) \flows \store^\prime(\lbl) \flows \store^\prime(\clr) = \store(\clr)}
+      {\langle \store, \lioValp{e}\rangle \longrightarrow \langle \store, \Lv\ \store^\prime(\lbl)\ e^\prime \rangle} \tag{E-LIO-Close} \\
 &&&E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}] \tag{E-LIO'-Ret}\\
 &&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2] \tag{E-LIO'-Bind}\\
 &&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. \returnLIOp\ x] \longrightarrow E[\lioValp{e_1}] \tag{E-LIO'-Runit}
@@ -292,7 +304,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
 \pagebreak
 
 \subsection{Example} 
-For the following examples we assume the following lattice elements: $\{\lL, \lH\}$ with the partial order $\bot \sqsubseteq \lL \sqsubseteq \lH \sqsubseteq \top$, and $\cdot \lub \lH = \lH$ and $\cdot \glb \lL = \lL$.
+For the following examples we assume the following lattice elements: $\{\lL, \lH\}$ with the partial order $\bot \flows \lL \flows \lH \flows \top$, and $\cdot \lub \lH = \lH$ and $\cdot \glb \lL = \lL$.
 For simplicity, we refer to \lL{} as the ``public label'' and \lH{} as the ``secret label''.
 Additionally, we define $l_\bot = \lL$ and $l_\top = \lH$.
 
@@ -387,7 +399,7 @@ As above, we consider a full program, but in this case one that would violates i
                                           \seal\ y\ \lL\rangle\\
 &\tref{E-LIO'-Bind}   & \longrightarrow & \langle \store=\{(\lbl,\lH),(\clr,\lH)\},
                                           \seal\ 1\ \lL\rangle\\
-&\tref{E-LIO-Seal}    & \texttt{STUCK: }& \textrm{Premise for rule is not satisfied: $\store(\lbl)=\lH \not\sqsubseteq \lL$.}
+&\tref{E-LIO-Seal}    & \texttt{STUCK: }& \textrm{Premise for rule is not satisfied: $\store(\lbl)=\lH \not\flows \lL$.}
 \end{align*}
 
 
@@ -415,9 +427,10 @@ We define a function ${\mathcal{W}\llbracket \rrbracket} : \textrm{Environment}\
 \well{\store}{\ifel{\true}{e_1}{e_2}} &= \well{\store}{e_1}\\
 \well{\store}{\ifel{\false}{e_1}{e_2}} &= \well{\store}{e_2}\\
 &\vdots\\
-\well{\store}{\seal\ e\ l_1}          &= (\store(\lbl) \sqsubseteq l_1 \sqsubseteq \store(\clr)) \land\ \well{\store}{e}\\
-\well{\store}{\open\ (\Lv\ l_1\ e_1)} &= (\store^\prime(\lbl) \sqsubseteq \store(\clr)) \land \well{\store^\prime}{e},\\
-                                      &\textrm{where } \store^\prime=\store[\lbl\mapsto l^\prime], \textrm{and } l^\prime = \store(\lbl)\lub l_1
+\well{\store}{\seal\ e\ l_1}          &= (\store(\lbl) \flows l_1 \flows \store(\clr)) \land\ \well{\store}{e}\\
+\well{\store}{\open\ (\Lv\ l_1\ e_1)} &= (\store^\prime(\lbl) \flows \store(\clr)) \land \well{\store^\prime}{e},\\
+                                      &\textrm{where } \store^\prime=\store[\lbl\mapsto l^\prime], \textrm{and } l^\prime = \store(\lbl)\lub l_1\\
+\well{\store}{\close\ e} &= \well{\store}{e}
 \end{align*}
 
 The remaining terms are similarly defined. We say that a term $e$ is well-behaved (at this point in the execution) in environment $\store$ if $\well{\store}{e}=\tT$.
@@ -445,46 +458,181 @@ Given environment $\store$, if $\vdash e : \tau$ and $\well{\store}{e}$ then $\l
 \end{lemma}
 This lemma states that a well-typed and well-behaved term is either a value or is not stuck. A well-typed term, however, may get``stuck'' if it not well-behaved, i.e., violates information flow.
 
-%\begin{theorem}[Type safety of pure terms]
-%If $\vdash e : \tau$ and $e \longrightarrow e^\prime$, then $e^\prime$ is not stuck.
-%\end{theorem}
+\subsection{Security properties}
+The main security properties we are interested in are non-interfrerence and
+confinement. In formalizing and proving our security guarantees we introduce
+a new term, `$\hole$', that denotes an ``erased'' term.
+\begin{language}
+\begin{align*}
+&& e    &\Coloneqq  \cdots\ |\ \hole
+\end{align*}
+\caption{Extending language with erased terms}
+\end{language}
+
+Terms are then erased to a $\hole$ according to the label-dependent erasure
+function $\erase{L}{e}$, that we define below:
+\begin{align*}
+\erase{L}{\hole} &= \hole\\
+\erase{L}{x} &= x\\
+\erase{L}{\lambda x. e} &= \lambda x.\erase{L}{e}\\
+\erase{L}{\Lv\ l\ e} &= \begin{cases}
+                          \Lv\ l\ \erase{L}{\hole} &  l \not \flows L\\
+                          \Lv\ l\ \erase{L}{e} & \textrm{otherwise}\\
+                        \end{cases}\\
+\erase{L}{\true} &= \true\\
+\erase{L}{\false} &= \false\\
+\erase{L}{l} &= l\\
+\erase{L}{\fix\ e} &= \fix\ \erase{L}{e}\\
+\erase{L}{[\cdot]}=[\cdot]\\
+\erase{L}{E\ e} &= \erase{L}{E}\ \erase{L}{e}\\
+\erase{L}{(E,e)}  &= (\erase{L}{E}, \erase{L}{e})\\
+\erase{L}{\letbind{x}{E}{e}} &= \letbind{x}{\erase{L}{E}}{\erase{L}{e}} \\
+\erase{L}{\pi_i\ E}  &= \pi_i\ \erase{L}{E}\\
+\erase{L}{\return\ E}  &= \return\ \erase{L}{E}\\
+\erase{L}{E\ \diamond\ e}  &= \erase{L}{E}\ \diamond\ \erase{L}{e} \textrm{, where }\diamond = \{\bind, \seq, \lub, \glb\} \\
+\erase{L}{\withLblClr\ e_1\ e_2}  &= \withLblClr\ e_1\ e_2\\
+\erase{L}{\seal\ E\ l}          &= \seal\ E\ l\\
+\erase{L}{\open\ E}             &= \open\ E\\
+\erase{L}{\close\ E}             &= \close\ E\\
+\erase{L}{\returnLIOp\ E} &= \returnLIOp\ E\\
+\erase{L}{E\ \bindLIOp\ e}  &= E\ \bindLIOp\ e\\
+\erase{L}{\lioValp{E}} &= \lioValp{E} \\
+\erase{L}{\langle \store, E \rangle} &=
+                        \begin{cases}
+                          \langle \store, \hole \rangle &  \store(\lbl) \not \flows L\\
+                          \langle \store, \erase{L}{E} \rangle &\textrm{otherwise}\\
+                        \end{cases}\\
+\end{align*}
+
+Informally, to an attacker observing labeled values with label at most $L$,
+a computation $e$ is not distinguishable from $e^\prime$, where $e^\prime$ is 
+$e$ with all values labeled above $L$ erased to $\hole$.
+
+To prove our security guarantees we need to define a new evaluation relation, 
+${\longrightarrow_L}$, that performs the term erasures:
+
+\begin{equation*}
+\inferrule{e \longrightarrow e^\prime}
+          {e \longrightarrow_L \erase{L}{e^\prime}}
+\end{equation*}
+
+\subsubsection{Example with term erasure on pure terms}
+Let us consider the previous example, working only on pure terms, and 
+using the erasure function $\erase{\lL}{\cdot}$.
+\begin{align*}
+&                     && \Lv\ \lL\ 1\ \bind\ \lambda x.\
+                         \Lv\ \lH\ 2\ \bind\ \lambda y.\
+                         \return\ (x + y) \\
+&\tref{E-Bind}:        & \longrightarrow_\lL\ &
+                         \Lv\ \lH\ \hole\ \bind\ \lambda y.
+                         \return\ (1 + y)\
+                         \bind\ \lambda x.\Lv\ \lL\ x\\
+&\tref{E-Bind}:        & \longrightarrow_\lL\ &
+                         \return\ (1 + \hole)\
+                         \bind\ \lambda x.\Lv\ \lL\ x
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-Ret}          & \longrightarrow_\lL\ &
+                         \Lv\ l_\bot\ (1 + \hole)\ 
+                         \bind\ \lambda x.\Lv\ \lL\ x
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-Runit}:       & \longrightarrow_\lL\ &
+                         \Lv\ (l_\bot\lub\lL)\ (1 + \hole)\ 
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-Runit}:       & \longrightarrow_\lL\ &
+                         \Lv\ (l_\bot\lub\lL\lub\lH)\ (1 + \hole)\\
+&\tref{E-Join}:        & \longrightarrow_\lL\ &
+                         \Lv\ \lH\ (1 + \hole)\\
+&                      & \longrightarrow_\lL\ &
+                        \Lv\ \lH\ \hole
+\end{align*}
+
+\subsubsection{Example with term erasure on terms with side-effects}
+Let us consider the previous example, working only on terms with side-effects, and 
+using the erasure function $\erase{\lL}{\cdot}$.
+\begin{align*}
+&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
+                                                  y_l\ \bind\ \lambda y.
+                                                  \return\ (x + y)\\
+&                     && {\tt in}\ \withLblClr (\lL, \lH)\ (\
+                                \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
+                                \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                \open\ (f\ x\ y)\ )\\
+&\tref{E-LetVal}      & \longrightarrow_\lL & \withLblClr (\lL, \lH)\ (\
+                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y)\ )\\
+&\tref{E-WithLblClr}  & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y) \rangle\\
+&\tref{E-LIO-Seal}    & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.  
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y) \rangle\\
+&\tref{E-LIO'-Bind}   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
+&\tref{E-LIO-Seal}    & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \lioValp{\Lv\ \lH\ 2}\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
+&\tref{E-LIO'-Bind}   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \open\ (f\ (\Lv\ \lL\ 1)\ (\Lv\ \lH\ 2)) \rangle\\
+&\textrm{Evaluate $f$}& \longrightarrow_\lL^* & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \open\ (\Lv\ \lH\ 3) \rangle\\
+&\tref{E-LIO-Open}    & \longrightarrow_\lL & \langle \store=\{(\lbl,\lH),(\clr,\lH)\}, 
+                                          \hole \rangle\\
+\end{align*}
+
+
 
 \begin{definition}[Low-equivalence]
-Two values, each consisting of a pair of values with labels ${l}, {l}'$ such that $ {l}' \not\sqsubseteq{l}$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, 
+Two values, each consisting of a pair of values with labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, 
 \begin{equation*}
-\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i))_{j=1,2} \\ (e_j\longrightarrow^* v_j)_{j=1,2}\\ \pi_2\ v_1 = \pi_2\ v_2\\ l \sqsubseteq L\\ L\not\sqsubseteq l}
+\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i))_{j=1,2} \\ (e_j\longrightarrow^* v_j)_{j=1,2}\\ \pi_2\ v_1 = \pi_2\ v_2\\ l \flows L\\ L\not\flows l}
 {e_1 =_L e_2}
 \end{equation*}
 \end{definition}
 
+The low-equivalence expresses the observing power of an attacker; an attacker may distinguish  values labeled with at most $L$.
+
 For example, $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lH\ 9,\Lv\ \lL\ 2)$, but 
 $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) \not =_{\lL} (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$.
-Similarly, if we extend the lattice with element $\lM : \lL\sqsubseteq \lM \sqsubseteq \lH$, 
+Similarly, if we extend the lattice with element $\lM : \lL\flows \lM \flows \lH$, 
 $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lM\ 9,\Lv\ \lL\ 2)$.
 
-The low-equivalence expresses the observing power of an attacker; an attacker may observe any values labeled with at most $L$.
+
+\begin{definition}[Low-view]
+Two labeled values (each consisting of a pair of labeled values), are equivalent according to the equivalence relation $\approx_L$ if they are not observable, i.e., $L$ is lower than the labels of both values, or the pairs are low-equivalent.
+\begin{equation*}
+\inferrule{(\Gamma \vdash e_j : (\Lvalue\ l_j\ e_j'))_{j=1,2}\\ (l_1 \not\flows L \land l_2 \not\flows L)\lor (e_1'=_L e_2')}
+          {e_1 \approx_L e_2}
+\end{equation*}
+\end{definition}
+
+The low-view simply states that an attacker, who may observe values with label at most $L$, cannot distinguish two labeled values if they are either 1) both labeled above $L$, or 2) the values are low-equivalent.
+
+For example, $\Lv\ \lM\ (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \approx_{\lL} \Lv\ \lH\ (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$, even though the labeled pairs are not low-equivalent.
+Similarly, $\Lv\ \lM\ (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \approx_\lM \Lv\ \lL\ (\Lv\ \lH\ 9,\Lv\ \lL\ 2)$, but
+$\Lv\ \lL\ (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \not =_{\lL} \Lv\ \lL\ (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$.
+
+
 
 \begin{theorem}[Non-interference]
-Given labels ${l}, {l}'$ such that $ {l}' \not\sqsubseteq{l}$,
-a computation $e$ such that $\Gamma \vdash e : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i) \rightarrow (\Lvalue\ {l}'\ \tau'_o, \Lvalue\ {l}\ \tau_o)$ in environment $\store$, such that $\store(\lbl)\sqsubseteq l_i \sqsubseteq \store(\clr)$ for $l_i = \{l,l'\}$,
-and an attacker with clearance $L$ such that ${l} \sqsubseteq L$ and ${l}' \not\sqsubseteq L$,
+Given labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$,
+a computation $e$ where $\Gamma \vdash e : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i) \rightarrow (\Lvalue\ {l}'\ \tau'_o, \Lvalue\ {l}\ \tau_o)$ in environment $\store$, such that $\store(\lbl)\flows l_i \flows \store(\clr)$ for $l_i = \{l,l'\}$,
+and an attacker with clearance $L$ such that ${l} \flows L$ and ${l}' \not\flows L$,
 \begin{align*}
 \forall e_1 e_2.&(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i,\Lvalue\ \ell\ \tau_i))_{j=1,2}\\
 &\land e_1 =_L e_2\\ 
-&\land \langle \store, e\ e_1\rangle \longrightarrow^* \langle \store^\prime, v_1\rangle\\
-&\land \langle \store, e\ e_2\rangle \longrightarrow^* \langle \store^\prime, v_2\rangle\\
-&\Rightarrow v_1 =_{L} v_2.
+&\land \langle \store, \close\ (e\ e_1)\rangle \longrightarrow^* \langle \store^\prime, v_1\rangle\\
+&\land \langle \store, \close\ (e\ e_2)\rangle \longrightarrow^* \langle \store^\prime, v_2\rangle\\
+&\Rightarrow v_1 \approx_{L} v_2.
 \end{align*}
 \end{theorem}
 
-In other words, given two inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as observed by the attacker (at label level up to $L$) is indistinguishable.
+In other words, given two low-equivalent inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as observed by the attacker (at label level up to $L$) is indistinguishable.
 
 
-To prove non-interference we define an erasure functino $\erase{L}{\cdot}$ and a new evaluation relation $\longrightarrow_L$, such that
-\begin{equation*}
-\inferrule{e \longrightarrow e^\prime}
-          {e \longrightarrow \erase{L}{e^\prime}}
-\end{equation*}
 
 
 
@@ -510,13 +658,13 @@ More specifically, ${\tt LIO} :: (\ell,\ell)\rightarrow {\tt IO}\ (\tau,(\ell,\e
 
 Consider the semantics of \seal{} with non-paremetric evaluation context:
 \begin{equation*}
-\inferrule{l \sqsubseteq l_1 \sqsubseteq c} {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e]}
+\inferrule{l \flows l_1 \flows c} {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e]}
 \end{equation*}
 can be rewritten to
 \begin{align*}
 E[\seal\ e\ l_1] \longrightarrow E[&\getS\ \bindLIOp\ \lambda(l,c).\\
-                                   &{\tt if}\ { l \sqsubseteq l_1 }\\
-                                   &{\tt then}\ \ifel{l_1 \sqsubseteq c}{\returnLIOp\ (\Lv\ l\ e)}{\texttt{lerror}\ l\ \textrm{``$\ldots$''}}\\
+                                   &{\tt if}\ { l \flows l_1 }\\
+                                   &{\tt then}\ \ifel{l_1 \flows c}{\returnLIOp\ (\Lv\ l\ e)}{\texttt{lerror}\ l\ \textrm{``$\ldots$''}}\\
                                    &{\tt else}\ {\texttt{lerror}\ l\ \textrm{``$\ldots$''}}]
 \end{align*}
 where bind and return are lift to and sequence {\tt LIO} actions and not \Lvalue{}s. 
@@ -525,22 +673,22 @@ Finally, \getS{} and \putS{} are functions of the MonadState type class (of whic
 
 Similarly,
 \begin{equation*}
-\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}{E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]}
+\inferrule{l^\prime = l \lub l_1 \\ l^\prime \flows c}{E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]}
 \end{equation*}
 can be rewritten to:
 \begin{align*}
 E[\open\ \Lv\ l_1\ e_1] \longrightarrow
 E[&\getS\ \bindLIOp\ \lambda(l,c).\\
   &{\tt let}\ {l^\prime}={l\lub l_1}\\
-  &{\tt in }\ {\tt if}\ {l^\prime \sqsubseteq c}\\
+  &{\tt in }\ {\tt if}\ {l^\prime \flows c}\\
   &\quad\quad {\tt then}\ {\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1}\\
   &\quad\quad {\tt else}\ {\texttt{lerror}\ l\ \textrm{``$\ldots$''}}]
-%  {\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
-%\letbind{l^\prime}{l\lub l_1}{\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
+%  {\ifel{l^\prime \flows c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
+%\letbind{l^\prime}{l\lub l_1}{\ifel{l^\prime \flows c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
 \end{align*}
 %\begin{equation*}
 %E[\open\ \Lv\ l_1\ e_1] \longrightarrow E[\getS\ \bindLIOp\ \lambda(l,c).\letbind{l^\prime}{l\lub l_1}{
-%\ifel{l^\prime \sqsubseteq c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
+%\ifel{l^\prime \flows c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
 %\end{equation*}
 
 
@@ -550,14 +698,14 @@ We note that any program using the \seal{}, \open{} functions must be executed a
 \begin{sos}
 \begin{align*}
 &&&E[\return\ e] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e] \tag{E-Ret}  \\
-&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
+&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \flows c}
       {E[\return^\prime\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l_1\ e]} \tag{E-Ret$^\prime$}  \\
-&&&\inferrule{E[[e_1/x]e_2] \transevalrel{l}{c}{l^\prime}{c} E[\Lv\ l_2\ {e_2}^\prime]\\ {l_2}^\prime=l_1\lub l_2 \lub l^\prime \\ {l_2}^\prime\sqsubseteq c}
+&&&\inferrule{E[[e_1/x]e_2] \transevalrel{l}{c}{l^\prime}{c} E[\Lv\ l_2\ {e_2}^\prime]\\ {l_2}^\prime=l_1\lub l_2 \lub l^\prime \\ {l_2}^\prime\flows c}
       {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]   \evalrel{l}{c}{l^\prime}{c} E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ {l_2}^\prime]}\tag{E-Bind} \\
-&&&\inferrule{{l_1}^\prime = l_1\lub l_2 \\ {l_1}^\prime \sqsubseteq c}{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \evalrel{l}{c}{l}{c} E[\Lv\ l_1^\prime\ e_1]}\tag{E-Runit}\\
-&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \sqsubseteq c}
+&&&\inferrule{{l_1}^\prime = l_1\lub l_2 \\ {l_1}^\prime \flows c}{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \evalrel{l}{c}{l}{c} E[\Lv\ l_1^\prime\ e_1]}\tag{E-Runit}\\
+&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \flows c}
       {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l_1\ e]} \tag{E-Seal}  \\
-&&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \sqsubseteq c}
+&&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \flows c}
       {E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]} \tag{E-Open} 
 \end{align*}
 \caption{Semantics for terms with side effects; \texttt{Lvalue} case}
