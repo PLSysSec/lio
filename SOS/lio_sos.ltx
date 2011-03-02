@@ -123,7 +123,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
                               &&      &\ |\  \pi_i\ e                   \\ % \pi_1 = fst, \pi_2 = snd
                               &&      &\ |\  \return\ e                 \\ % return
                               &&      &\ |\  e\ \bind\ e                \\ % bind two expressions
-                              &&      &\ |\  e\ \seq\ e                 \\ % sequence two expressions
+%                              &&      &\ |\  e\ \seq\ e                 \\ % sequence two expressions
                               &&      &\ |\  \withLblClr\ e\ e          \\ % withLblClr
 %                              &&      &\ |\  \langle \store, \ e\rangle   \\ % LIO value
                               &&      &\ |\  \seal\ e\ e                \\ % seal
@@ -193,9 +193,9 @@ Note that, in practice, this may be implemented using a state transformer monad 
 \\
 \inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
      {\Gamma \vdash e_1\ \bind\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Bind}
-\\
-\inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \Lvalue\ \ell\ \tau_2}
-     {\Gamma \vdash e_1\ \seq\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Seq}
+%\\
+%\inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \Lvalue\ \ell\ \tau_2}
+%     {\Gamma \vdash e_1\ \seq\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Seq}
 \\
 \inferrule{\Gamma \vdash e_1 : \ell\\ \Gamma \vdash e_2 : \ell}
      {\Gamma \vdash e_1\ \lub\ e_2 : \ell}\tag{T-Join}
@@ -243,17 +243,19 @@ Note that, in practice, this may be implemented using a state transformer monad 
        \ |\  E\ e                       
        \ |\  (E, e)                     
        \ |\  (v, E)                     
+       \ |\  \Lv\ E\ e                    
+       \ |\  \Lv\ v\ E                    
        \ |\  \ifel{E}{e}{e}
        \ |\  \letbind{x}{E}{e}
        \ |\  \pi_i\ E                     
        \\
 &&&    \ |\  \return\ E                 
        \ |\  E\ \diamond\ e                
-       \ |\  v\ \diamond\ E, \textrm{where }\diamond = \{\bind, \seq, \lub, \glb\}
+       \ |\  v\ \diamond\ E, \textrm{where }\diamond = \{\bind, \lub, \glb\}
        \\
 \\                                                                                                    
 &&&E[(\lambda x.e_1)\ e_2]                         \longrightarrow E[[e_2/x]e_1]          \tag{E-App}    \\
-&&&E[\fix\ e]                                      \longrightarrow E[e\ \fix\ e]          \tag{E-Fix}    \\
+&&&E[\fix\ e]                                      \longrightarrow E[e\ (\fix\ e)]          \tag{E-Fix}    \\
 &&&E[\ifel{\true}{e_1}{e_2}]                       \longrightarrow E[e_1]                 \tag{E-IfTrue} \\
 &&&E[\ifel{\false}{e_1}{e_2}]                      \longrightarrow E[e_2]                 \tag{E-IfFalse}\\
 &&&\inferrule{e_1 \longrightarrow {e_1}^\prime}
@@ -264,7 +266,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
 &&&\inferrule{e_2 \ne \Lv\ e_l\ e_2^\prime}
       {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]      \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}\tag{E-Bind} \\
 &&&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]\tag{E-Runit}\\
-&&&E[\Lv\ l_1\ e_1\ \seq\ e_2]                     \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
+%&&&E[\Lv\ l_1\ e_1\ \seq\ e_2]                     \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
 &&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \lub l_2\rrbracket}
             {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]} \tag{E-Join}\\
 &&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \glb l_2\rrbracket}
@@ -475,9 +477,9 @@ function $\erase{L}{e}$, that we define below:
 \erase{L}{\hole} &= \hole\\
 \erase{L}{x} &= x\\
 \erase{L}{\lambda x. e} &= \lambda x.\erase{L}{e}\\
-\erase{L}{\Lv\ l\ e} &= \begin{cases}
+\erase{L}{\Lv\ l\ E} &= \begin{cases}
                           \Lv\ l\ \erase{L}{\hole} &  l \not \flows L\\
-                          \Lv\ l\ \erase{L}{e} & \textrm{otherwise}\\
+                          \Lv\ l\ \erase{L}{E} & \textrm{otherwise}\\
                         \end{cases}\\
 \erase{L}{\true} &= \true\\
 \erase{L}{\false} &= \false\\
@@ -489,14 +491,14 @@ function $\erase{L}{e}$, that we define below:
 \erase{L}{\letbind{x}{E}{e}} &= \letbind{x}{\erase{L}{E}}{\erase{L}{e}} \\
 \erase{L}{\pi_i\ E}  &= \pi_i\ \erase{L}{E}\\
 \erase{L}{\return\ E}  &= \return\ \erase{L}{E}\\
-\erase{L}{E\ \diamond\ e}  &= \erase{L}{E}\ \diamond\ \erase{L}{e} \textrm{, where }\diamond = \{\bind, \seq, \lub, \glb\} \\
-\erase{L}{\withLblClr\ e_1\ e_2}  &= \withLblClr\ e_1\ e_2\\
-\erase{L}{\seal\ E\ l}          &= \seal\ E\ l\\
-\erase{L}{\open\ E}             &= \open\ E\\
-\erase{L}{\close\ E}             &= \close\ E\\
-\erase{L}{\returnLIOp\ E} &= \returnLIOp\ E\\
+\erase{L}{E\ \diamond\ e}  &= \erase{L}{E}\ \diamond\ \erase{L}{e} \textrm{, where }\diamond = \{\bind, \lub, \glb, \bindLIOp\} \\
+\erase{L}{\withLblClr\ e_1\ e_2}  &= \withLblClr\ \erase{L}{e_1}\ \erase{L}{e_2}\\
+\erase{L}{\seal\ E\ e}          &= \seal\ \erase{L}{E}\ \erase{L}{e}\\
+\erase{L}{\open\ E}             &= \open\ \erase{L}{E}\\
+\erase{L}{\close\ E}             &= \close\ \erase{L}{E}\\
+\erase{L}{\returnLIOp\ E} &= \returnLIOp\ \erase{L}{E}\\
 \erase{L}{E\ \bindLIOp\ e}  &= E\ \bindLIOp\ e\\
-\erase{L}{\lioValp{E}} &= \lioValp{E} \\
+\erase{L}{\lioValp{E}} &= \lioValp{\erase{L}{E}} \\
 \erase{L}{\langle \store, E \rangle} &=
                         \begin{cases}
                           \langle \store, \hole \rangle &  \store(\lbl) \not \flows L\\
@@ -573,12 +575,12 @@ using the erasure function $\erase{\lL}{\cdot}$.
                                           \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
 &\tref{E-LIO-Seal}    & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \lioValp{\Lv\ \lH\ 2}\ \bindLIOp\ \lambda y. 
+                                          \lioValp{\Lv\ \lH\ \hole}\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
 &\tref{E-LIO'-Bind}   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \open\ (f\ (\Lv\ \lL\ 1)\ (\Lv\ \lH\ 2)) \rangle\\
+                                          \open\ (f\ (\Lv\ \lL\ 1)\ (\Lv\ \lH\ \hole)) \rangle\\
 &\textrm{Evaluate $f$}& \longrightarrow_\lL^* & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \open\ (\Lv\ \lH\ 3) \rangle\\
+                                          \open\ (\Lv\ \lH\ \hole) \rangle\\
 &\tref{E-LIO-Open}    & \longrightarrow_\lL & \langle \store=\{(\lbl,\lH),(\clr,\lH)\}, 
                                           \hole \rangle\\
 \end{align*}
@@ -602,18 +604,34 @@ $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lM\ 9,\Lv\ \lL\ 2)$.
 
 
 \begin{definition}[Low-view]
-Two labeled values (each consisting of a pair of labeled values), are equivalent according to the equivalence relation $\approx_L$ if they are not observable, i.e., $L$ is lower than the labels of both values, or the pairs are low-equivalent.
+Two values (each consisting of a pair of labeled values) with contexts $\store^1$ and $\store^2$,
+are equivalent according to the equivalence relation $\approx_L$ if they are
+not observable, i.e., $L$ is lower than $\store^j(\lbl), j={1,2}$,
+or the pairs are low-equivalent.
 \begin{equation*}
-\inferrule{(\Gamma \vdash e_j : (\Lvalue\ l_j\ e_j'))_{j=1,2}\\ (l_1 \not\flows L \land l_2 \not\flows L)\lor (e_1'=_L e_2')}
+\inferrule{(\Gamma \vdash e_j : (\langle \store^j, e_j' \rangle)_{j=1,2}\\ (\store^1(\lbl) \not\flows L \land \store^2(\lbl)\not\flows L)\lor (e_1'=_L e_2')}
           {e_1 \approx_L e_2}
 \end{equation*}
 \end{definition}
 
-The low-view simply states that an attacker, who may observe values with label at most $L$, cannot distinguish two labeled values if they are either 1) both labeled above $L$, or 2) the values are low-equivalent.
+The low-view simply states that an attacker, who may observe values with label at most $L$, cannot distinguish two labeled values if they are either 1) both in a context labeled above $L$, or 2) the values are low-equivalent.
 
-For example, $\Lv\ \lM\ (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \approx_{\lL} \Lv\ \lH\ (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$, even though the labeled pairs are not low-equivalent.
-Similarly, $\Lv\ \lM\ (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \approx_\lM \Lv\ \lL\ (\Lv\ \lH\ 9,\Lv\ \lL\ 2)$, but
-$\Lv\ \lL\ (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \not =_{\lL} \Lv\ \lL\ (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$.
+For example,
+\begin{align*}
+\langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle \approx_{\lL} \langle \{(\lbl,\lH), (\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 3)\rangle,
+\end{align*}
+even though the labeled pairs are not low-equivalent.
+Similarly,
+\begin{align*}
+\langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle \approx_\lM
+\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 9,\Lv\ \lL\ 2) \rangle,
+\end{align*}
+but
+\begin{align*}
+\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle \not \approx_\lL
+\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 3)
+\rangle
+\end{align*}
 
 
 
@@ -624,9 +642,10 @@ and an attacker with clearance $L$ such that ${l} \flows L$ and ${l}' \not\flows
 \begin{align*}
 \forall e_1 e_2.&(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i,\Lvalue\ \ell\ \tau_i))_{j=1,2}\\
 &\land e_1 =_L e_2\\ 
-&\land \langle \store, \close\ (e\ e_1)\rangle \longrightarrow^* \langle \store^\prime, v_1\rangle\\
-&\land \langle \store, \close\ (e\ e_2)\rangle \longrightarrow^* \langle \store^\prime, v_2\rangle\\
+&\land \langle \store, e\ e_1\rangle \longrightarrow^* \langle \store^\prime, v_1\rangle\\
+&\land \langle \store, e\ e_2\rangle \longrightarrow^* \langle \store^\prime, v_2\rangle\\
 &\Rightarrow v_1 \approx_{L} v_2.
+\langle \store^\prime, v_1\rangle \approx_{L} \langle \store^\prime, v_2\rangle\\
 \end{align*}
 \end{theorem}
 
