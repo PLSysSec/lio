@@ -31,13 +31,13 @@ Library
                  containers >= 0.2 && < 1,
                  directory >= 1.0 && < 2,
                  filepath >= 1.1 && < 2,
-                 mtl >= 1.1.0.2 && < 2,
+                 mtl >= 1.1.0.2 && < 2.1,
                  old-time >= 1 && < 2,
                  unix >= 2.3 && < 3,
                  SHA >= 1.4.1.1 && < 2,
                  deepseq >= 1.1.0.2 && < 2,
                  iterIO >= 0.0,
-                 ListLike >= 1.0 && < 3,
+                 ListLike >= 1.0 && < 3.1,
                  time >= 1.1.4 && < 2
 
   Exposed-modules:
