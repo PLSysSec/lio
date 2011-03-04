@@ -1,5 +1,5 @@
 \documentclass[10pt]{article} 
-%\usepackage[margin=.5in]{geometry} 
+\usepackage[margin=1in]{geometry} 
 \usepackage{float}
 \usepackage{amsmath,amssymb,amsfonts,amsthm,stmaryrd,txfonts, mathabx}
 \usepackage{float}
@@ -224,7 +224,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
      {\Gamma \vdash \open\ e : \LIOp\ \tau}\tag{T-Open}
 \\
 \inferrule{\Gamma \vdash e : \LIOp\ \tau}
-     {\Gamma \vdash \close\ e : \LIOp(\Lvalue\ \ell\ \tau)}\tag{T-Close}
+     {\Gamma \vdash \close\ e : \LIOp\ (\Lvalue\ \ell\ \tau)}\tag{T-Close}
 \\
 \inferrule{\Gamma \vdash e : \tau}
      {\Gamma \vdash \returnLIOp\ e  : \LIOp\ \tau}\tag{T-LIO'-Ret}
@@ -295,7 +295,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
 &&&\inferrule{l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \flows \store(\clr) \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
       {\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle} \tag{E-LIO-Open} \\
 &&&\inferrule{\langle \store, \lioValp{e} \rangle \longrightarrow \langle \store^\prime, \lioValp{e^\prime} \rangle  \\ \store(\lbl) \flows \store^\prime(\lbl) \flows \store^\prime(\clr) = \store(\clr)}
-      {\langle \store, \lioValp{e}\rangle \longrightarrow \langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime} \rangle} \tag{E-LIO-Close} \\
+      {\langle \store, \close\ \lioValp{e}\rangle \longrightarrow \langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime} \rangle} \tag{E-LIO-Close} \\
 &&&E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}] \tag{E-LIO'-Ret}\\
 &&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2] \tag{E-LIO'-Bind}\\
 &&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. \returnLIOp\ x] \longrightarrow E[\lioValp{e_1}] \tag{E-LIO'-Runit}
@@ -349,69 +349,96 @@ For simplicity, we do not expand $f$.
 &                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
                                                   y_l\ \bind\ \lambda y.
                                                   \return\ (x + y)\\
-&                     && {\tt in}\ \withLblClr (\lL, \lH)\ (\
+&                     && {\tt in}\ \withLblClr\ (\lL, \lH)\ (\
                                 \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
                                 \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
                                 \open\ (f\ x\ y)\ )\\
-&\tref{E-LetVal}      & \longrightarrow & \withLblClr (\lL, \lH)\ (\
+&\tref{E-LetVal}      & \longrightarrow & \withLblClr\ (\lL, \lH)\ (\
                                           \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
                                           \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y)\ )\\
-&\tref{E-WithLblClr}  & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+&\tref{E-WithLblClr}  & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
                                           \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
                                           \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y) \rangle\\
-&\tref{E-LIO-Seal}    & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+&\tref{E-LIO-Seal}    & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
                                           \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.  
                                           \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y) \rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
                                           \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
-&\tref{E-LIO-Seal}    & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+&\tref{E-LIO-Seal}    & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
                                           \lioValp{\Lv\ \lH\ 2}\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
                                           \open\ (f\ (\Lv\ \lL\ 1)\ (\Lv\ \lH\ 2)) \rangle\\
-&\textrm{Evaluate $f$}& \longrightarrow^* & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+&\textrm{Evaluate $f$}& \longrightarrow^* & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
                                           \open\ (\Lv\ \lH\ 3) \rangle\\
-&\tref{E-LIO-Open}    & \longrightarrow & \langle \store=\{(\lbl,\lH),(\clr,\lH)\}, 
+&\tref{E-LIO-Open}    & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\}, 
                                           \lioValp{3} \rangle\\
 \end{align*}
+
+\subsubsection{Example with side-effects and no label-raising.} 
+Let us reconsider the above example using \close{} to prevent label-raising.
+For simplicity, we do not repeat the steps shown in the previous example
+\begin{align*}
+&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
+                                                  y_l\ \bind\ \lambda y.
+                                                  \return\ (x + y)\\
+&                     && {\tt in}\ \withLblClr\ (\lL, \lH)\ (\ \close\ (
+                                \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
+                                \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                \open\ (f\ x\ y))\ )\\
+&\tref{E-LetVal}      & \longrightarrow & \withLblClr\ (\lL, \lH)\ (\ \close\ (
+                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y))\ )\\
+&\tref{E-WithLblClr}  & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, \close\ (
+                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
+                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y)) \rangle\\
+&\tref{E-LIO-Close}    & \longrightarrow &
+\inferrule{\textrm{\footnotesize $
+    \langle \{(\lbl,\lL),(\clr,\lH)\}, 
+    \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.  
+    \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+    \open\ (f\ x\ y) \rangle
+    \longrightarrow^{*}
+    \langle \{(\lbl,\lH),(\clr,\lH)\}, 
+    \lioValp{3} \rangle$}}
+    {\langle \{(\lbl,\lL),(\clr,\lH)\}, \lioValp{\Lv\ \lH\ 3}\rangle}
+\end{align*}
+
 \subsubsection{Example with side-effects that violates information flow.} 
 As above, we consider a full program, but in this case one that would violates information flow (flow from a secret value to a public value).
 \begin{align*}
-&                     && \withLblClr (\lL, \lH)\ (\
+&                     && \withLblClr\ (\lL, \lH)\ (\
                          \seal\ 1\ \lH\ \bindLIOp\ \lambda x.  
                          \open\ x\ \bindLIOp\ \lambda y. 
                          \seal\ y\ \lL)\\
-&\tref{E-WithLblClr}  & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+&\tref{E-WithLblClr}  & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
                                           \seal\ 1\ \lH\ \bindLIOp\ \lambda x.  
                                           \open\ x\ \bindLIOp\ \lambda y. 
                                           \seal\ y\ \lL)\rangle\\
-&\tref{E-LIO-Seal}    & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+&\tref{E-LIO-Seal}    & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
                                           \lioValp{\Lv\ \lH\ 1}\ \bindLIOp\ \lambda x.  
                                           \open\ x\ \bindLIOp\ \lambda y. 
                                           \seal\ y\ \lL\rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
                                           \open\ (\Lv\ \lH\ 1)\ \bindLIOp\ \lambda y. 
                                           \seal\ y\ \lL\rangle\\
-&\tref{E-LIO-Open}    & \longrightarrow & \langle \store=\{(\lbl,\lH),(\clr,\lH)\},
+&\tref{E-LIO-Open}    & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
                                           \lioValp{1}\ \bindLIOp\ \lambda y. 
                                           \seal\ y\ \lL\rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \store=\{(\lbl,\lH),(\clr,\lH)\},
+&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
                                           \seal\ 1\ \lL\rangle\\
-&\tref{E-LIO-Seal}    & \texttt{STUCK: }& \textrm{Premise for rule is not satisfied: $\store(\lbl)=\lH \not\flows \lL$.}
+&\tref{E-LIO-Seal}    & \texttt{STUCK: }& \textrm{Premise for rule is not satisfied: $\lH \not\flows \lL$.}
 \end{align*}
 
 
 
 
-
-
-
-
-\pagebreak
 
 \subsection{Well-behaved terms}
 We define a function ${\mathcal{W}\llbracket \rrbracket} : \textrm{Environment}\times\textrm{Term} \rightarrow \{\tT, \tF\}$, where $\tT{}$ denotes true, and $\tF{}$ denotes false.
@@ -513,7 +540,6 @@ function $\erase{L}{e}$, that we define below:
 Informally, to an observer reading labeled values with label at most $L$,
 a computation $e$ is not distinguishable from $e^\prime$, where $e^\prime$ is 
 $e$ with all values labeled above $L$ erased to $\hole$.
-
 To prove our security guarantees we need to define a new evaluation relation, 
 ${\longrightarrow_L}$, that performs the term erasures:
 
@@ -594,7 +620,7 @@ using the erasure function $\erase{\lL}{\cdot}$.
 \begin{definition}[$L$-equivalence]
 Two values, each consisting of a pair of values with labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, 
 \begin{equation*}
-\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i))_{j=1,2} \\ (e_j\longrightarrow^* v_j)_{j=1,2}\\ \pi_2\ v_1 = \pi_2\ v_2\\ l \flows L\\ L\not\flows l}
+\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {l}'\ \tau', \Lvalue\ {l}\ \tau))_{j=1,2} \\ (e_j\longrightarrow^* v_j)_{j=1,2}\\ \pi_2\ v_1 = \pi_2\ v_2\\ l \flows L\\ L\not\flows l}
 {e_1 =_L e_2}
 \end{equation*}
 \end{definition}
@@ -613,7 +639,7 @@ are equivalent according to the equivalence relation $\approx_L$ if they are
 not observable, i.e., $L$ is lower than $\store^j(\lbl), j={1,2}$,
 or the pairs are $L$-equivalent. Specifically, 
 \begin{equation*}
-\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i))_{j=1,2} \\ l \flows L\\ L\not\flows l\\
+\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {l}'\ \tau', \Lvalue\ {l}\ \tau))_{j=1,2} \\ l \flows L\\ L\not\flows l\\
            (\store^1(\lbl) \not\flows L \land \store^2(\lbl)\not\flows L)\lor (e_1=_L e_2)}
           {\langle \store^1, \lioValp{e_1} \rangle \approx_L \langle \store^2, \lioValp{e_2}\rangle}
 \end{equation*}
