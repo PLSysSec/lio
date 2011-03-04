@@ -188,7 +188,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
      {\Gamma \vdash \pi_i\ e : \tau_i}
      {(i\in\{1,2\})}\tag{T-Proj}
 \\
-\inferrule{\Gamma[l_\bot \mapsto \ell] \vdash e : \tau}
+\inferrule{\Gamma \vdash e : \tau}
      {\Gamma \vdash \return\ e : \Lvalue\ \ell\ \tau}\tag{T-Ret}
 \\
 \inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
@@ -211,8 +211,8 @@ Note that, in practice, this may be implemented using a state transformer monad 
 \inferrule{\Gamma \vdash e : \tau}
      {\Gamma \vdash \lioValp{e} : \LIOp\ \tau}\tag{T-LIO'-Val}
 \\
-\inferrule{\Gamma \vdash e_1 : (\ell,\ell) \\ \Gamma \vdash e_2 : \tau}
-     {\Gamma \vdash \withLblClr\ e_1\ e_2: \tau}\tag{T-WithLblClr}
+\inferrule{\Gamma \vdash e_1 : (\ell,\ell) \\ \Gamma \vdash e_2 : \LIOp\ \tau}
+     {\Gamma \vdash \withLblClr\ e_1\ e_2: \LIOp\ \tau}\tag{T-WithLblClr}
 %\\
 %\inferrule{\Gamma \vdash e : \tau}
 %     {\Gamma \vdash \langle \store, e \rangle: \LIO\ \ell\ \tau}\tag{T-LIO-Val}
@@ -224,7 +224,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
      {\Gamma \vdash \open\ e : \LIOp\ \tau}\tag{T-Open}
 \\
 \inferrule{\Gamma \vdash e : \LIOp\ \tau}
-     {\Gamma \vdash \close\ e : \Lvalue\ \ell\ \tau}\tag{T-Close}
+     {\Gamma \vdash \close\ e : \LIOp(\Lvalue\ \ell\ \tau)}\tag{T-Close}
 \\
 \inferrule{\Gamma \vdash e : \tau}
      {\Gamma \vdash \returnLIOp\ e  : \LIOp\ \tau}\tag{T-LIO'-Ret}
@@ -289,13 +289,13 @@ Note that, in practice, this may be implemented using a state transformer monad 
        \\
 &&&
 \inferrule{\store(\lbl)=l \\ \store(\clr)=c}
-{\langle \emptyset, \withLblClr\ (l, c)\ e \rangle \longrightarrow \langle \store, e\rangle} \tag{E-WithLblClr}\\
+{\langle \emptyset, \withLblClr\ (l, c)\ \lioValp{e} \rangle \longrightarrow \langle \store,  \lioValp{e}\rangle} \tag{E-WithLblClr}\\
 &&&\inferrule{\store(\lbl) \flows l_1 \flows \store(\clr)}
       {\langle \store, E[\seal\ e\ l_1]\rangle \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle} \tag{E-LIO-Seal}  \\
 &&&\inferrule{l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \flows \store(\clr) \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
       {\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle} \tag{E-LIO-Open} \\
 &&&\inferrule{\langle \store, \lioValp{e} \rangle \longrightarrow \langle \store^\prime, \lioValp{e^\prime} \rangle  \\ \store(\lbl) \flows \store^\prime(\lbl) \flows \store^\prime(\clr) = \store(\clr)}
-      {\langle \store, \lioValp{e}\rangle \longrightarrow \langle \store, \Lv\ \store^\prime(\lbl)\ e^\prime \rangle} \tag{E-LIO-Close} \\
+      {\langle \store, \lioValp{e}\rangle \longrightarrow \langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime} \rangle} \tag{E-LIO-Close} \\
 &&&E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}] \tag{E-LIO'-Ret}\\
 &&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2] \tag{E-LIO'-Bind}\\
 &&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. \returnLIOp\ x] \longrightarrow E[\lioValp{e_1}] \tag{E-LIO'-Runit}
@@ -440,6 +440,10 @@ The remaining terms are similarly defined. We say that a term $e$ is well-behave
 
 \subsection{Language properties}
 
+\begin{definition}[Pure term]
+A pure term $e$ does not depend on the environment and may take an evaluation step in a setting with or without an environment.
+\end{definition}
+
 \begin{lemma}[Preservation of pure terms]
 If $\vdash e : \tau$ and $e \longrightarrow e^\prime$ then $\vdash e^\prime : \tau$.
 \end{lemma}
@@ -463,7 +467,7 @@ This lemma states that a well-typed and well-behaved term is either a value or i
 \subsection{Security properties}
 The main security properties we are interested in are non-interfrerence and
 confinement. In formalizing and proving our security guarantees we introduce
-a new term, `$\hole$', that denotes an ``erased'' term.
+a new syntactic term, `$\hole$', that denotes an ``erased'' term.
 \begin{language}
 \begin{align*}
 && e    &\Coloneqq  \cdots\ |\ \hole
@@ -477,10 +481,6 @@ function $\erase{L}{e}$, that we define below:
 \erase{L}{\hole} &= \hole\\
 \erase{L}{x} &= x\\
 \erase{L}{\lambda x. e} &= \lambda x.\erase{L}{e}\\
-\erase{L}{\Lv\ l\ E} &= \begin{cases}
-                          \Lv\ l\ \erase{L}{\hole} &  l \not \flows L\\
-                          \Lv\ l\ \erase{L}{E} & \textrm{otherwise}\\
-                        \end{cases}\\
 \erase{L}{\true} &= \true\\
 \erase{L}{\false} &= \false\\
 \erase{L}{l} &= l\\
@@ -488,25 +488,29 @@ function $\erase{L}{e}$, that we define below:
 \erase{L}{[\cdot]}=[\cdot]\\
 \erase{L}{E\ e} &= \erase{L}{E}\ \erase{L}{e}\\
 \erase{L}{(E,e)}  &= (\erase{L}{E}, \erase{L}{e})\\
+\erase{L}{\Lv\ l\ E} &= \begin{cases}
+                          \Lv\ l\ \hole &  l \not \flows L\\
+                          \Lv\ l\ \erase{L}{E} & \textrm{otherwise}\\
+                        \end{cases}\\
 \erase{L}{\letbind{x}{E}{e}} &= \letbind{x}{\erase{L}{E}}{\erase{L}{e}} \\
 \erase{L}{\pi_i\ E}  &= \pi_i\ \erase{L}{E}\\
 \erase{L}{\return\ E}  &= \return\ \erase{L}{E}\\
 \erase{L}{E\ \diamond\ e}  &= \erase{L}{E}\ \diamond\ \erase{L}{e} \textrm{, where }\diamond = \{\bind, \lub, \glb, \bindLIOp\} \\
-\erase{L}{\withLblClr\ e_1\ e_2}  &= \withLblClr\ \erase{L}{e_1}\ \erase{L}{e_2}\\
 \erase{L}{\seal\ E\ e}          &= \seal\ \erase{L}{E}\ \erase{L}{e}\\
 \erase{L}{\open\ E}             &= \open\ \erase{L}{E}\\
 \erase{L}{\close\ E}             &= \close\ \erase{L}{E}\\
 \erase{L}{\returnLIOp\ E} &= \returnLIOp\ \erase{L}{E}\\
-\erase{L}{E\ \bindLIOp\ e}  &= E\ \bindLIOp\ e\\
+\erase{L}{E\ \bindLIOp\ e}  &= \erase{L}{E}\ \bindLIOp\ \erase{L}{e}\\
 \erase{L}{\lioValp{E}} &= \lioValp{\erase{L}{E}} \\
-\erase{L}{\langle \store, E \rangle} &=
+\erase{L}{\withLblClr\ e_1\ e_2}  &= \withLblClr\ \erase{L}{e_1}\ \erase{L}{e_2}\\
+\erase{L}{\langle \store, e \rangle} &=
                         \begin{cases}
                           \langle \store, \hole \rangle &  \store(\lbl) \not \flows L\\
-                          \langle \store, \erase{L}{E} \rangle &\textrm{otherwise}\\
+                          \langle \store, \erase{L}{e} \rangle &\textrm{otherwise}\\
                         \end{cases}\\
 \end{align*}
 
-Informally, to an attacker observing labeled values with label at most $L$,
+Informally, to an observer reading labeled values with label at most $L$,
 a computation $e$ is not distinguishable from $e^\prime$, where $e^\prime$ is 
 $e$ with all values labeled above $L$ erased to $\hole$.
 
@@ -587,7 +591,7 @@ using the erasure function $\erase{\lL}{\cdot}$.
 
 
 
-\begin{definition}[Low-equivalence]
+\begin{definition}[$L$-equivalence]
 Two values, each consisting of a pair of values with labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, 
 \begin{equation*}
 \inferrule{(\Gamma \vdash e_j : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i))_{j=1,2} \\ (e_j\longrightarrow^* v_j)_{j=1,2}\\ \pi_2\ v_1 = \pi_2\ v_2\\ l \flows L\\ L\not\flows l}
@@ -595,7 +599,7 @@ Two values, each consisting of a pair of values with labels ${l}, {l}'$ such tha
 \end{equation*}
 \end{definition}
 
-The low-equivalence expresses the observing power of an attacker; an attacker may distinguish  values labeled with at most $L$.
+The low-equivalence expresses the power of an observer; an observer may distinguish  values labeled with at most $L$.
 
 For example, $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lH\ 9,\Lv\ \lL\ 2)$, but 
 $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) \not =_{\lL} (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$.
@@ -603,24 +607,25 @@ Similarly, if we extend the lattice with element $\lM : \lL\flows \lM \flows \lH
 $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lM\ 9,\Lv\ \lL\ 2)$.
 
 
-\begin{definition}[Low-view]
-Two values (each consisting of a pair of labeled values) with contexts $\store^1$ and $\store^2$,
+\begin{definition}[$L$-view]
+Two values (each consisting of a pair of labeled values) in environents $\store^1$ and $\store^2$,
 are equivalent according to the equivalence relation $\approx_L$ if they are
 not observable, i.e., $L$ is lower than $\store^j(\lbl), j={1,2}$,
-or the pairs are low-equivalent.
+or the pairs are $L$-equivalent. Specifically, 
 \begin{equation*}
-\inferrule{(\Gamma \vdash e_j : (\langle \store^j, e_j' \rangle)_{j=1,2}\\ (\store^1(\lbl) \not\flows L \land \store^2(\lbl)\not\flows L)\lor (e_1'=_L e_2')}
-          {e_1 \approx_L e_2}
+\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i))_{j=1,2} \\ l \flows L\\ L\not\flows l\\
+           (\store^1(\lbl) \not\flows L \land \store^2(\lbl)\not\flows L)\lor (e_1=_L e_2)}
+          {\langle \store^1, \lioValp{e_1} \rangle \approx_L \langle \store^2, \lioValp{e_2}\rangle}
 \end{equation*}
 \end{definition}
 
-The low-view simply states that an attacker, who may observe values with label at most $L$, cannot distinguish two labeled values if they are either 1) both in a context labeled above $L$, or 2) the values are low-equivalent.
+The $L$-view simply states that an observer, who may read values with label at most $L$, cannot distinguish two labeled values if they are either 1) both in an environment with a label above $L$, or 2) the values are $L$-equivalent.
 
 For example,
 \begin{align*}
 \langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle \approx_{\lL} \langle \{(\lbl,\lH), (\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 3)\rangle,
 \end{align*}
-even though the labeled pairs are not low-equivalent.
+even though the labeled pairs are not $L$-equivalent.
 Similarly,
 \begin{align*}
 \langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle \approx_\lM
@@ -637,19 +642,19 @@ but
 
 \begin{theorem}[Non-interference]
 Given labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$,
-a computation $e$ where $\Gamma \vdash e : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i) \rightarrow (\Lvalue\ {l}'\ \tau'_o, \Lvalue\ {l}\ \tau_o)$ in environment $\store$, such that $\store(\lbl)\flows l_i \flows \store(\clr)$ for $l_i = \{l,l'\}$,
-and an attacker with clearance $L$ such that ${l} \flows L$ and ${l}' \not\flows L$,
+a computation $e$ where $\Gamma \vdash e : (\Lvalue\ {l}'\ \tau'_i, \Lvalue\ {l}\ \tau_i) \rightarrow \LIOp\ (\Lvalue\ {l}'\ \tau'_o, \Lvalue\ {l}\ \tau_o)$ in environment $\store$, such that $\store(\lbl)\flows l_i \flows \store(\clr)$ for $l_i = \{l,l'\}$,
+and an observer with clearance $L$ such that ${l} \flows L$ and ${l}' \not\flows L$,
 \begin{align*}
 \forall e_1 e_2.&(\Gamma \vdash e_j : (\Lvalue\ \ell'\ \tau'_i,\Lvalue\ \ell\ \tau_i))_{j=1,2}\\
 &\land e_1 =_L e_2\\ 
-&\land \langle \store, e\ e_1\rangle \longrightarrow^* \langle \store^\prime, v_1\rangle\\
-&\land \langle \store, e\ e_2\rangle \longrightarrow^* \langle \store^\prime, v_2\rangle\\
-&\Rightarrow v_1 \approx_{L} v_2.
-\langle \store^\prime, v_1\rangle \approx_{L} \langle \store^\prime, v_2\rangle\\
+&\land \withLblClr\ (\store(\lbl), \store(\clr))\ (e\ e_1) \longrightarrow^* \langle \store^1, v_1\rangle\\
+&\land \withLblClr\ (\store(\lbl), \store(\clr))\ (e\ e_2) \longrightarrow^* \langle \store^2, v_2\rangle\\
+&\Rightarrow 
+\langle \store^1, v_1\rangle \approx_{L} \langle \store^2, v_2\rangle\\
 \end{align*}
 \end{theorem}
 
-In other words, given two low-equivalent inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as observed by the attacker (at label level up to $L$) is indistinguishable.
+In other words, given two $L$-equivalent inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as read by the observer (at label level up to $L$) is indistinguishable.
 
 
 
