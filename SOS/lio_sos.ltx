@@ -541,11 +541,18 @@ Informally, to an observer reading labeled values with label at most $L$,
 a computation $e$ is not distinguishable from $e^\prime$, where $e^\prime$ is 
 $e$ with all values labeled above $L$ erased to $\hole$.
 To prove our security guarantees we need to define a new evaluation relation, 
-${\longrightarrow_L}$, that performs the term erasures:
+${\longrightarrow_L}$, that performs the term erasures. For pure terms,
 
 \begin{equation*}
 \inferrule{e \longrightarrow e^\prime}
           {e \longrightarrow_L \erase{L}{e^\prime}}
+\end{equation*}
+
+and, similarly, for terms in an environment,
+
+\begin{equation*}
+\inferrule{\langle \store, e \rangle \longrightarrow \langle \store^\prime, e^\prime \rangle}
+          {\langle \store, e \rangle \longrightarrow_L \erase{L}{\langle \store^\prime, e^\prime \rangle}}
 \end{equation*}
 
 \subsubsection{Example with term erasure on pure terms}
