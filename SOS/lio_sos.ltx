@@ -244,7 +244,6 @@ Note that, in practice, this may be implemented using a state transformer monad 
        \ |\  E\ e                       
        \ |\  (E, e)                     
        \ |\  (v, E)                     
-       \ |\  \Lv\ E\ e                    
        \ |\  \Lv\ v\ E                    
        \ |\  \ifel{E}{e}{e}
        \ |\  \letbind{x}{E}{e}
@@ -269,9 +268,9 @@ Note that, in practice, this may be implemented using a state transformer monad 
 &&&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]\tag{E-Runit}\\
 %&&&E[\Lv\ l_1\ e_1\ \seq\ e_2]                     \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
 &&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \lub l_2\rrbracket}
-            {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]} \tag{E-Join}\\
+            {l_1\ \lub\ l_2 \longrightarrow l_3} \tag{E-Join}\\
 &&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \glb l_2\rrbracket}
-           {E[l_1\ \glb\ l_2] \longrightarrow E[l_3]} \tag{E-Meet}
+           {l_1\ \glb\ l_2 \longrightarrow l_3} \tag{E-Meet}
 \end{align*}
 \caption{Semantics for pure terms.}
 \end{sos}
@@ -336,7 +335,7 @@ Let us consider a simple example, working only on pure terms. In this example we
                          \Lv\ (l_\bot\lub\lL)\ (1 + 2)\ 
                          \bind\ \lambda x.\Lv\ \lH\ x\\
 &\tref{E-Runit}:       & \longrightarrow &
-                         \Lv\ (l_\bot\lub\lL\lub\lH)\ (1 + 2)\\
+                         \Lv\ (\lL\lub\lH)\ (1 + 2)\\
 &\tref{E-Join}:        & \longrightarrow &
                          \Lv\ \lH\ (1 + 2)\\
 &                      & \longrightarrow &
@@ -473,7 +472,7 @@ We define a function ${\mathcal{W}\llbracket \rrbracket} : \textrm{Environment}\
 
 We say that a term $e$ is well-behaved (at this point in the execution) in environment $\store$ if $\well{\store}{e}=\tT$.
 
-\begin{proposition}[Properties of $\mathcal{W}$]
+\begin{proposition}[Properties of $\mathcal{W}$]\label{proposition-well}
 \quad
 \begin{enumerate}
 \item IFC is not violated if environment constraints are relaxed:\\ 
@@ -521,9 +520,8 @@ We say that a term $e$ is well-behaved (at this point in the execution) in envir
       \item Let $ E := ([\cdot], e_0)$, it follows that \\
             ${\well{\store}{E[e]}= \well{\store}{(e, e_0)} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
       \item $ E := (v, [\cdot])$ is as above.
-      \item Let $ E := \Lv\ [\cdot]\ e_0$, it follows that \\
-            ${\well{\store}{E[e]}= \well{\store}{\Lv\ e\ e_0} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
-      \item $ E := \Lv\ v\ [\cdot]$ is as above.
+      \item Let $ E := \Lv\ e_0\ [\cdot]$, it follows that \\
+            ${\well{\store}{E[e]}= \well{\store}{\Lv\ e_0\ e} \implies \well{\store}{e_0} \land \well{\store}{e} \implies \well{\store}{e}}$
       \item Let $ E := \ifel{[\cdot]}{e_0}{e_1}$, it follows that \\
             ${\well{\store}{E[e]}= \well{\store}{\ifel{e}{e_0}{e_1}} \implies \well{\store}{e} \land \well{\store}{e_0} \land \well{\store}{e_1} \implies \well{\store}{e}}$
       \item Let $ E := \letbind{x}{[\cdot]}{e_0}$, it follows that \\
@@ -613,11 +611,11 @@ function $\erase{L}{e}$, that we define below:
 \erase{L}{E\ \bindLIOp\ e}  &= \erase{L}{E}\ \bindLIOp\ \erase{L}{e}\\
 \erase{L}{\lioValp{E}} &= \lioValp{\erase{L}{E}} \\
 \erase{L}{\withLblClr\ e_1\ e_2}  &= \withLblClr\ \erase{L}{e_1}\ \erase{L}{e_2}\\
-\erase{L}{\langle \store, e \rangle} &=
-                        \begin{cases}
-                          \langle \store, \hole \rangle &  \store(\lbl) \not \flows L\\
-                          \langle \store, \erase{L}{e} \rangle &\textrm{otherwise}\\
-                        \end{cases}\\
+%\erase{L}{\langle \store, e \rangle} &=
+%                        \begin{cases}
+%                          \langle \store, \hole \rangle &  \store(\lbl) \not \flows L\\
+%                          \langle \store, \erase{L}{e} \rangle &\textrm{otherwise}\\
+%                        \end{cases}\\
 \end{align*}
 
 Informally, to an observer reading labeled values with label at most $L$,
@@ -635,7 +633,7 @@ and, similarly, for terms in an environment,
 
 \begin{equation*}
 \inferrule{\langle \store, e \rangle \longrightarrow \langle \store^\prime, e^\prime \rangle}
-          {\langle \store, e \rangle \longrightarrow_L \erase{L}{\langle \store^\prime, e^\prime \rangle}}
+          {\langle \store, e \rangle \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime} \rangle}
 \end{equation*}
 
 \subsubsection{Example with term erasure on pure terms}
@@ -702,11 +700,77 @@ using the erasure function $\erase{\lL}{\cdot}$.
 &\textrm{Evaluate $f$}& \longrightarrow_\lL^* & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
                                           \open\ (\Lv\ \lH\ \hole) \rangle\\
 &\tref{E-LIO-Open}    & \longrightarrow_\lL & \langle \store=\{(\lbl,\lH),(\clr,\lH)\}, 
-                                          \hole \rangle\\
+                                          \lioValp{\hole} \rangle\\
 \end{align*}
 
+\begin{proposition}[Properties of $ \varepsilon_L $]\label{proposition-erase}
+\quad
+\begin{enumerate}
+\item $\erase{L}{E[e]} = \erase{L}{E}[\erase{L}{e}]$
+\item $\erase{L}{[e_2/x]e_1} = [\erase{L}{e_2}/x]\erase{L}{e_1}$
+\item $\erase{L}{\erase{L}{e}} = \erase{L}{e}$
+\item $\erase{L}{\erase{L}{E}} = \erase{L}{E}$
+\item $\inferrule{\erase{L}{E}[e] \longrightarrow \erase{L}{E}[e^\prime] }
+                 {\erase{L}{E}[e] \longrightarrow_L \erase{L}{E}[\erase{L}{e^\prime}] }
+      $
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+\quad
+\begin{enumerate}
+\item All follow directly from the induction on evaluation contexts and terms.
+      \begin{enumerate}
+      \item Let $E := [\cdot]\ e_0$, it follows that $\erase{L}{E} := [\cdot]\ \erase{L}{e_0}$, and\\
+            ${\erase{L}{E[e]}=\erase{L}{e\ e_0}=\erase{L}{e}\ \erase{L}{e_0}=\erase{L}{E}[\erase{L}{e}]}$
+      \item Let $E := ([\cdot], e_0)$, it follows that $\erase{L}{E} := ([\cdot], \erase{L}{e_0})$, and\\
+            ${\erase{L}{E[e]}=\erase{L}{(e, e_0)}=(\erase{L}{e}, \erase{L}{e_0})=\erase{L}{E}[\erase{L}{e}]}$
+      \item $ E := (v, [\cdot])$ is as above.
+      \item Let $ E := \Lv\ l\ [\cdot]$, it follows that 
+            \begin{equation*}
+             \erase{L}{E} := \begin{cases}
+                          \Lv\ l\ \hole &  l \not \flows L\\
+                          \Lv\ l\ \erase{L}{[\cdot]} & \textrm{otherwise}\\
+                        \end{cases}
+            \end{equation*}
+            and
+            \begin{equation*}
+            \erase{L}{E[e]}=\erase{L}{\Lv\ l\ e}= \begin{cases}
+                                                       \Lv\ l\ \hole &  l \not \flows L\\
+                                                       \Lv\ l\ \erase{L}{e} & \textrm{otherwise}\\
+                                                     \end{cases},
+            \end{equation*}
+            from which $\erase{L}{E[e]} = \erase{L}{E}[\erase{L}{e}]$ follows directly.
+      \item $\ldots$
+      \end{enumerate}
 
-\begin{lemma}[Single-step simulation]
+\item $\erase{L}{[e_2/x]e_1} = \erase{L}{ (\lambda x . e_1)\ e_2}
+       = \erase{L}{\lambda x . e_1}\ \erase{L}{e_2}
+       = \lambda x . \erase{L}{e_1}\ \erase{L}{e_2}
+       = [\erase{L}{e_2}/x]\erase{L}{e_1}
+      $
+
+\item Directly from definition of the erasure function and induction on terms.
+
+\item Directly from definition of the erasure function and induction on terms and evaluation contexts.
+
+\item From the property of evaluation contexts: 
+      \begin{equation*}
+      \inferrule{e \longrightarrow e^\prime}{E[e] \longrightarrow E[e^\prime]},
+      \end{equation*}
+      definition of $\longrightarrow_L$, and properties 2 and 4, above, we have 
+      \begin{equation*}
+      \inferrule{E[e] \longrightarrow E[e^\prime]}{E[e] \longrightarrow_L \erase{L}{E[e^\prime]}}
+      =\inferrule{E[e] \longrightarrow E[e^\prime]}{E[e] \longrightarrow_L \erase{L}{E}[\erase{L}{e^\prime}]}
+      =\inferrule{\erase{L}{E^\prime}[e] \longrightarrow \erase{L}{E^\prime}[e^\prime] }
+                 {\erase{L}{E^\prime}[e] \longrightarrow_L \erase{L}{E^\prime}[\erase{L}{e^\prime}] }, \textrm{ for some $E=\erase{L}{E^\prime}$}.
+      \end{equation*}
+
+
+\end{enumerate}
+\end{proof}
+
+
+\begin{lemma}[Single-step simulation]\label{lemma:single-step}
 If $ \Gamma \vdash e : \tau$, $\well{\store}{e}$, and 
 ${\langle \store, e \rangle \longrightarrow \langle \store^\prime, e^\prime\rangle}$
 then 
