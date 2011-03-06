@@ -71,6 +71,7 @@
 \newtheorem{theorem}{Theorem}
 \newtheorem{lemma}{Lemma}
 \newtheorem{corollary}{Corollary}
+\newtheorem{proposition}{Proposition}
 \theoremstyle{definition}
 \newtheorem{definition}{Definition}
 
@@ -278,7 +279,7 @@ Note that, in practice, this may be implemented using a state transformer monad 
 \begin{sos}
 \begin{align*}
 &&E&   ::=  \cdots
-       \ |\  \seal\ E\ l                
+       \ |\  \seal\ E\ v
        \ |\  \open\ E                 
        \ |\  \close\ E                 
        \ |\  \returnLIOp\ E
@@ -446,23 +447,105 @@ We define a function ${\mathcal{W}\llbracket \rrbracket} : \textrm{Environment}\
 \begin{align*}
 \well{\store}{x} &= \tT\\
 \well{\store}{\lambda x. e} &= \well{\store}{e}\\
+\well{\store}{(e_1, e_2)} &= \well{\store}{e_1} \land \well{\store}{e_2}\\
+%\well{\store}{\Lv\ l\ e} &= \well{\store}{e}\\
+\well{\store}{\Lv\ e_1\ e_2} &= \well{\store}{e_1} \land \well{\store}{e_2}\\
 \well{\store}{\lioValp{e}} &= \well{\store}{e}\\
 \well{\store}{\true} &= \tT\\
 \well{\store}{\false} &= \tT\\
 \well{\store}{l} &= \tT\\
 \well{\store}{\fix\ e} &= \well{\store}{e}\\
-\well{\store}{\Lv\ l\ e} &= \well{\store}{e}\\
 \well{\store}{e_1\ e_2} &= \well{\store}{e_1} \land \well{\store}{e_2}\\
-\well{\store}{\ifel{\true}{e_1}{e_2}} &= \well{\store}{e_1}\\
-\well{\store}{\ifel{\false}{e_1}{e_2}} &= \well{\store}{e_2}\\
-&\vdots\\
-\well{\store}{\seal\ e\ l_1}          &= (\store(\lbl) \flows l_1 \flows \store(\clr)) \land\ \well{\store}{e}\\
-\well{\store}{\open\ (\Lv\ l_1\ e_1)} &= (\store^\prime(\lbl) \flows \store(\clr)) \land \well{\store^\prime}{e},\\
-                                      &\textrm{where } \store^\prime=\store[\lbl\mapsto l^\prime], \textrm{and } l^\prime = \store(\lbl)\lub l_1\\
+%\well{\store}{\ifel{\true}{e_1}{e_2}} &= \well{\store}{e_1}\\
+%\well{\store}{\ifel{\false}{e_1}{e_2}} &= \well{\store}{e_2}\\
+\well{\store}{\ifel{e_1}{e_2}{e_3}} &= \well{\store}{e_1} \land \well{\store}{e_2} \land \well{\store}{e_3}\\
+\well{\store}{\letbind{x}{e_1}{e_2}} &= \well{\store}{e_1} \land \well{\store}{e_2}\\
+\well{\store}{\pi_i\ e} &= \well{\store}{e}\\
+\well{\store}{\return\ e} &= \well{\store}{e}\\
+\well{\store}{\returnLIOp\ e} &= \well{\store}{e}\\
+\well{\store}{e_1\ \diamond\ e_2}  &= \well{\store}{e_1} \land \well{\store}{e_2}\textrm{, where }\diamond = \{\bind, \lub, \glb, \bindLIOp\} \\
+\well{\store}{\withLblClr\ e_1\ e_2}  &= \well{\store}{e_1} \land \well{\store}{e_2}\\ %TODO: look over
+\well{\store}{\seal\ e\ l}        &= (\store(\lbl) \flows l \flows \store(\clr)) \land\ \well{\store}{e}\\
+\well{\store}{\open\ (\Lv\ l\ e)} &= (\store^\prime(\lbl) \flows \store(\clr)) \land \well{\store^\prime}{e},\\
+                                      &\textrm{where } \store^\prime=\store[\lbl\mapsto l^\prime], \textrm{and } l^\prime = \store(\lbl)\lub l\\
 \well{\store}{\close\ e} &= \well{\store}{e}
 \end{align*}
 
-The remaining terms are similarly defined. We say that a term $e$ is well-behaved (at this point in the execution) in environment $\store$ if $\well{\store}{e}=\tT$.
+We say that a term $e$ is well-behaved (at this point in the execution) in environment $\store$ if $\well{\store}{e}=\tT$.
+
+\begin{proposition}[Properties of $\mathcal{W}$]
+\quad
+\begin{enumerate}
+\item IFC is not violated if environment constraints are relaxed:\\ 
+  $\well{\store}{e} \land \store^\prime({\lbl}) \flows \store({\lbl}) \land  \store({\clr}) \flows \store^\prime({\clr}) \implies \well{\store^\prime}{e}$
+\item Inversion of $\mathcal{W}$:
+      \begin{enumerate}
+        \item $\well{\store}{\lambda x. e} \implies \well{\store}{e}$
+        \item $\well{\store}{(e_1, e_2)} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
+        \item $\well{\store}{\Lv\ e_1\ e_2} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
+        \item $\well{\store}{\lioValp{e}} \implies \well{\store}{e}$
+        \item $\well{\store}{\fix\ e} \implies \well{\store}{e}$
+        \item $\well{\store}{e_1\ e_2} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
+        \item $\well{\store}{\ifel{e_1}{e_2}{e_3}} \implies \well{\store}{e_1} \land \well{\store}{e_2} \land \well{\store}{e_3}$
+        \item $\well{\store}{\letbind{x}{e_1}{e_2}} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
+        \item $\well{\store}{\pi_i\ e} \implies \well{\store}{e}$
+        \item $\well{\store}{\return\ e} \implies \well{\store}{e}$
+        \item $\well{\store}{\returnLIOp\ e} \implies \well{\store}{e}$
+        \item $\well{\store}{e_1\ \diamond\ e_2}  \implies \well{\store}{e_1} \land \well{\store}{e_2}$, where $\diamond = \{\bind, \lub, \glb, \bindLIOp\}$
+        \item $\well{\store}{\withLblClr\ e_1\ e_2}  \implies \well{\store}{e_1} \land \well{\store}{e_2}$ % TODO : look over
+        \item $\well{\store}{\seal\ e_1\ e_1}        \implies \well{\store}{e_1} \land \well{\store}{e_2}$
+        \item $\well{\store}{\open\ e} \implies  \well{\store}{e}$
+        \item $\well{\store}{\close\ e} \implies \well{\store}{e}$
+      \end{enumerate}
+\item Inversion of $\mathcal{W}$ on evaluation contexts: $\well{\store}{E[e]} \implies \well{\store}{e}$
+\item Inversion of $\mathcal{W}$ under substitution: $\well{\store}{[e_2/x]e_1} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+\quad
+\begin{enumerate}
+\item By definition of $\mathcal{W}$ and induction on terms. 
+% Add proof for open and seal
+\item All follow directly from the definition of $\mathcal{W}$, we highlight the interesting case below:
+      \begin{enumerate}
+        \item[{\em (o)}] It follows from the definition of $\mathcal{W}$ that $\well{\store}{\open\ e} \implies \well{\store^\prime}{e}$
+              for some $\store^\prime : {\store^\prime({\lbl}) \flows \store({\lbl})}$.
+              As $\store$ is less constrained than $\store^\prime$, it follows from the first
+              proposition that ${\well{\store^\prime}{e} \implies \well{\store}{e}}$.
+      \end{enumerate}
+\item All follow directly from the inversion properties of $\mathcal{W}$, and induction on evaluation contexts and terms.
+      Let $e_i: \well{\store}{e_i}$.
+      \begin{enumerate}
+      \item Let $E := [\cdot]\ e_0$, it follows that\\
+            ${\well{\store}{E[e]}= \well{\store}{e\ e_0} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
+      \item Let $ E := ([\cdot], e_0)$, it follows that \\
+            ${\well{\store}{E[e]}= \well{\store}{(e, e_0)} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
+      \item $ E := (v, [\cdot])$ is as above.
+      \item Let $ E := \Lv\ [\cdot]\ e_0$, it follows that \\
+            ${\well{\store}{E[e]}= \well{\store}{\Lv\ e\ e_0} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
+      \item $ E := \Lv\ v\ [\cdot]$ is as above.
+      \item Let $ E := \ifel{[\cdot]}{e_0}{e_1}$, it follows that \\
+            ${\well{\store}{E[e]}= \well{\store}{\ifel{e}{e_0}{e_1}} \implies \well{\store}{e} \land \well{\store}{e_0} \land \well{\store}{e_1} \implies \well{\store}{e}}$
+      \item Let $ E := \letbind{x}{[\cdot]}{e_0}$, it follows that \\
+            ${\well{\store}{E[e]}= \well{\store}{\letbind{x}{e}{e_0}} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
+      \item Let $ E := \pi_i\ [\cdot]$, it follows that \\
+            ${\well{\store}{E[e]}= \well{\store}{\pi_i\ e} \implies \well{\store}{e}}$
+      \item Let $ E := \return\ [\cdot]$, it follows that \\
+            ${\well{\store}{E[e]}= \well{\store}{\return\ e} \implies \well{\store}{e}}$
+      \item $ E := \returnLIOp\ [\cdot]$ is as above.
+      \item Let $ E := [\cdot]\ \diamond\ e_0$, for $\diamond = \{\bind, \lub, \glb, \bindLIOp\}$, it follows that \\
+            ${\well{\store}{E[e]}= \well{\store}{e\ \diamond\ e_0} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
+      \item $ E := v\ \diamond\ [\cdot]$, for $\diamond = \{\bind, \lub, \glb, \bindLIOp\}$ is as above.
+      \item Let $E := \seal\ [\cdot]\ e_0$, it follows that\\
+            ${\well{\store}{E[e]}= \well{\store}{\seal\ e\ e_0} \implies \well{\store}{e} \land \well{\store}{e_0}}$
+      \item Let $E := \open\ [\cdot]$, it follows that\\
+            ${\well{\store}{E[e]}= \well{\store}{\open\ e} \implies  \well{\store}{e}}$
+      \item Let $E := \close\ [\cdot]$, it follows that\\
+            ${\well{\store}{E[e]}= \well{\store}{\close\ e} \implies \well{\store}{e}}$
+      \end{enumerate}
+\item Since information flow control is preserved under substitution, it directly follows from $\well{\store}{(\lambda x .e_1)\ e_2} \implies \well{\store}{e_1} \land \well{\store}{e_2}$ and evaluation rule \tref{E-App}.
+\end{enumerate}
+\end{proof}
 
 
 \subsection{Language properties}
@@ -477,7 +560,7 @@ If $\vdash e : \tau$ and $e \longrightarrow e^\prime$ then $\vdash e^\prime : \t
 In other words, a well-typed term taking an evaluation step results in a term that is also well-typed.
 
 \begin{lemma}[Type and information flow preservation]
-If $\vdash e : \tau$ and $\langle \store, e\rangle \longrightarrow \langle \store^\prime, e^\prime \rangle$ then $\vdash e^\prime : \tau$.
+If $\vdash e : \tau$, $\well{\store}{e}$, and $\langle \store, e\rangle \longrightarrow \langle \store^\prime, e^\prime \rangle$ then $\vdash e^\prime : \tau$.
 \end{lemma}
 A well-typed and well-behaved term taking an evaluation step results in a term that is also well-typed.
 
@@ -623,6 +706,27 @@ using the erasure function $\erase{\lL}{\cdot}$.
 \end{align*}
 
 
+\begin{lemma}[Single-step simulation]
+If $ \Gamma \vdash e : \tau$, $\well{\store}{e}$, and 
+${\langle \store, e \rangle \longrightarrow \langle \store^\prime, e^\prime\rangle}$
+then 
+$ \Gamma \vdash e^\prime : \tau$, and
+$\erase{L}{{\langle \store, e \rangle} \longrightarrow^*_L \erase{L}{\langle \store^\prime, e^\prime\rangle}}$
+\end{lemma}
+
+\begin{lemma}[Multi-step simulation]
+If $ \Gamma \vdash e : \tau$, $\well{\store}{e}$, and 
+${\langle \store, e \rangle \longrightarrow^* \langle \store^\prime, e^\prime\rangle}$
+then 
+$ \Gamma \vdash e^\prime : \tau$, and
+$\erase{L}{{\langle \store, e \rangle} \longrightarrow^*_L \erase{L}{\langle \store^\prime, e^\prime\rangle}}$
+\end{lemma}
+\begin{proof}
+By induction on the single-step simulation lemma.
+\end{proof}
+
+
+\pagebreak
 
 \begin{definition}[$L$-equivalence]
 Two values, each consisting of a pair of values with labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, 
