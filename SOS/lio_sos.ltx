@@ -500,7 +500,7 @@ We say that a term $e$ is well-behaved (at this point in the execution) in envir
         \item $\well{\store}{e_1\ \diamond\ e_2}  \implies \well{\store}{e_1} \land \well{\store}{e_2}$, where $\diamond = \{\bind, \lub, \glb, \bindLIOp\}$
         \item $\well{\store}{\withLblClr\ e_1\ e_2}  \implies \well{\store}{e_1} \land \well{\store}{e_2}$ % TODO : look over
         \item $\well{\store}{\seal\ e_1\ e_1}        \implies \well{\store}{e_1} \land \well{\store}{e_2}$
-        \item $\well{\store}{\open\ e} \implies  \well{\store}{e}$
+        \item $\well{\store}{\open\ (\Lv\ l\ e)} \implies  \well{\store}{e}$
         \item $\well{\store}{\close\ e} \implies \well{\store}{e}$
       \end{enumerate}
 \item Inversion of $\mathcal{W}$ on evaluation contexts: $\well{\store}{E[e]} \implies \well{\store}{e}$
@@ -514,7 +514,7 @@ We say that a term $e$ is well-behaved (at this point in the execution) in envir
 % Add proof for open and seal
 \item All follow directly from the definition of $\mathcal{W}$, we highlight the interesting case below:
       \begin{enumerate}
-        \item[{\em (o)}] It follows from the definition of $\mathcal{W}$ that $\well{\store}{\open\ e} \implies \well{\store^\prime}{e}$
+        \item[{\em (o)}] It follows from the definition of $\mathcal{W}$ that $\well{\store}{\open\ (\Lv\ l\ e)} \implies \well{\store^\prime}{e}$
               for some $\store^\prime : {\store^\prime({\lbl}) \flows \store({\lbl})}$.
               As $\store$ is less constrained than $\store^\prime$, it follows from the first
               proposition that ${\well{\store^\prime}{e} \implies \well{\store}{e}}$.
@@ -834,7 +834,7 @@ If $ \Gamma \vdash e : \tau$, $\well{\store}{e}$, and
 ${\langle \store, e \rangle \longrightarrow \langle \store^\prime, e^\prime\rangle}$
 then 
 $ \Gamma \vdash e^\prime : \tau$, and
-${\langle \store, \erase{L}{e} \rangle \longrightarrow^*_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$
+${\langle \store, \erase{L}{e} \rangle \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$
 \end{lemma}
 \begin{proof}
 Lemma~\ref{lemma:type-flow-preservation} proves type preservation of well-behaved terms, so we limit the proof to the simulation.
@@ -1157,20 +1157,23 @@ Using Lemma~\ref{lemma:multi-step},
 \longrightarrow^*_L \langle \store^\prime, \el{\lioValp{(\Lv\ l^\prime\ v_j^1, \Lv\ l\ v_j^2)}}\rangle
 \end{equation*}
 can be either 
+\begin{enumerate}
+\item
 \begin{equation*}
-\withLblClr\ (\store(\lbl), \store(\clr))\ (\el{e}\ (\Lv\ l^\prime\ \hole, \Lv\ l\ \el{e_j^2}))
-\longrightarrow^*_L \langle \store, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ \el{v_j^2})}\rangle
+\inferrule{\store^\prime{\lbl}=l \lor \store^\prime(\lbl) = \store(\lbl)}{\withLblClr\ (\store(\lbl), \store(\clr))\ (\el{e}\ (\Lv\ l^\prime\ \hole, \Lv\ l\ \el{e_j^2}))
+\longrightarrow^*_L \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ \el{v_j^2})}\rangle}
 \end{equation*}
-or 
+\item
 \begin{equation*}
-\inferrule{\store^\prime(\lbl) = l^\prime}{
+\inferrule{\store^\second(\lbl) = l^\prime}{
 \withLblClr\ (\store(\lbl), \store(\clr))\ (\el{e}\ (\Lv\ l^\prime\ \hole, \Lv\ l\ \el{e_j^2}))
-\longrightarrow^*_L \langle \store^\prime, \lioValp{\hole}\rangle}.
+\longrightarrow^*_L \langle \store^\second, \lioValp{\hole}\rangle}.
 \end{equation*}
+\end{enumerate}
 
-If $\store^\prime(\lbl) = l^\prime \not\flows L$, the $L$-view equivalence holds, by definition.
+If $\store^\second(\lbl) = l^\prime \not\flows L$, the $L$-view equivalence holds, by definition.
 Otherwise, by Proposition~\ref{proposition:determinacy-evalL}, it must be that $v_1^2 = v_2^2$,
-and consequently, $\langle \store, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_1^2)}\rangle \approx_{L} \langle \store, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_2^2)}\rangle$.
+and consequently, $\langle \store, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_1^2)}\rangle \approx_{L} \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_2^2)}\rangle$.
 \end{proof}
 
 
