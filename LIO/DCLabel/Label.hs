@@ -17,7 +17,7 @@ The categories themselves (of type 'DCatS' and 'DCatI', for secrecy
 and integrity, respectively) are Sets of 'Principal's, where a
 'Principal' is just a 'String' whose meaning is up to the application.
 Privileges ('DCPrivs') also correspond to 'Principal's.  You can use
-'mintTCB' to obtain the privileges of a 'Pinripal' and 'mappend' to
+'mintTCB' to obtain the privileges of a 'Principal' and 'mappend' to
 combine privileges of multiple 'Principal's.  Owning a Principal
 (having it in a 'DCPrivs' object) confers the right to modify labels
 by removing /any/ 'DCatS' containing that Principal and adding /any/
@@ -34,11 +34,11 @@ module LIO.DCLabel.Label
     , DCat(..) , DCatI, DCatS
     , DCSet, DCLabel(..)
     -- * Functions for categories
-    , dcSingleton, dcFromList, dcUnion, dcSubsumes, dcSubsumesNE
+    , dcSingleton, dcFromList, dcFromPList, dcUnion, dcSubsumes, dcSubsumesNE
     -- * Functions for sets of categories (DCSet)
     -- ** Straight set operations
-    , dcsEmpty, dcsSingleton, dcsFromList, dcsAll
-    , dcsSubsetOf, dcsUnion, dcsIntersection
+    , dcsEmpty, dcsSingleton, dcsFromList, dcsFromPList, dcsAll
+    , dcsSubsetOf, dcsUnion, dcsIntersection, dcsMap
     -- ** Operations that reflect the disjunction property
     , dcsSubsumes, dcsUnion', dcsIntersection'
     , dclReduce
@@ -46,10 +46,15 @@ module LIO.DCLabel.Label
     , DCPrivs, dcprivs, owns
     -- * Useful aliases for the LIO Monad
     , DC, evalDC
+    -- * Useful aliases for the IterIO Monad
+    , evalIterDC 
     ) where
 
 import LIO.TCB
+import LIO.IterLIO 
+import Data.IterIO 
 
+import Control.DeepSeq
 import Control.Applicative
 import Data.List
 import Data.Maybe
@@ -59,6 +64,9 @@ import qualified Data.Set as Set
 import Data.Typeable
 
 newtype Principal = Principal String deriving (Eq, Ord)
+
+instance NFData Principal where
+  rnf (Principal p) = p `seq` ()
 
 instance Show Principal where
     showsPrec d (Principal s) = showsPrec d s
@@ -73,8 +81,10 @@ instance Read Principal where
 class (Show t) => DCType t where dcType :: t -> String
 data Secrecy = Secrecy deriving (Eq, Show)
 instance DCType Secrecy where dcType _ = "S"
+instance NFData Secrecy
 data Integrity = Integrity deriving (Eq, Show)
 instance DCType Integrity where dcType _ = "I"
+instance NFData Integrity
 
 -- | @DCat@ is the generalized type for disjunction categories.  A
 -- @DCat@ is a set of the 'Principals who own the category and can
@@ -85,6 +95,8 @@ instance DCType Integrity where dcType _ = "I"
 newtype (DCType t) => DCat t = DCat (Set Principal) deriving (Eq, Ord)
 type DCatS = DCat Secrecy
 type DCatI = DCat Integrity
+instance NFData (DCat t) where
+  rnf (DCat pSet) = pSet `deepseq` ()
 
 instance (DCType t) => Show (DCat t) where
     showsPrec _ (DCat c) = shows (Set.toList c)
@@ -100,6 +112,9 @@ dcSingleton _ p = DCat $ Set.singleton p
 dcFromList      :: (DCType t) => t -> [Principal] -> DCat t
 dcFromList _ pl = DCat $ Set.fromList pl
 
+dcFromPList :: (DCType t) => [Principal] -> DCat t
+dcFromPList pl = DCat $ Set.fromList pl
+
 dcUnion                     :: (DCType t) => DCat t -> DCat t -> DCat t
 dcUnion (DCat c1) (DCat c2) = DCat $ Set.union c1 c2
 
@@ -109,7 +124,7 @@ dcUnion (DCat c1) (DCat c2) = DCat $ Set.union c1 c2
 -- bypass).  We therefore say that category [A] subsumes category [A,
 -- B].  In other words, if [A] is a secrecy category, then anyone who
 -- can read data labeled [A] can also read data labeled [A, B].
--- Converely, if [A] is an integrity category, then anyone who can
+-- Conversely, if [A] is an integrity category, then anyone who can
 -- write data labeled [A] can also write data labeled [A, B].
 --
 -- Generalizing, we define @c1 `dcSubsumes` c2@ as the subset
@@ -144,6 +159,10 @@ data (DCType t) => DCSet t = DCSet (Set (DCat t))
                            -- ^ Theset of all possible categories
                              deriving (Eq, Typeable)
 
+instance (DCType t) => NFData (DCSet t) where
+  rnf (DCSet cSet) = cSet `deepseq` ()
+  rnf DCAll = ()
+
 dcsEmpty :: (DCType t) => DCSet t
 dcsEmpty = DCSet Set.empty
 
@@ -152,6 +171,9 @@ dcsSingleton c = DCSet $ Set.singleton c
 
 dcsFromList :: (DCType t) => [DCat t] -> DCSet t
 dcsFromList l = DCSet $ Set.fromList l
+
+dcsFromPList :: (DCType t) => [Principal] -> DCSet t
+dcsFromPList pl = dcsFromList $ map (DCat . Set.singleton $) pl
 
 -- | The set of all possible categories of a given type (either
 -- 'Secrecy' or 'Integrity').
@@ -168,6 +190,8 @@ dcsUnion                       :: (DCType t) => DCSet t -> DCSet t -> DCSet t
 dcsUnion DCAll _               = DCAll
 dcsUnion _ DCAll               = DCAll
 dcsUnion (DCSet s1) (DCSet s2) = DCSet $ Set.union s1 s2
+
+
 
 dcsIntersection :: (DCType t) => DCSet t -> DCSet t -> DCSet t
 dcsIntersection DCAll s               = s
@@ -187,6 +211,10 @@ hasCatSubsuming s c = s `hasCatSuchThat` (`dcSubsumes` c)
 dcsFilter             :: (DCType t) => (DCat t -> Bool) -> DCSet t -> DCSet t
 dcsFilter f (DCSet s) = DCSet $ Set.filter f s
 dcsFilter _ DCAll     = DCAll
+
+dcsMap              :: (DCType t) => (DCat t -> DCat t) -> DCSet t -> DCSet t
+dcsMap f (DCSet s) = DCSet $ Set.map f s
+dcsMap _ DCAll     = DCAll
 
 -- | Eliminate categories that are subsumed (see 'dcSubsumes') by
 -- other categories in the set.
@@ -274,6 +302,9 @@ instance POrd DCLabel where
         s2 `dcsSubsumes` s1 && i1 `dcsSubsumes` i2
         -- i2 `dcsSubsetOf` i1 && s1 `dcsSubsetOf` s2
 
+instance NFData DCLabel where
+  rnf (DCLabel sSet iSet) = sSet `deepseq` iSet `deepseq` ()
+
 -- | Removes any categories that can be removed from a label without
 -- changing its security implications.  Specifically, any category is
 -- removed if it is subsumed by a different category that the label
@@ -302,6 +333,9 @@ instance MintTCB DCPrivs Principal where
 instance Monoid DCPrivs where
     mempty = DCPrivsTCB Set.empty
     mappend (DCPrivsTCB s1) (DCPrivsTCB s2) = DCPrivsTCB $ Set.union s1 s2
+
+instance NFData DCPrivs where
+  rnf (DCPrivsTCB pSet ) = pSet `deepseq` ()
 
 -- | Extract the set of 'Principal's from a 'DCPrivs' object.
 dcprivs                :: DCPrivs -> Set Principal
@@ -349,3 +383,8 @@ type DC = LIO DCLabel ()
 -- computation's result and the label of the result.
 evalDC :: DC a -> IO (a, DCLabel)
 evalDC m = evalLIO m ()
+
+-- | Runs a 'LIO' 'Iter', returning the computation's result and
+-- label in an 'IO' 'Iter'.
+evalIterDC :: (ChunkData t) => Iter t DC a -> Iter t IO (a, DCLabel)
+evalIterDC iter = evalIterLIO () iter

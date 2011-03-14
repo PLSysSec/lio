@@ -13,7 +13,7 @@
 
    @
     import Prelude hiding ('readFile', 'writeFile', 'catch')
-    import Control.Exception hiding ('throwIO', 'catch', 'onException'
+    import Control.Exception hiding ('throwIO', 'catch', 'handle', 'onException'
                                     , 'bracket', 'block', 'unblock')
     import LIO.LIO
    @

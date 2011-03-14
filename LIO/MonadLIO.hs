@@ -2,6 +2,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE OverlappingInstances #-}
 
 -- | This module provides a function 'liftLIO' for executing 'LIO'
 -- computations from transformed versions of the 'LIO' monad.  There
@@ -22,4 +23,4 @@ instance (Label l) => MonadLIO (LIO l s) l s where
     liftLIO = id
 
 instance (MonadLIO m l s, MonadTrans t, Monad (t m)) => MonadLIO (t m) l s where
-    liftLIO = lift . liftLIO
+   liftLIO = lift . liftLIO

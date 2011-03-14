@@ -25,7 +25,15 @@
 -- allows one to seal off the results of an LIO computation inside an
 -- 'Lref' without tainting the current flow of execution.  'openR'
 -- conversely allows one to use the value stored within an 'Lref'.
---
+-- 
+-- If protection of the label on the data is unnecessary, i.e., only
+-- the data needs to be protected by a label, then a secondary
+-- data structure 'LrefD' (publicly-labeled reference) can be used
+-- instead of 'Lref'. 'LrefD' is a wrapper for 'Lref', hence, it also
+-- protects access to pure values. Additionally, one must use the
+-- 'openRD' function to use the value stored within an 'LrefD',
+-- thereby tainting the current flow of execution.
+-- 
 -- Any code that imports this module is part of the
 -- /Trusted Computing Base/ (TCB) of the system.  Hence, untrusted
 -- code must be prevented from importing this module.  The exported
@@ -57,39 +65,54 @@ module LIO.TCB (
                , openR, openRP, closeR, discardR
                -- ** Lref monad transformer
                , LrefT(..)
-               , unliftLrefTTCB, lrefTLabelTCB 
+               -- * References to publicly-labeled pure data (LrefDs)
+               , LrefD
+               , lrefD, lrefPD, unlrefPD, labelOfRD
+               , taintRD, openRD, openRPD
                -- * Exceptions
                -- ** Exception type thrown by LIO library
                , LabelFault(..)
                -- ** Throwing and catching labeled exceptions
                -- $lexception
-               , MonadCatch(..), catchP, onExceptionP, bracketP
+               , MonadCatch(..), catchP, handleP, onExceptionP, bracketP
                -- * Executing computations
+               , evaluate
                , evalLIO
                -- Start TCB exports
                -- * Privileged operations
+               , LIOstate(..)
+               , runLIO
                , ShowTCB(..)
+               , ReadTCB(..)
                , lrefTCB
+               , lrefDTCB
                , PrivTCB, MintTCB(..)
                , unlrefTCB, labelOfRTCB
+               , unlrefDTCB
+               , unliftLrefTTCB, lrefTLabelTCB 
                , setLabelTCB, setClearanceTCB
+               , closeRDTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
                -- ** Misc symbols useful for privileged code
                , newstate, LIOstate, runLIO
                -- End TCB exports
+{-               , lvalue, Lvalue
+               , openRv
+-}
                ) where
 
 import Prelude hiding (catch)
 import Control.Applicative
 import Control.Monad.Error
 import Control.Monad.State.Lazy hiding (put, get)
-import Control.Exception hiding (catch, throw, throwIO,
-                                 onException, block, unblock)
+import Control.Exception hiding (catch, handle, throw, throwIO,
+                                 onException, block, unblock, evaluate)
 import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
+import Text.Read (minPrec)
 
 import LIO.MonadCatch
 
@@ -253,6 +276,34 @@ class MintTCB t i where
     -- can define instances of mintTCB.
     mintTCB :: i -> t
 
+-- | It is useful to have the dual of 'ShowTCB', @ReadTCB@, that allows
+-- for the reading of 'Lref's that were written using 'showTCB'. Only
+-- @readTCB@ (corresponding to 'read') and @readsPrecTCB@ (corresponding
+-- to 'readsPrec') are implemented.
+class ReadTCB a where
+  readsPrecTCB :: Int -> ReadS a
+  readTCB :: String -> a
+  readTCB str = check $ readsPrecTCB minPrec str
+    where check []                          = error "readTCB: no parse"
+          check [(x,rst)] | all (==' ') rst = x
+                         | otherwise        = error "readTCB: no parse"
+          check _                           = error "readTCB: ambiguous parse"
+
+instance (Label l, Read l, Read a) => ReadTCB (Lref l a) where
+  readsPrecTCB _ str = do (val, str1) <- reads str
+                          ("{", str2) <- lex str1
+                          (lab, str3) <- reads str2
+                          ("}", rest) <- lex str3
+                          return (lrefTCB lab val, rest)
+
+instance (Label l, Read l, Read a) => ReadTCB (LrefD l a) where
+  readsPrecTCB _ str = do (val, str1) <- reads str
+                          ("{", str2) <- lex str1
+                          (lab, str3) <- reads str2
+                          ("}", rest) <- lex str3
+                          return (lrefDTCB lab val, rest)
+
+
 -- | @PrivTCB@ is a method-less class whose only purpose is to be
 -- unavailable to unprivileged code.  Since @(PrivTCB t) =>@ is in the
 -- context of class 'Priv' and unprivileged code cannot create new
@@ -409,6 +460,92 @@ lrefTLabelTCB :: (Monad m,Label l) => l -> LrefT l m ()
 lrefTLabelTCB l = LrefT $ return $ LrefTCB l ()
 
 
+--
+-- Publicly-labeled data - LrefD
+--
+
+-- | @LrefD@ is a reference to labeled data with the label covering
+--   /only/ the data. The label itself is publicly readable.
+--   Hence, only a subset of the functions available for 'Lref's are
+--   needed to equivalently perform the same tasks using @LrefD@s.
+--   For example, the @LrefD@ 'guardR' and 'labelOfRP' equivalents are not
+--   necessary since the label on the  data can be observed.
+--
+--   Additionally, to avoid information leakage the equivalent of
+--   'closeR' is necessarily limited to trusted code by disallowing the
+--   export of 'closeRDTCB'. Although arbitrary 'LIO' computations cannot
+--   be sealed in an @LrefD@, since @LrefD@ is a 'Monad', computations on
+--   different level labeled values can be performed using functions such
+--   as 'liftM2'. Consider the following example of adding a value labeled
+--    \"low\" and another labeled \"high\" in a context labeled \"medium\":
+--
+-- @
+--   -- lLabel ``leq`` mLabel, lLabel ``leq`` hLabel, and mLabel ``leq`` hLabel
+--   hD <- 'lrefD' hLabel h
+--   lD <- 'lrefD' lLabel l
+--   rD <- 'withClearance' mLabel $
+--             return $ 'liftM2' (+) lD hD
+-- @
+--
+--   The @LrefD@ result @rD@, has value @h+l@ and label @lD ``lub`` hD@.
+--   If instead of using 'liftM2' we used 'openRD' to extract @h@ and @l@ as
+--   to add them, an exception would have been thrown. Rather, we have the 
+--   similar effect of 'closeR' and will need to taint the flow of execution
+--   only when wishing to use the value in @rD@.
+--
+--   Since @LrefD@ is an 'Lref' wrapper, we provide functions to construct,
+--   retrieve values from, raise the label of, and read the label of @LrefD@s.
+--   The functions names are the same as those of 'Lref' with an additional
+--   \"D\" (for data) suffix.
+newtype LrefD l t = LrefDTCB {unLrefD :: Lref l t}
+  deriving(Monad,Functor,Applicative,MonadFix)
+
+instance (Label l, Show a) => ShowTCB (LrefD l a) where
+    showTCB = showTCB . unLrefD
+
+-- | See 'lref'.
+lrefD :: (Label l) => l -> a -> LIO l s (LrefD l a)
+lrefD l a = lref l a >>= return . LrefDTCB
+
+-- | See 'lrefP'.
+lrefPD :: (Priv l p) => p -> l -> a -> LIO l s (LrefD l a)
+lrefPD p l a = lrefP p l a >>= return . LrefDTCB
+
+-- | See 'lrefTCB'.
+lrefDTCB :: Label l => l -> a -> LrefD l a
+lrefDTCB l a = LrefDTCB $ LrefTCB l a
+
+-- | See 'unlrefP'.
+unlrefPD :: Priv l p => p -> LrefD l a -> a
+unlrefPD p = unlrefP p . unLrefD
+
+-- | See 'unlrefTCB'.
+unlrefDTCB :: Label l => LrefD l a -> a
+unlrefDTCB (LrefDTCB (LrefTCB _ a)) = a
+
+-- | Returns the label of the 'LrefD' regardless of the level of the current label.
+labelOfRD :: Label l => LrefD l a -> l
+labelOfRD (LrefDTCB (LrefTCB l _)) = l
+
+-- | See 'taintR'.
+taintRD :: (Label l) => l -> LrefD l a -> LIO l s (LrefD l a)
+taintRD l ldr = taintR l (unLrefD ldr) >>= return . LrefDTCB
+
+-- | See 'openR'.
+openRD :: (Label l) => LrefD l a -> LIO l s a
+openRD = openR . unLrefD
+
+-- | See 'openRP'.
+openRPD :: (Priv l p) => p -> LrefD l a -> LIO l s a
+openRPD p = openRP p . unLrefD
+
+-- | @closeRDTCB@ is the dual of 'openRD', however its use must be
+--   restricted to trusted code, since observing the label could
+--   leak information from the "LIO" computation.
+closeRDTCB :: (Label l) => LIO l s a -> LIO l s (LrefD l a)
+closeRDTCB m = closeR m >>= return . LrefDTCB
+
+
 
 --
 -- Labeled IO
@@ -508,7 +645,7 @@ currentClearance = get >>= return . lioC
      when using 'leqp' instead of 'leq'.)  This is ensured by the
      'wguard' (write guard) function, which does the equivalent of
      'taint' to ensure the target label @ldata@ can flow to the
-     current label, then throws an exception if @ldata@ cannot flow
+     current label, then throws an exception if @lcurrent@ cannot flow
      back to the target label.
 
    * When /creating/ or /allocating/ objects, it is permissible for
@@ -959,6 +1096,14 @@ catchP p m c = iomaps (\s m' -> m' `E.catch` doit s) m
                           else E.throw e
             _       -> E.throw e
 
+-- | Version of 'catchP' with arguments swapped.
+handleP :: (Label l, Exception e, Priv l p) =>
+                 p   -- ^ Privileges with which to downgrade exception
+              -> (l -> e -> LIO l s a) -- ^ Exception handler
+              -> LIO l s a             -- ^ Computation to run
+              -> LIO l s a             -- ^ Result of computation or handler
+handleP p = flip (catchP p)
+
 -- | 'onException' cannot run its handler if the label was raised in
 -- the computation that threw the exception.  This variant allows
 -- privileges to be supplied, so as to catch exceptions thrown with a
@@ -1001,3 +1146,51 @@ instance (Label l) => OnExceptionTCB (LIO l s) where
 instance (Label l) => MonadError IOException (LIO l s) where
     throwError = throwIO
     catchError = catch
+
+-- | Evaluate in LIO.
+evaluate :: (Label l) => a -> LIO l s a
+evaluate = rtioTCB . E.evaluate
+
+
+{-
+--
+-- Lvalue
+--
+data (Label l) => Lv l t = LvTCB l t -- same as Lref
+newtype (Label l) => Lvalue l s t = LvalueTCB (LIO l s (Lv l t)) -- the exported Lvalue
+
+instance (Label l) => Monad (Lvalue l s) where
+  return x = LvalueTCB $ get >>= \s -> return $ LvTCB (lioL s) x
+  (LvalueTCB lx) >>= f = LvalueTCB $ do
+    (LvTCB l x) <- lx
+    s <- get
+
+    let (LvalueTCB lx') = f x
+    (LvTCB l' x') <- lx'
+    s' <- get
+
+    let lc = (lioL s) `lub` (lioL s') -- upperbound of two contexts
+        cc = lioC s' -- clearance of the second action
+        lnew = l `lub` l' `lub` lc -- do not throw exception if label < context labe, raise it instead
+    clearGuard lc cc     -- check that context label < context clearance
+    clearGuard lnew cc   -- check that Lv label is < context clearance
+
+    put s' { lioL = lc }
+    return $ LvTCB lnew x'
+
+      where clearGuard l c | not $ l `leq` c = throwIO LerrClearance
+                           | otherwise       = return ()
+
+lvalue :: (Label l) => l -> t -> LIO l s (Lvalue l s t)
+lvalue l a = return . LvalueTCB $ get >>= doit
+    where doit s | not $ l `leq` lioC s = throwIO LerrClearance
+                 | otherwise            = return $ LvTCB (l `lub` lioL s) a
+
+openRv :: (Label l) => Lvalue l s t -> LIO l s t
+openRv (LvalueTCB lx) = do
+  (LvTCB l x) <- lx
+  taintL l
+  return x
+-}
+
+

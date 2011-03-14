@@ -11,6 +11,7 @@ Category:       Security
 Synopsis:       Labeled IO library
 Extra-source-files:
         Examples/test.hs
+        Examples/test2.hs
 
 Description:
         The /Labeled IO/ (LIO) library provides information flow
@@ -26,15 +27,21 @@ Description:
 
 Library
   Build-Depends: base >= 4 && < 5,
-                 array >= 0.2 && < 1,
-                 bytestring >= 0.9 && < 1,
+                 array >= 0.2 && < 1, bytestring >= 0.9 && < 1,
                  containers >= 0.2 && < 1,
                  directory >= 1.0 && < 2,
                  filepath >= 1.1 && < 2,
-                 mtl >= 1.1.0.2 && < 2,
+                 mtl >= 1.1.0.2 && < 2.1,
                  old-time >= 1 && < 2,
                  unix >= 2.3 && < 3,
-                 SHA >= 1.4.1.1 && < 2
+                 SHA >= 1.4.1.1 && < 2,
+                 deepseq >= 1.1.0.2 && < 2,
+                 iterIO >= 0.0,
+                 ListLike >= 1.0 && < 3.1,
+                 time >= 1.1.4 && < 2
+
+  ghc-options: -O2 -Wall -funbox-strict-fields
+               -threaded -fno-warn-unused-imports -rtsopts
 
   Exposed-modules:
     LIO.Armor,
@@ -42,6 +49,7 @@ Library
     LIO.DCLabel,
     LIO.DCLabel.Label,
     LIO.DCLabel.PrivStore,
+    LIO.DCLabel.NanoEDSL,
     LIO.FS,
     LIO.Handle,
     LIO.HiStar,
@@ -49,6 +57,7 @@ Library
     LIO.LIORef,
     LIO.MonadCatch,
     LIO.MonadLIO,
+    LIO.IterLIO,
     LIO.TCB,
     LIO.TmpFile
 
