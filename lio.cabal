@@ -40,7 +40,7 @@ Library
                  ListLike >= 1.0 && < 3.1,
                  time >= 1.1.4 && < 2
 
-  ghc-options: -O2 -Wall -funbox-strict-fields
+  ghc-options: -O2 -funbox-strict-fields
                -threaded -fno-warn-unused-imports -rtsopts
 
   Exposed-modules:
