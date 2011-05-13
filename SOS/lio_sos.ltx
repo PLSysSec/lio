@@ -4,6 +4,9 @@
 \usepackage{amsmath,amssymb,amsfonts,amsthm,stmaryrd,txfonts, mathabx}
 \usepackage{float}
 \usepackage{mathpartir}
+\usepackage{hyperref}
+\usepackage[usenames,dvipsnames]{color}
+\newcommand{\Red}[1]{{\color{red} #1}}
 \pagestyle{empty}
 
 \date{\today}
@@ -23,7 +26,7 @@
 \newcommand{\flows}{\sqsubseteq}
 \newcommand{\lub}{\sqcup}
 \newcommand{\glb}{\sqcap}
-\newcommand{\labelOf}{\mathcal{L}}
+\newcommand{\labelOf}[1]{\mathcal{L} \llbracket #1 \rrbracket}
 \newcommand{\lL}{\texttt{L}}
 \newcommand{\lM}{\texttt{M}}
 \newcommand{\lH}{\texttt{H}}
@@ -41,17 +44,17 @@
 \newcommand{\transevalrel}[4]{{\xrightarrow[{#1 \quad #3}]{{#2 \quad #4}}}^{*}}
 
 \newcommand{\LIO}{\texttt{LIO}}
-\newcommand{\LIOp}{\texttt{LIO'$\ell$}}
+\newcommand{\LIOp}{\texttt{LIO$^\prime$}} %$^\prime\ell$}}
 \newcommand{\IO}{\texttt{IO}}
-\newcommand{\returnLIOp}{\texttt{return}^\texttt{\tiny LIO'}}
-\newcommand{\bindLIOp}{\texttt{>>=}^\texttt{\tiny LIO'}}
-\newcommand{\seqLIO}{\texttt{>>}^\texttt{\tiny LIO'}}
-\newcommand{\lioValp}[1]{(#1)^\texttt{\tiny LIO'}}
+\newcommand{\returnLIOp}{\texttt{return}^\texttt{\tiny LIO$^\prime$}}
+\newcommand{\bindLIOp}{\texttt{>>=}^\texttt{\tiny LIO$^\prime$}}
+\newcommand{\seqLIO}{\texttt{>>}^\texttt{\tiny LIO$^\prime$}}
+\newcommand{\lioValp}[1]{(#1)^\texttt{\tiny LIO$^\prime$}}
 
 \newcommand{\tref}[1]{\textrm{#1}}
 
 \newcommand{\withLblClr}{\texttt{withLblClr}}
-\newcommand{\store}{\sigma_\ell}
+\newcommand{\store}{\Delta_\ell}
 \newcommand{\lbl}{\texttt{lbl}}
 \newcommand{\clr}{\texttt{clr}}
 
@@ -81,83 +84,141 @@
 
 \begin{document} 
 \begin{enumerate}
-\item The typing relation has the form $\Gamma \vdash e : \tau$, which can be read as ``term $e$ has type $\tau$ in the typing context $\Gamma$''; $\Gamma$ is the set of assumptions on the types of the free variables in term $e$.
+\item
+The typing relation has the standard form $\Gamma \vdash e : \tau$, which
+can be read as ``term $e$ has type $\tau$ in the typing context $\Gamma$'';
+$\Gamma$ is the set of assumptions on the types of the free variables in term
+$e$.
 Hence, $\Gamma : \textrm{Term} \rightarrow \textrm{Type}$.
-\item The function $\mathcal{L} : \textrm{Label} \rightarrow \mathbb{L}$ maps labels to elements of latice $\mathbb{L}$, i.e., $\mathcal{L}\llbracket l\rrbracket \in \mathbb{L}\cup\{\bot,\top\}$.
-Furthermore, $\mathcal{L}$ is homomorphically defined over label operations, so 
-$\mathcal{L}\llbracket l_1 \lub\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \lub \mathcal{L} \llbracket l_2\rrbracket$, and similarly $\mathcal{L}\llbracket l_1 \glb\ l_2\rrbracket = \mathcal{L}\llbracket l_1 \rrbracket \glb \mathcal{L} \llbracket l_2\rrbracket$.
-Note that the label kind and lattice may be arbitrary defined as long as $\mathcal{L}$ is bijective.
-\item The evaluation contexts $E$ are terms with a hole; where $E[e]$ is a term with the hole being replaced by $e$.
-      It is important to note that, for a unique $E$,
-      \begin{equation*}
-      \inferrule{e\longrightarrow e^\prime}{E[e]\longrightarrow E[e^\prime]}
-      \end{equation*}
-\item We use the notion of an environment $\store$ that maps \lbl{} to the current label, and \clr{} to the current clearance as to keep track of and enforce information flow control.
-The current label is the highest label of all the variables that we can name in the environment; for example, if we current label is high, then we can name variables that were labeled high, hose label was removed.
-The function \withLblClr{} is used to initialize the environment, which may be updated by functions such as \open{}.
-Note that, in practice, this may be implemented using a state transformer monad that threads the label and clearance through the computations.
-\item We define a wrapper monad, \LIOp{}, that is simply used to prevent the escaping of wrapped values (which could violate information flow).
-\item The evaluation relation consisting that may have side-effects in the environment is
-      \begin{equation*}
-      \inferrule{e\longrightarrow e^\prime}{\langle \store, e\rangle \longrightarrow \langle \store^\prime, e^\prime\rangle }
-      \end{equation*}
-      which may be read as ``term $e$ in environment $\store$ evaluates to $e^\prime$ in environment $\store^\prime$''.
-\item We say that a term is ``stuck'' (at run-time) if it violates information flow control.
-\item For the preseted examples we assume the following lattice elements: $\{\lL, \lH\}$ with the partial order $\bot \flows \lL \flows \lH \flows \top$, and $\cdot \lub \lH = \lH$ and $\cdot \glb \lL = \lL$.
-For simplicity, we refer to \lL{} as the ``public label'' and \lH{} as the ``secret label''.
-Additionally, we define $l_\bot = \lL$ and $l_\top = \lH$.
-Furthermore we assume the language is extended to support integer types and integer operations, e.g., addition.
+
+\item
+The function $\mathcal{L} : \textrm{Label} \rightarrow \mathsf{L}$ maps
+labels to elements of lattice $\mathbb{L}$, i.e.,
+$\labelOf{l} \in \mathsf{L}\cup\{\bot,\top\}$.
+We use the meta-variables $l$ to denote Label values of type $\ell$.
+
+We highlight that $\mathcal{L}$ is homomorphically defined over label operations
+$op \in \{\lub, \glb\}$, so
+$\labelOf{l_1\ op\ l_2} = \labelOf{l_1}\ op\ \labelOf{l_2}$.
+
+The label type ($\ell$) and lattice may be arbitrary defined as long as
+$\mathcal{L}$ is bijective.
+However, we require that every label kind provide a default label for pure
+values, denoted by $l_\bot$ such that 
+$\labelOf{l_\bot} \in \mathsf{L}\cup\{\bot,\top\}$.
+
+We overload operator $\flows$ to allow for comparison of syntactic labels in
+the premise of evaluation rules. For example, $l_1 \flows l_2$ can be 
+is has the semantic meaning of $\labelOf{l_1} \flows \labelOf{l_2}$.
+
+\item
+The evaluation contexts $E$ are terms with a hole; where $E[e]$ is a term
+with the hole being replaced by $e$.
+It is important to note that, for a unique $E$,
+\begin{equation*}
+\inferrule{e\longrightarrow e^\prime}{E[e]\longrightarrow E[e^\prime]}
+\end{equation*}
+
+\item
+We use the notion of an environment
+$\store : \{\lbl, \clr\} \rightarrow \textrm{Label}$ that maps
+the {\em current label}, \lbl{}, and {\em current clearance}, \clr{}, to a
+label value.
+The current label is effectively a ceiling over the labels of all data the
+current computation may depend on, the current clearance specified an upper
+bound on permissible values of the current label.
+This suggests that all data within the computation is uniformly
+labeled by the current label. We provide labeled values ($\Lv{}\ l\ v$) to allow
+for values ($v$) to be protected by labels ($l$) other than the current label.
+
+
+The function \withLblClr{} is used to initialize $\store{}$, which may be
+updated with functions such as \open{}.
+In the actual implementation, we use a state transformer monad to
+``thread'' the current label and clearance over the computation.
+Our semantics assume the ability to modify and query the environment, which
+we do not model explicitly:
+we can avoid this layer of implementation detail as it provides no
+interesting properties. Hence, our semantics are akin to modular monadic
+semantics.
+
+\item
+Side-effects of certain functions may modify the environment $\store$.
+The evaluation relation that may have side-effects in the environment is
+\begin{equation*}
+\inferrule{e\longrightarrow e^\prime}
+{\langle \store, e\rangle \longrightarrow \langle \store^\prime, e^\prime\rangle}
+\end{equation*}
+which may be read as ``term $e$ in environment $\store$ evaluates to
+$e^\prime$ in environment $\store^\prime$''.
+
+
+\item
+We define a wrapper type, \LIOp{}, the constructor of which is used to
+wrap/box values $v$ into $\lioValp{v}$. \LIOp{} is a monad, for which we 
+limit the operations to return and bind.
+\Red{Do we need to parametrize \LIOp{} with $\ell$?}
+
+\item
+We say that a term is {\em stuck} at run-time if it violates information
+flow control.
+
+\item
+For the ongoing examples we assume the following lattice elements:
+$\{\lL, \lH\}$ with partial order $\bot \flows \lL \flows \lH \flows \top$,
+and $\cdot \lub \lH = \lH$ and $\cdot \glb \lL = \lL$.
+Additionally, we let $l_\bot = \lL$.
+For simplicity, we refer to \lL{} as the ``public label'' and
+\lH{} as the ``secret label''. We assume the language supports
+integer types and integer operations, e.g., addition.
 \end{enumerate}
 
 \begin{language}
 \begin{align*}
-\textrm{Lattice:}             && \mathbb{L} &= (L, \flows, \lub, \glb, \bot, \top)                 \\
+\textrm{Lattice:} && \mathbb{L}&= (\mathsf{L}, \flows, \lub, \glb, \bot, \top)\\
 \\
-\textrm{Label:}               && l, c &\\
+\textrm{Label:}   && l  &\\
 \\
-\textrm{Value:}               && v    &\Coloneqq   x                    \\ % variable
-                              &&      &\ |\  \lambda x.e                \\ % abstraction
-                              &&      &\ |\  (e, e)                     \\ % tuple
-                              &&      &\ |\  \Lv\ e\ e                  \\ % value of type Lvalue
-                              &&      &\ |\  \lioValp{e}                \\ % value of type LIO'
-                              &&      &\ |\  \true                      \\ % value of type Bool
-                              &&      &\ |\  \false                     \\ % value of type Bool
-                              &&      &\ |\  l                          \\ % label
-                              &&      &\ |\  \fix\ e                    \\ % recursion
+\textrm{Value:}   && v    &\Coloneqq   x                 \\ % variable
+                  &&      &\ |\  \lambda x.e             \\ % abstraction
+                  &&      &\ |\  (e, e)                  \\ % tuple
+                  &&      &\ |\  \Lv\ e\ e               \\ % val of type Lvalue
+                  &&      &\ |\  \lioValp{e}             \\ % value of type LIO'
+                  &&      &\ |\  \true                   \\ % value of type Bool
+                  &&      &\ |\  \false                  \\ % value of type Bool
+                  &&      &\ |\  l                       \\ % label
+                  &&      &\ |\  \fix\ e                 \\ % recursion
 \\
-\textrm{Term:}                && e    &\Coloneqq  v                     \\ % values
-                              &&      &\ |\  e\ e                       \\ % application
-                              &&      &\ |\  \ifel{e}{e}{e}             \\ % recursion
-                              &&      &\ |\  \letbind{x}{e}{e}          \\ % let-bindings
-                              &&      &\ |\  \pi_i\ e                   \\ % \pi_1 = fst, \pi_2 = snd
-                              &&      &\ |\  \return\ e                 \\ % return
-                              &&      &\ |\  e\ \bind\ e                \\ % bind two expressions
-%                              &&      &\ |\  e\ \seq\ e                 \\ % sequence two expressions
-                              &&      &\ |\  \withLblClr\ e\ e          \\ % withLblClr
-%                              &&      &\ |\  \langle \store, \ e\rangle   \\ % LIO value
-                              &&      &\ |\  \seal\ e\ e                \\ % seal
-                              &&      &\ |\  \open\ e                   \\ % open
-                              &&      &\ |\  \close\ e                   \\ % close
-                              &&      &\ |\  \returnLIOp\ e\             \\ % returnLIOp
-                              &&      &\ |\  e\ \bindLIOp\ e             \\ % bind two expressions
-%                              &&      &\ |\  \evalLIO\ e\ e             \\ % evalLIO
-                              &&      &\ |\  e\ \lub\ e                 \\ % lub
-                              &&      &\ |\  e\ \glb\ e                 \\ % glb
+\textrm{Term:}    && e    &\Coloneqq  v                  \\ % values
+                  &&      &\ |\  e\ e                    \\ % application
+                  &&      &\ |\  \ifel{e}{e}{e}          \\ % recursion
+                  &&      &\ |\  \letbind{x}{e}{e}       \\ % let-bindings
+                  &&      &\ |\  \pi_i\ e                \\ % pi_1=fst,pi_2=snd
+                  &&      &\ |\  \return\ e              \\ % return
+                  &&      &\ |\  e\ \bind\ e             \\ % bind two exprs
+                  &&      &\ |\  \withLblClr\ e\ e       \\ % withLblClr
+                  &&      &\ |\  \seal\ e\ e             \\ % seal
+                  &&      &\ |\  \open\ e                \\ % open
+                  &&      &\ |\  \close\ e               \\ % close
+                  &&      &\ |\  \returnLIOp\ e\         \\ % returnLIOp
+                  &&      &\ |\  e\ \bindLIOp\ e         \\ % bind two exprs
+                  &&      &\ |\  e\ \lub\ e              \\ % lub
+                  &&      &\ |\  e\ \glb\ e              \\ % glb
 \\
-\textrm{Type:}                && \tau &\Coloneqq  \tau\rightarrow\tau   \\ % function
-                              &&      &\ |\  (\tau,\tau)                \\ % tuple
-                              &&      &\ |\  \Bool                      \\ % bool
-                              &&      &\ |\  \ell                       \\ % Label
-                              &&      &\ |\  \Lvalue\ \ell\ e           \\ % Lvalue
-%                              &&      &\ |\  \LIO\ \ell\ e              \\ % LIO
-                              &&      &\ |\  \LIOp\ e             \\ % LIO'
-%                              &&      &\ |\  \IO                        \\ % IO
+\textrm{Type:}    && \tau &\Coloneqq  \tau\rightarrow\tau\\ % function
+                  &&      &\ |\  (\tau,\tau)             \\ % tuple
+                  &&      &\ |\  \Bool                   \\ % bool
+                  &&      &\ |\  \ell                    \\ % Label
+                  &&      &\ |\  \Lvalue\ \ell\ e        \\ % Lvalue
+                  &&      &\ |\  \LIOp\ e                \\ % LIO'
 \\
-\textrm{Environment:}         && \store & : \{\lbl,\clr\} \rightarrow \textrm{Label}   \\
+\textrm{Program:} && p    &\Coloneqq  (\letbind{x}{e}{})^*(\withLblClr\ e\ e)\\
 \\
-\textrm{Program:}             && p    &\Coloneqq  (\letbind{x}{e}{})^*(\withLblClr\ e\ e)
+\textrm{Environment:} && \store & : \{\lbl,\clr\} \rightarrow \textrm{Label}
 \end{align*}
-\caption{Haskell embeded information flow control language. $\Lv\ e\ e$ is the runtime representation of a labeled value and it does not appear in the source. Similarly $\lioValp{e}$ is the runtime representation of a \LIOp{} value.}
+\caption{Haskell embedded information flow control language. $\Lv\ e\ e$ is the
+runtime representation of a labeled value and it does not appear in the source.
+Similarly $\lioValp{e}$ is the runtime representation of a \LIOp{} value.}
 \label{language:lvalue}
 \end{language}
 
@@ -184,14 +245,18 @@ Furthermore we assume the language is extended to support integer types and inte
 \inferrule{\Gamma \vdash e : \tau \rightarrow \tau}
      {\Gamma \vdash \fix\ e : \tau}\tag{T-Fix}
 \\
-\inferrule{\Gamma \vdash e_1 : \tau_1 \rightarrow \tau_2 \\ \Gamma \vdash e_2 : \tau_1}
-     {\Gamma \vdash e_1\ e_2 : \tau_2}\tag{T-App}
+\inferrule
+{\Gamma \vdash e_1 : \tau_1 \rightarrow \tau_2 \\ \Gamma \vdash e_2 : \tau_1}
+{\Gamma \vdash e_1\ e_2 : \tau_2}\tag{T-App}
 \\
-\inferrule{\Gamma \vdash e_1 : \Bool \\ \Gamma \vdash e_2 : \tau \\ \Gamma \vdash e_3 : \tau}
-     {\Gamma \vdash \ifel{e_1}{e_2}{e_3} : \tau}\tag{T-IfEl}
+\inferrule
+{\Gamma \vdash e_1 : \Bool \\ \Gamma \vdash e_2 : \tau
+                           \\ \Gamma \vdash e_3 : \tau}
+{\Gamma \vdash \ifel{e_1}{e_2}{e_3} : \tau}\tag{T-IfEl}
 \\
-\inferrule{\Gamma \vdash e_1 : \tau_1 \\ \Gamma [x \mapsto \tau_1] \vdash e_2 : \tau_2}
-     {\Gamma \vdash \letbind{x}{e_1}{e_2} : \tau_2}\tag{T-Let}
+\inferrule
+{\Gamma \vdash e_1 : \tau_1 \\ \Gamma [x \mapsto \tau_1] \vdash e_2 : \tau_2}
+{\Gamma \vdash \letbind{x}{e_1}{e_2} : \tau_2}\tag{T-Let}
 \\
 \inferrule{\Gamma \vdash e : (\tau_1, \tau_2)}
      {\Gamma \vdash \pi_i\ e : \tau_i}
@@ -200,11 +265,10 @@ Furthermore we assume the language is extended to support integer types and inte
 \inferrule{\Gamma \vdash e : \tau}
      {\Gamma \vdash \return\ e : \Lvalue\ \ell\ \tau}\tag{T-Ret}
 \\
-\inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
-     {\Gamma \vdash e_1\ \bind\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Bind}
-%\\
-%\inferrule{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1 \\ \Gamma \vdash e_2 : \Lvalue\ \ell\ \tau_2}
-%     {\Gamma \vdash e_1\ \seq\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Seq}
+\inferrule
+{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1
+ \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
+{\Gamma \vdash e_1\ \bind\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Bind}
 \\
 \inferrule{\Gamma \vdash e_1 : \ell\\ \Gamma \vdash e_2 : \ell}
      {\Gamma \vdash e_1\ \lub\ e_2 : \ell}\tag{T-Join}
@@ -212,21 +276,19 @@ Furthermore we assume the language is extended to support integer types and inte
 \inferrule{\Gamma \vdash e_1 : \ell\\ \Gamma \vdash e_2 : \ell}
      {\Gamma \vdash e_1\ \glb\ e_2 : \ell}\tag{T-Meet}
 \end{align}
-\caption{Type rules where the monadic bind and return are solely given for \Lvalue{} types.}
+\caption{Type rules for pure terms. The monadic return and bind are only
+defined for type \Lvalue{}.}
 \end{typerules}
 
 \begin{typerules}
 \begin{align}
 \inferrule{\Gamma \vdash e : \tau}
-     {\Gamma \vdash \lioValp{e} : \LIOp\ \tau}\tag{T-LIO'-Val}
+     {\Gamma \vdash \lioValp{e} : \LIOp\ \tau}\tag{T-LIO$^\prime$-Val}
 \\
 \inferrule{\Gamma \vdash e_1 : (\ell,\ell) \\ \Gamma \vdash e_2 : \LIOp\ \tau}
      {\Gamma \vdash \withLblClr\ e_1\ e_2: \LIOp\ \tau}\tag{T-WithLblClr}
-%\\
-%\inferrule{\Gamma \vdash e : \tau}
-%     {\Gamma \vdash \langle \store, e \rangle: \LIO\ \ell\ \tau}\tag{T-LIO-Val}
 \\
-\inferrule{\Gamma \vdash e_1 : \tau \\ \Gamma \vdash e_2 : \ell}
+\inferrule{\Gamma \vdash e_1 : \ell \\ \Gamma \vdash e_2 : \tau}
      {\Gamma \vdash \seal\ e_1\ e_2: \LIOp\ (\Lvalue\ \ell\ \tau)}\tag{T-Seal}
 \\
 \inferrule{\Gamma \vdash e : \Lvalue\ \ell\ \tau}
@@ -236,13 +298,15 @@ Furthermore we assume the language is extended to support integer types and inte
      {\Gamma \vdash \close\ e : \LIOp\ (\Lvalue\ \ell\ \tau)}\tag{T-Close}
 \\
 \inferrule{\Gamma \vdash e : \tau}
-     {\Gamma \vdash \returnLIOp\ e  : \LIOp\ \tau}\tag{T-LIO'-Ret}
+     {\Gamma \vdash \returnLIOp\ e  : \LIOp\ \tau}\tag{T-LIO$^\prime$-Ret}
 \\
-\inferrule{\Gamma \vdash e_1 : \LIOp\ \tau_1 \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \LIOp\ \tau_2}
-     {\Gamma \vdash e_1\ \bindLIOp\ e_2 : \LIOp\ \tau_2}\tag{T-LIO'-Bind}
+\inferrule
+{\Gamma \vdash e_1 : \LIOp\ \tau_1
+ \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \LIOp\ \tau_2}
+{\Gamma \vdash e_1\ \bindLIOp\ e_2 : \LIOp\ \tau_2}\tag{T-LIO$^\prime$-Bind}
 \end{align}
-\caption{Type rules where the monadic bind and return are solely given for \Lvalue{} types.}
-\caption{Type rules for terms with side-effects.}
+\caption{Type rules for terms with side-effects. Monadic return and
+bind are distinct from those of \Lvalue{}.}
 \end{typerules}
 
 
@@ -262,61 +326,124 @@ Furthermore we assume the language is extended to support integer types and inte
        \ |\  E\ \diamond\ e                
        \ |\  v\ \diamond\ E, \textrm{where }\diamond = \{\bind, \lub, \glb\}
        \\
-\\                                                                                                    
-&&&E[(\lambda x.e_1)\ e_2]                         \longrightarrow E[[e_2/x]e_1]          \tag{E-App}    \\
-&&&E[\fix\ e]                                      \longrightarrow E[e\ (\fix\ e)]          \tag{E-Fix}    \\
-&&&E[\ifel{\true}{e_1}{e_2}]                       \longrightarrow E[e_1]                 \tag{E-IfTrue} \\
-&&&E[\ifel{\false}{e_1}{e_2}]                      \longrightarrow E[e_2]                 \tag{E-IfFalse}\\
-&&&\inferrule{e_1 \longrightarrow {e_1}^\prime}
-   {E[\letbind{x}{e_1}{e_2}]                       \longrightarrow E[\letbind{x}{{e_1}^\prime}{e_2}]}         \tag{E-Let}    \\
-&&&E[\letbind{x}{v}{e}]                            \longrightarrow E[[v/x]e]                                  \tag{E-LetVal} \\
-&&&E[\pi_i\ (e_1,e_2)]                             \longrightarrow E[e_i]                 \tag{E-Proj}   \\
-&&&E[\return\ e]                                   \longrightarrow E[\Lv\ l_\bot\ e] \tag{E-Ret}    \\
-&&&\inferrule{e_2 \ne \Lv\ e_l\ e_2^\prime}
-      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]      \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}\tag{E-Bind} \\
-&&&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]\tag{E-Runit}\\
-%&&&E[\Lv\ l_1\ e_1\ \seq\ e_2]                     \longrightarrow E[e_2\ \bind\ \lambda x.\return\ x]\tag{E-Seq} \\
-&&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \lub l_2\rrbracket}
+\\
+%
+&&&E[(\lambda x.e_1)\ e_2] \longrightarrow E[[e_2/x]e_1] \tag{E-App}\\
+%
+&&&E[\fix\ e] \longrightarrow E[e\ (\fix\ e)] \tag{E-Fix}\\
+%
+&&&E[\ifel{\true}{e_1}{e_2}]  \longrightarrow E[e_1] \tag{E-IfTrue}\\
+%
+&&&E[\ifel{\false}{e_1}{e_2}] \longrightarrow E[e_2] \tag{E-IfFalse}\\
+%
+%&&&\inferrule
+%                {e_1 \longrightarrow {e_1}^\prime}
+%% --------------------------------------------------------------------------
+%{E[\letbind{x}{e_1}{e_2}] \longrightarrow E[\letbind{x}{{e_1}^\prime}{e_2}]}
+%\tag{E-Let}\\
+%
+&&&E[\letbind{x}{v}{e}] \longrightarrow E[[v/x]e] \tag{E-Let}\\
+%
+&&&E[\pi_i\ (e_1,e_2)] \longrightarrow E[e_i] \tag{E-Proj}\\
+%
+&&&E[\return\ e] \longrightarrow E[\Lv\ l_\bot\ e] \tag{E-Ret}\\
+%
+&&&\inferrule
+                        {e_2 \ne \Lv\ e_1^\prime\ e_2^\prime}
+% --------------------------------------------------------------------------
+{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]
+              \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}
+\tag{E-Bind}\\
+%
+&&&E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]
+        \longrightarrow E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]\tag{E-RUnit}\\
+%
+&&&\inferrule
+            {\labelOf{l_3} = \labelOf{l_1} \lub \labelOf{l_2}}
+% --------------------------------------------------------------------------
             {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]} \tag{E-Join}\\
-&&&\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \glb l_2\rrbracket}
+%
+&&&\inferrule
+            {\labelOf{l_3} = \labelOf{l_1} \glb \labelOf{l_2}}
+% --------------------------------------------------------------------------
            {E[l_1\ \glb\ l_2] \longrightarrow E[l_3]} \tag{E-Meet}
+%
 \end{align*}
-\caption{Semantics for pure terms.}
+\caption{Semantics for pure terms. These rewrite rules may be applied in 
+any context.}
+\label{sos:pure}
 \end{sos}
 
 \begin{sos}
 \begin{align*}
 &&E&   ::=  \cdots
-       \ |\  \seal\ E\ v
+       \ |\  \seal\ E\ e
+       \ |\  \seal\ v\ E
        \ |\  \open\ E                 
        \ |\  \close\ E                 
        \ |\  \returnLIOp\ E
        \ |\  E\ \bindLIOp\ e
        \ |\  v\ \bindLIOp\ E
-%       \ |\  \langle \store, E \rangle
        \ |\  \lioValp{E}
        \\
 &&&
-\inferrule{\store(\lbl)=l \\ \store(\clr)=c}
-{\langle \emptyset, \withLblClr\ (l, c)\ \lioValp{e} \rangle \longrightarrow \langle \store,  \lioValp{e}\rangle} \tag{E-WithLblClr}\\
-&&&\inferrule{\store(\lbl) \flows l_1 \flows \store(\clr)}
-      {\langle \store, E[\seal\ e\ l_1]\rangle \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle} \tag{E-LIO-Seal}  \\
-&&&\inferrule{l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \flows \store(\clr) \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
-      {\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle} \tag{E-LIO-Open} \\
-&&&\inferrule{\langle \store, \lioValp{e} \rangle \longrightarrow \langle \store^\prime, \lioValp{e^\prime} \rangle  \\ \store(\lbl) \flows \store^\prime(\lbl) \flows \store^\prime(\clr) = \store(\clr)}
-      {\langle \store, \close\ \lioValp{e}\rangle \longrightarrow \langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime} \rangle} \tag{E-LIO-Close} \\
-&&&E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}] \tag{E-LIO'-Ret}\\
-&&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2] \tag{E-LIO'-Bind}\\
-&&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. \returnLIOp\ x] \longrightarrow E[\lioValp{e_1}] \tag{E-LIO'-Runit}
+%
+\inferrule
+              {\store[\lbl\mapsto l_1, \clr\mapsto l_2]}
+% --------------------------------------------------------------------------
+{\langle \emptyset, \withLblClr\ (l_1, l_2)\ \lioValp{e} \rangle
+                        \longrightarrow \langle \store,  \lioValp{e}\rangle}
+\tag{E-WithLblClr}\\
+%
+&&&\inferrule
+             {\store(\lbl) \flows l_1 \flows \store(\clr)}
+% --------------------------------------------------------------------------
+{\langle \store, E[\seal\ l_1\ e]\rangle
+            \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle}
+\tag{E-LIO-Seal}\\
+%
+&&&\inferrule
+{l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \flows \store(\clr)
+                           \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
+% --------------------------------------------------------------------------
+{\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle
+             \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle}
+\tag{E-LIO-Open} \\
+%
+&&&\inferrule
+{\langle \store, \lioValp{e} \rangle
+    \longrightarrow^* \langle \store^\prime, \lioValp{v} \rangle
+\\ \store(\lbl) \flows \store^\prime(\lbl)
+    \flows \store^\prime(\clr) \flows \store(\clr)
+\\ l = \store^\prime(\lbl)}
+% --------------------------------------------------------------------------
+{\langle \store, \close\ \lioValp{e}\rangle
+  \longrightarrow \langle \store, \lioValp{\Lv\ l\ v} \rangle}
+\tag{E-LIO-Close} \\
+%
+\\
+&&&E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}] \tag{E-LIO$^\prime$-Ret}\\
+%
+&&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2]
+\tag{E-LIO$^\prime$-Bind}\\
+%
+&&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. \returnLIOp\ x]
+           \longrightarrow E[\lioValp{e_1}] \tag{E-LIO$^\prime$-RUnit}
+%
 \end{align*}
-\caption{Semantics for terms with side effects; \texttt{Lref} case}
+\caption{Semantics for terms with side effects.}
+\label{sos:sideeffect}
 \end{sos}
+
 
 \pagebreak
 
 
-\begin{example}[Example with no side-effects]
-Let us consider a simple example, working only on pure terms. In this example we are given two labeled values, one with a public label \lL{} and another with a secret label \lH. Adding the two we expect the resulting value to be a labeled value with the secret label the secret label.
+\begin{example}[Example with no side-effects]\label{ex:pure}
+Let us consider a simple example, working only on pure terms. In this example
+we are given two labeled values, one with a public label \lL{} and another with
+a secret label \lH. Adding the two we expect the resulting value to be a labeled
+value with the secret label the secret label.
 
 \begin{align*}
 &                     && \Lv\ \lL\ 1\ \bind\ \lambda x.\
@@ -346,64 +473,75 @@ Let us consider a simple example, working only on pure terms. In this example we
 \end{align*}
 \end{example}
 
-\begin{example}[Example with side-effects]
-Let us consider a more complex example, a full program, that has type checks and does not violate the information flow constraints.
-For simplicity, we do not expand $f$.
+\begin{example}[Example with side-effects]\label{ex:sideeffect}
+Let us consider a more complex example, a full program, that type checks and
+does not violate the information flow constraints.
+For simplicity, and since Example~\ref{ex:pure} is a special case of $f$, we
+do not expand $f$.
 \begin{align*}
-&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
-                                                  y_l\ \bind\ \lambda y.
-                                                  \return\ (x + y)\\
+&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\
+                                        \lambda x. y_l\ \bind\
+                                        \lambda y. \return\ (x + y)\\
 &                     && {\tt in}\ \withLblClr\ (\lL, \lH)\ (\
-                                \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
-                                \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
+                                \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                 \open\ (f\ x\ y)\ )\\
-&\tref{E-LetVal}      & \longrightarrow & \withLblClr\ (\lL, \lH)\ (\
-                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+&\tref{E-Let}:        & \longrightarrow & \withLblClr\ (\lL, \lH)\ (\
+                                          \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
+                                          \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y)\ )\\
-&\tref{E-WithLblClr}  & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
-                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+&\tref{E-WithLblClr}: & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
+                                          \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y) \rangle\\
-&\tref{E-LIO-Seal}    & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.  
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+&\tref{E-LIO-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\
+                                          \lambda x.  
+                                          \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y) \rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
-&\tref{E-LIO-Seal}    & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \lioValp{\Lv\ \lH\ 2}\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \open\ (f\ (\Lv\ \lL\ 1)\ (\Lv\ \lH\ 2)) \rangle\\
-&\textrm{Evaluate $f$}& \longrightarrow^* & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
+&\tref{E-LIO$^\prime$-Bind}:
+                      & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ (\Lv\ \lL\ 1) \ y)\rangle\\
+&\tref{E-LIO-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \lioValp{\Lv\ \lH\ 2}\ \bindLIOp\
+                                          \lambda y. 
+                                          \open\ (f\ (\Lv\ \lL\ 1) \ y)\rangle\\
+&\tref{E-LIO$^\prime$-Bind}:
+                      & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
+                                          \open\ (f\ (\Lv\ \lL\ 1)\
+                                                     (\Lv\ \lH\ 2)) \rangle\\
+&\textrm{Evaluate $f$}:
+                      & \longrightarrow^* & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
                                           \open\ (\Lv\ \lH\ 3) \rangle\\
-&\tref{E-LIO-Open}    & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\}, 
+&\tref{E-LIO-Open}:   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\}, 
                                           \lioValp{3} \rangle\\
 \end{align*}
 \end{example}
 
 \begin{example}[Example with side-effects and no label-raising]
-Let us reconsider the above example using \close{} to prevent label-raising.
-For simplicity, we do not repeat the steps shown in the previous example
+Let us reconsider the above example using \close{} to prevent final current
+label increase.
+For simplicity, we do not repeat the steps shown in the previous example.
 \begin{align*}
-&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
-                                                  y_l\ \bind\ \lambda y.
-                                                  \return\ (x + y)\\
+&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ 
+                                        \lambda x.  y_l\ \bind\
+                                        \lambda y.  \return\ (x + y)\\
 &                     && {\tt in}\ \withLblClr\ (\lL, \lH)\ (\ \close\ (
-                                \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
-                                \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+                                \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
+                                \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                 \open\ (f\ x\ y))\ )\\
-&\tref{E-LetVal}      & \longrightarrow & \withLblClr\ (\lL, \lH)\ (\ \close\ (
-                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
+&\tref{E-Let}:        & \longrightarrow & \withLblClr\ (\lL, \lH)\ (\ \close\ (
+                                          \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
+                                          \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y))\ )\\
-&\tref{E-WithLblClr}  & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, \close\ (
-                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ x\ y)) \rangle\\
-&\tref{E-LIO-Close}    & \longrightarrow &
+&\tref{E-WithLblClr}: & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \close\ (
+                                            \seal\ \lL\ 1\ \bindLIOp\ \lambda x.
+                                            \seal\ \lH\ 2\ \bindLIOp\ \lambda y.
+                                            \open\ (f\ x\ y)
+                                                  ) \rangle\\
+&\tref{E-LIO-Close}:   & \longrightarrow &
 \inferrule{\textrm{\footnotesize $
     \langle \{(\lbl,\lL),(\clr,\lH)\}, 
     \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.  
@@ -417,29 +555,35 @@ For simplicity, we do not repeat the steps shown in the previous example
 \end{example}
 
 \begin{example}[Example with side-effects that violates information flow]
-As above, we consider a full program, but in this case one that would violates information flow (flow from a secret value to a public value).
+As above, we consider a full program, but in this case one that would violates
+information flow (flow from a secret value to a public value).
 \begin{align*}
 &                     && \withLblClr\ (\lL, \lH)\ (\
-                         \seal\ 1\ \lH\ \bindLIOp\ \lambda x.  
+                         \seal\ \lH\ 1\ \bindLIOp\ \lambda x.  
                          \open\ x\ \bindLIOp\ \lambda y. 
-                         \seal\ y\ \lL)\\
-&\tref{E-WithLblClr}  & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
-                                          \seal\ 1\ \lH\ \bindLIOp\ \lambda x.  
+                         \seal\ \lL\ y)\\
+&\tref{E-WithLblClr}: & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \seal\ \lH\ 1\ \bindLIOp\ \lambda x.  
                                           \open\ x\ \bindLIOp\ \lambda y. 
-                                          \seal\ y\ \lL)\rangle\\
-&\tref{E-LIO-Seal}    & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
-                                          \lioValp{\Lv\ \lH\ 1}\ \bindLIOp\ \lambda x.  
+                                          \seal\ \lL\ y)\rangle\\
+&\tref{E-LIO-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \lioValp{\Lv\ \lH\ 1}\ \bindLIOp\
+                                          \lambda x.  
                                           \open\ x\ \bindLIOp\ \lambda y. 
-                                          \seal\ y\ \lL\rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
-                                          \open\ (\Lv\ \lH\ 1)\ \bindLIOp\ \lambda y. 
-                                          \seal\ y\ \lL\rangle\\
-&\tref{E-LIO-Open}    & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
+                                          \seal\ \lL\ y\rangle\\
+&\tref{E-LIO$^\prime$-Bind}:
+                      & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \open\ (\Lv\ \lH\ 1)\ \bindLIOp\
+                                          \lambda y. 
+                                          \seal\ \lL\ y\rangle\\
+&\tref{E-LIO-Open}:   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
                                           \lioValp{1}\ \bindLIOp\ \lambda y. 
-                                          \seal\ y\ \lL\rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
-                                          \seal\ 1\ \lL\rangle\\
-&\tref{E-LIO-Seal}    & \texttt{STUCK: }& \textrm{Premise for rule is not satisfied: $\lH \not\flows \lL$.}
+                                          \seal\ \lL\ y\rangle\\
+&\tref{E-LIO$^\prime$-Bind}:
+                      & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
+                                          \seal\ \lL\ 1\rangle\\
+&\tref{E-LIO-Seal}:   & \texttt{STUCK: }& \textrm{Premise for rule is not
+                                               satisfied: $\lH \not\flows \lL$.}
 \end{align*}
 \end{example}
 
@@ -447,6 +591,783 @@ As above, we consider a full program, but in this case one that would violates i
 
 
 
+
+
+\subsection{Language properties}
+
+\begin{definition}[Pure term]
+A pure term $e$ does not depend on the environment and may take an evaluation
+step regardless of whether the environment is empty or not.
+\end{definition}
+
+\begin{proposition}[Determinacy of $(\longrightarrow)$]
+\label{proposition:determinacy-eval}
+\quad
+\begin{itemize}
+\item
+For term $e$ there is a unique term $e^\prime$ and unique evaluation context
+$E$: $e = E[e^\prime]$.
+%
+\item
+If $e \longrightarrow\ e^\prime$ and $e \longrightarrow\ e^\second$
+then $e^\prime = e^\second$.
+\end{itemize}
+\end{proposition}
+\begin{proof}
+By induction on terms and evaluation contexts.
+\end{proof}
+
+
+
+\begin{lemma}[Type preservation under information flow preservation]
+\label{lemma:type-flow-preservation}
+If $\vdash e : \tau$, and
+$\langle \store, e\rangle \longrightarrow
+  \langle \store^\prime, e^\prime \rangle$ then $\vdash e^\prime : \tau$.
+\end{lemma}
+\begin{proofidea}
+Follows directly from the typing derivations.
+\end{proofidea}
+A well-typed term taking an evaluation step results in a term that is also
+well-typed. Note that if a term takes an evaluation step, then it has not
+violated information flow. Since information flow control rules are described
+as premises to evaluation rules, an information flow violation results
+in a term getting stuck. Note that this lemma encompasses the pure case
+where $\store=\emptyset$.
+
+Proving progress for the pure case, i.e. terms that do not depend on an 
+environment is standard. However, the proof of progress for terms relying
+on an environment, e.g., \seal{}, requires the definition of ``well-behaved''
+terms. A term that does not violate the information flow control premises
+of an evaluation rule is said to be well-behaved. At each step, a well-typed
+and well-behaved term is either a value or it can progress.
+Conversely, a well-typed but information flow violating term does not progress.
+
+
+\subsection{Security properties}
+
+The main security properties we are interested in are non-interference and
+confinement. In formalizing and proving our security guarantees we introduce
+a new syntactic term, `$\hole$', that denotes an ``erased'' term.
+\begin{language}
+\begin{align*}
+&& e    &\Coloneqq  \cdots\ |\ \hole
+\end{align*}
+\caption{Extending language with erased terms}
+\end{language}
+
+Terms are then erased to a $\hole$ according to the label-dependent erasure
+function $\erase{L}{e}$, that we define below:
+\begin{align*}
+\erase{L}{\hole} &= \hole\\
+\erase{L}{x} &= x\\
+\erase{L}{\lambda x. e} &= \lambda x.\erase{L}{e}\\
+\erase{L}{\true} &= \true\\
+\erase{L}{\false} &= \false\\
+\erase{L}{l} &= l\\
+\erase{L}{\fix\ e} &= \fix\ \erase{L}{e}\\
+\\
+\erase{L}{[\cdot]}&=[\cdot]\\
+\erase{L}{E\ e} &= \erase{L}{E}\ \erase{L}{e}\\
+\erase{L}{(E,e)}  &= (\erase{L}{E}, \erase{L}{e})\\
+\erase{L}{\Lv\ l\ E} &= \begin{cases}
+                          \Lv\ l\ \hole &  l \not \flows L\\
+                          \Lv\ l\ \erase{L}{E} & \textrm{otherwise}\\
+                        \end{cases}\\
+\erase{L}{\ifel{E}{e}} &= \ifel{\erase{L}{E}}{\erase{L}{e}}{\erase{L}{e}} \\
+\erase{L}{\letbind{x}{E}{e}} &= \letbind{x}{\erase{L}{E}}{\erase{L}{e}} \\
+\erase{L}{\pi_i\ E}  &= \pi_i\ \erase{L}{E}\\
+\erase{L}{\return\ E}  &= \return\ \erase{L}{E}\\
+\erase{L}{E\ \diamond\ e}  &= \erase{L}{E}\ \diamond\ \erase{L}{e}
+                      \textrm{, where }\diamond = \{\bind, \lub, \glb\} \\
+\erase{L}{\seal\ E\ e}          &= \seal\ \erase{L}{E}\ \erase{L}{e}\\
+\erase{L}{\open\ E}             &= \open\ \erase{L}{E}\\
+\erase{L}{\close\ E}             &= \close\ \erase{L}{E}\\
+\erase{L}{\returnLIOp\ E} &= \returnLIOp\ \erase{L}{E}\\
+\erase{L}{E\ \bindLIOp\ e}  &= \erase{L}{E}\ \bindLIOp\ \erase{L}{e}\\
+\erase{L}{\lioValp{E}} &= \lioValp{\erase{L}{E}} \\
+\erase{L}{\withLblClr\ e_1\ e_2}&= \withLblClr\ \erase{L}{e_1}\ \erase{L}{e_2}\\
+\end{align*}
+
+Informally, to an observer reading labeled values with label at most $L$,
+a computation $e$ is not distinguishable from $e^\prime$, where $e^\prime$ is 
+$e$ with all values labeled above $L$ erased to $\hole$.
+To prove our security guarantees we need to define a new evaluation relation, 
+${\longrightarrow_L}$, that performs the term erasures. For pure terms,
+%
+\begin{equation*}
+\inferrule{e \longrightarrow e^\prime}
+          {e \longrightarrow_L \erase{L}{e^\prime}}
+\end{equation*}
+%
+and, similarly, for terms in an environment,
+%
+\begin{equation*}
+\inferrule
+{\langle \store, e \rangle
+            \longrightarrow \langle \store^\prime, e^\prime \rangle}
+%-------------------------------------------------------------------------------
+{\langle \store, e \rangle
+           \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime} \rangle}
+\end{equation*}
+
+\begin{proposition}[Determinacy of $(\longrightarrow_L)$]
+\label{proposition:determinacy-evalL}
+\item
+If $e \longrightarrow_L\ e^\prime$ and
+$e \longrightarrow_L\ e^\second$ then $e^\prime = e^\second$.
+\end{proposition}
+\begin{proof}
+From Proposition~\ref{proposition:determinacy-eval} and definition
+of $\erase{L}{\cdot}$.
+\end{proof}
+
+\begin{example}[Example with term erasure on pure terms]
+Let us consider Example~\ref{ex:pure}, working only on pure terms, and 
+using the erasure function $\erase{\lL}{\cdot}$.
+\begin{align*}
+&                     && \Lv\ \lL\ 1\ \bind\ \lambda x.\
+                         \Lv\ \lH\ 2\ \bind\ \lambda y.\
+                         \return\ (x + y) \\
+&\tref{E-Bind}:        & \longrightarrow_\lL\ &
+                         \Lv\ \lH\ \hole\ \bind\ \lambda y.
+                         \return\ (1 + y)\
+                         \bind\ \lambda x.\Lv\ \lL\ x\\
+&\tref{E-Bind}:        & \longrightarrow_\lL\ &
+                         \return\ (1 + \hole)\
+                         \bind\ \lambda x.\Lv\ \lL\ x
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-Ret}          & \longrightarrow_\lL\ &
+                         \Lv\ l_\bot\ (1 + \hole)\ 
+                         \bind\ \lambda x.\Lv\ \lL\ x
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-Runit}:       & \longrightarrow_\lL\ &
+                         \Lv\ (l_\bot\lub\lL)\ (1 + \hole)\ 
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-Runit}:       & \longrightarrow_\lL\ &
+                         \Lv\ (\lL\lub\lH)\ (1 + \hole)\\
+&\tref{E-Join}:        & \longrightarrow_\lL\ &
+                         \Lv\ \lH\ (1 + \hole)\\
+&                      & \longrightarrow_\lL\ &
+                        \Lv\ \lH\ \hole
+\end{align*}
+\end{example}
+
+\begin{example}[Example with term erasure on terms with side-effects]
+Let us consider Example~\ref{ex:sideeffect}, working on terms with
+side-effects, and using the erasure function $\erase{\lL}{\cdot}$.
+\begin{align*}
+&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\
+                                        \lambda x.  y_l\ \bind\
+                                        \lambda y.  \return\ (x + y)\\
+&                     && {\tt in}\ \withLblClr (\lL, \lH)\ (\
+                                \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
+                                \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
+                                \open\ (f\ x\ y)\ )\\
+&\tref{E-LetVal}:     & \longrightarrow_\lL & \withLblClr (\lL, \lH)\ (\
+                                          \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
+                                          \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y)\ )\\
+&\tref{E-WithLblClr}:
+   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+                           \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
+                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
+                           \open\ (f\ x\ y) \rangle\\
+&\tref{E-LIO-Seal}:
+   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
+                           \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.
+                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
+                           \open\ (f\ x\ y) \rangle\\
+&\tref{E-LIO$^\prime$-Bind}:
+   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
+                           \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
+&\tref{E-LIO-Seal}:
+  & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                          \lioValp{\Lv\ \lH\ \hole}\ \bindLIOp\ \lambda y.
+                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
+&\tref{E-LIO$^\prime$-Bind}
+  & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                          \open\ (f\ (\Lv\ \lL\ 1)\ (\Lv\ \lH\ \hole)) \rangle\\
+&\textrm{Evaluate $f$}:
+  & \longrightarrow_\lL^* & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
+                            \open\ (\Lv\ \lH\ \hole) \rangle\\
+&\tref{E-LIO-Open}:
+  & \longrightarrow_\lL & \langle \store=\{(\lbl,\lH),(\clr,\lH)\}, 
+                          \lioValp{\hole} \rangle\\
+\end{align*}
+\end{example}
+
+\begin{proposition}[Properties of $ \varepsilon_L $]\label{proposition:erase}
+\quad
+\begin{enumerate}
+\item $\erase{L}{E[e]} = \erase{L}{E}[\erase{L}{e}]$
+\item $\erase{L}{[e_2/x]e_1} = [\erase{L}{e_2}/x]\erase{L}{e_1}$
+\item $\erase{L}{\erase{L}{e}} = \erase{L}{e}$
+\item $\erase{L}{\erase{L}{E}} = \erase{L}{E}$
+\item $\inferrule
+              {\erase{L}{E}[e] \longrightarrow \erase{L}{E}[e^\prime] }
+          % -------------------------------------------------------------------
+          {\erase{L}{E}[e] \longrightarrow_L \erase{L}{E}[\erase{L}{e^\prime}] }
+      $
+\end{enumerate}
+\end{proposition}
+\begin{proof}
+\quad
+\begin{enumerate}
+%
+\item All follow directly from the induction on evaluation contexts and terms.
+  \begin{enumerate}
+  \item Let $E := [\cdot]\ e_0$, it follows that
+        $\erase{L}{E} := [\cdot]\ \erase{L}{e_0}$, and\\
+        ${\erase{L}{E[e]}=\erase{L}{e\ e_0}=\erase{L}{e}\ \erase{L}{e_0}
+                         =\erase{L}{E}[\erase{L}{e}]}$
+  \item Let $E := ([\cdot], e_0)$, it follows that
+        $\erase{L}{E} := ([\cdot], \erase{L}{e_0})$, and\\
+        ${\erase{L}{E[e]}=\erase{L}{(e, e_0)}=(\erase{L}{e}, \erase{L}{e_0})
+                         =\erase{L}{E}[\erase{L}{e}]}$
+  \item $ E := (v, [\cdot])$ is as above.
+  \item Let $ E := \Lv\ [\cdot]\ e_0$, it follows that 
+        \begin{equation*}
+         \erase{L}{E} := \begin{cases}
+                      \Lv\ [\cdot]\ \hole &  [\cdot] \not \flows L\\
+                      \Lv\ [\cdot]\ \erase{L}{e_0} & \textrm{otherwise}\\
+                    \end{cases}
+        \end{equation*}
+        and
+        \begin{equation*}
+        \erase{L}{E[e]}=\erase{L}{\Lv\ e\ e_0}=
+                              \begin{cases}
+                                 \Lv\ e\ \hole &  e \not \flows L\\
+                                 \Lv\ e\ \erase{L}{e_0} & \textrm{otherwise}\\
+                              \end{cases},
+        \end{equation*}
+        from which $\erase{L}{E[e]} = \erase{L}{E}[\erase{L}{e}]$ follows
+        directly.
+  \item Let $ E := \Lv\ l\ [\cdot]$, it follows that 
+        \begin{equation*}
+         \erase{L}{E} := \begin{cases}
+                      \Lv\ l\ \hole &  l \not \flows L\\
+                      \Lv\ l\ \erase{L}{[\cdot]} & \textrm{otherwise}\\
+                    \end{cases}
+        \end{equation*}
+        and
+        \begin{equation*}
+        \erase{L}{E[e]}=\erase{L}{\Lv\ l\ e}=
+                            \begin{cases}
+                               \Lv\ l\ \hole &  l \not \flows L\\
+                               \Lv\ l\ \erase{L}{e} & \textrm{otherwise}\\
+                            \end{cases},
+        \end{equation*}
+        from which $\erase{L}{E[e]} = \erase{L}{E}[\erase{L}{e}]$ follows
+        directly.
+  \item $\ldots$
+  \end{enumerate}
+%
+\item $\erase{L}{[e_2/x]e_1} = \erase{L}{ (\lambda x . e_1)\ e_2}
+       = \erase{L}{\lambda x . e_1}\ \erase{L}{e_2}
+       = \lambda x . \erase{L}{e_1}\ \erase{L}{e_2}
+       = [\erase{L}{e_2}/x]\erase{L}{e_1}
+      $
+%
+\item Directly from definition of the erasure function and induction on terms.
+%
+\item Directly from definition of the erasure function and induction on terms
+      and evaluation contexts.
+%
+\item From the property of evaluation contexts: 
+  \begin{equation*}
+  \inferrule{e \longrightarrow e^\prime}{E[e] \longrightarrow E[e^\prime]},
+  \end{equation*}
+  definition of $\longrightarrow_L$, and properties 2 and 4, above, we have 
+  \begin{equation*}
+  \inferrule
+          {E[e] \longrightarrow E[e^\prime]}
+    % --------------------------------------------
+    {E[e] \longrightarrow_L \erase{L}{E[e^\prime]}}
+  =\inferrule
+               {E[e] \longrightarrow E[e^\prime]}
+    % -------------------------------------------------------
+    {E[e] \longrightarrow_L \erase{L}{E}[\erase{L}{e^\prime}]}
+  =\inferrule
+      {\erase{L}{E^\prime}[e] \longrightarrow \erase{L}{E^\prime}[e^\prime]}
+    % ----------------------------------------------------------------------
+    {\erase{L}{E^\prime}[e]
+                \longrightarrow_L \erase{L}{E^\prime}[\erase{L}{e^\prime}] },
+    \textrm{ for some $E=\erase{L}{E^\prime}$}.
+  \end{equation*}
+%
+\end{enumerate}
+\end{proof}
+
+
+\begin{lemma}[Single-step simulation]\label{lemma:single-step}
+If $ \Gamma \vdash e : \tau$, and
+${\langle \store, e \rangle
+       \longrightarrow \langle \store^\prime, e^\prime\rangle}$
+then 
+$ \Gamma \vdash e^\prime : \tau$, and
+${\langle \store, \erase{L}{e} \rangle
+       \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$.
+\end{lemma}
+\begin{proof}
+Lemma~\ref{lemma:type-flow-preservation} proves type preservation, so we limit
+the proof to the simulation.
+In most cases we do not show the environment in the simulation, for clarity.
+\begin{enumerate}
+\item Case: $E[(\lambda x. e_1)\ e_2] \longrightarrow  E[ [e_2/x]e_1]$:
+  \begin{align*}
+  &\ \el{E[(\lambda x. e_1)\ e_2]} = \el{E}[\el{(\lambda x. e_1)\ e_2}]
+                                   = \el{E}[(\lambda x. \el{e_1})\ \el{e_2}]\\
+  \longrightarrow_L &\  
+   \el{\el{E}[{[\el{e_2}/x]\el{e_1}}]} =\el{\el{E}}[\el{[\el{e_2}/x]\el{e_1}}]
+                                       =\el{E}[\el{[\el{e_2}/x]\el{e_1}}]\\ 
+  &\ = \el{E}[{[\el{e_2}/x]\el{e_1}}]
+     = \el{E}[\el{[e_2/x]e_1}]
+     = \el{E[[e_2/x]e_1]} \textrm{ by Proposition~\ref{proposition:erase}.}
+  \end{align*}
+%
+\item Case: $E[\fix\ e] \longrightarrow E[e (\fix\ e)]$:
+  \begin{align*}
+  &\ \el{E[\fix\ e]} = \el{E}[\el{\fix\ e}]= \el{E}[\fix\ \el{e}]\\
+  \longrightarrow_L &\  
+  \el{\el{E}[\el{e}\ (\fix\ \el{e})]}
+  = \el{E}[\el{e}\ (\fix\ \el{e})]\\
+  &\ = \el{E}[\el{e\ (\fix\ e)}]
+  = \el{E[e\ (\fix\ e)]} \textrm{ by definition of $\el{\cdot}$ and
+                                  Proposition~\ref{proposition:erase}.}
+  \end{align*}
+%
+\item Case: $E[\ifel{\true}{e_1}{e_2}] \longrightarrow E[e_1]$: \\
+  Follows similarly.
+%
+\item Case: $E[\ifel{\false}{e_1}{e_2}] \longrightarrow E[e_2]$: \\
+  Follows similarly.
+%
+\item Case: $\inferrule
+             {e_1 \longrightarrow {e_1}^\prime}
+  %-----------------------------------------------------------------------------
+  {E[\letbind{x}{e_1}{e_2}] \longrightarrow E[\letbind{x}{{e_1}^\prime}{e_2}]}$:
+  \\ Follows similarly.
+%
+\item Case: $E[\letbind{x}{v}{e}] \longrightarrow E[[v/x]e]$:\\
+  Follows similarly.
+%
+\item Case: $E[\pi_i\ (e_1,e_2)]  \longrightarrow E[e_i]$:\\
+  Follows similarly.
+%
+\item Case: $E[\return\ e]\longrightarrow E[\Lv\ l_\bot\ e]$:
+  \begin{itemize}
+  \item $l_\bot \flows L$:
+        \begin{align*}
+        &\ \el{E[\return\ e]}
+        = \el{E}[\el{\return\ e}]
+        = \el{E}[\return\ \el{e}]\\
+        \longrightarrow_L &\  
+        \el{\el{E}[\Lv\ l_\bot\ \el{e}]}
+        =\el{E}[\el{\Lv\ l_\bot\ \el{e}}]
+        =\el{E}[\Lv\ l_\bot\ \el{e}]\\
+        &\ =\el{E}[\el{\Lv\ l_\bot\ e}]
+           =\el{E[\Lv\ l_\bot\ e]}
+        \end{align*}
+  \item $l_\bot \not\flows L$:
+        \begin{align*}
+        &\ \el{E[\return\ e]}
+        = \el{E}[\el{\return\ e}]
+        = \el{E}[\return\ \el{e}]\\
+        \longrightarrow_L &\  
+        \el{\el{E}[\Lv\ l_\bot\ \el{e}]}
+        =\el{E}[\el{\Lv\ l_\bot\ \el{e}}]
+        =\el{E}[\Lv\ l_\bot\ \hole]\\
+        &\ =\el{E}[\el{\Lv\ l_\bot\ \hole}]
+           =\el{E[\Lv\ l_\bot\ \hole]}
+           =\el{E[\Lv\ l_\bot\ e]}
+        \end{align*}
+  \end{itemize}
+%
+\item Case: $\inferrule
+                      {e_2 \ne \Lv\ e_l\ e_2^\prime}
+         % ------------------------------------------------------------
+         {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]
+           \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}$:
+  \begin{itemize}
+  \item $l_1 \flows L$:
+        \begin{align*}
+        &\ \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]}
+        = \el{E}[\el{\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2}]
+        = \el{E}[\Lv\ l_1\ \el{e_1}\ \bind\ \lambda x.\el{e_2}]\\
+        \longrightarrow_L &\  
+        \el{\el{E}[[\el{e_1}/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x]}
+        = \el{E}[\el{[\el{e_1}/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x}]\\
+        &\ = \el{E}[[\el{e_1}/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x]
+           = \el{E}[\el{[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x}]\\
+        &\ = \el{E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}
+        \end{align*}
+  \item $l_1 \not\flows L$:
+        \begin{align*}
+        &\ \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]}
+        = \el{E}[\el{\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2}]
+        = \el{E}[\Lv\ l_1\ \hole\ \bind\ \lambda x.\el{e_2}]\\
+        \longrightarrow_L &\  
+        \el{\el{E}[[\hole/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x]}
+        = \el{E}[\el{[\hole/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x}]\\
+        &\ = \el{E}[[\hole/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ \hole]
+           = \el{E}[\el{[\hole/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ \hole}]\\
+        &\ = \el{E[[\hole/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ \hole]}
+           = \el{E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}
+        \end{align*}
+  \end{itemize}
+%
+\item Case: $E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]
+                  \longrightarrow E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]$:
+  \begin{itemize}
+  \item $l_1 \flows L \land l_2 \flows L$:
+        \begin{align*}
+        &\  \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]}
+           = \el{E}[\Lv\ l_1\ \el{e_1}\ \bind\ \lambda x.\Lv\ l_2\ \el{e_2}] \\
+        \longrightarrow_L &\
+           \el{\el{E}[\Lv\ (l_1\lub l_2)\ [\el{e_1}/x]\el{e_2}]}
+           =  \el{E}[\Lv\ (l_1\lub l_2)\ [\el{e_1}/x]\el{e_2}]\\
+        &\ =   \el{E}[\el{\Lv\ (l_1\lub l_2)\ [e_1/x]e_2}]
+           =   \el{E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]}
+        \end{align*}
+  \item $l_1 \not\flows L \land l_2 \flows L$:
+        \begin{align*}
+        &\  \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]}
+           = \el{E}[\Lv\ l_1\ \hole\ \bind\ \lambda x.\Lv\ l_2\ \el{e_2}] \\
+        \longrightarrow_L &\
+           \el{\el{E}[\Lv\ (l_1\lub l_2)\ [\hole/x]\el{e_2}]}
+           =  \el{E}[\Lv\ (l_1\lub l_2)\ \hole ]\\
+        &\ =   \el{E}[\el{\Lv\ (l_1\lub l_2)\ \hole}]
+           =   \el{E[\Lv\ (l_1\lub l_2)\ \hole]}
+           =   \el{E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]}
+        \end{align*}
+  \item $l_1 \flows L \land l_2 \not\flows L$:
+        \begin{align*}
+        &\  \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]}
+           = \el{E}[\Lv\ l_1\ \el{e_1}\ \bind\ \lambda x.\Lv\ l_2\ \hole] \\
+        \longrightarrow_L &\
+           \el{\el{E}[\Lv\ (l_1\lub l_2)\ [\el{e_1}/x]\hole]}
+           =  \el{E}[\Lv\ (l_1\lub l_2)\ \hole ]\\
+        &\ =   \el{E}[\el{\Lv\ (l_1\lub l_2)\ \hole}]
+           =   \el{E[\Lv\ (l_1\lub l_2)\ \hole]}
+           =   \el{E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]}
+        \end{align*}
+  \item $l_1 \not\flows L \land l_2 \not\flows L$:
+        \begin{align*}
+        &\  \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]}
+           = \el{E}[\Lv\ l_1\ \hole\ \bind\ \lambda x.\Lv\ l_2\ \hole] \\
+        \longrightarrow_L &\
+           \el{\el{E}[\Lv\ (l_1\lub l_2)\ [\hole/x]\hole]}
+           =  \el{E}[\Lv\ (l_1\lub l_2)\ \hole ]\\
+        &\ =   \el{E}[\el{\Lv\ (l_1\lub l_2)\ \hole}]
+           =   \el{E[\Lv\ (l_1\lub l_2)\ \hole]}
+           =   \el{E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]}
+        \end{align*}
+  \end{itemize}
+%
+\item Case: $\inferrule
+                  {\labelOf{l_3} = \labelOf{ l_1 \lub l_2}}
+                % --------------------------------------------
+                {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]}$:\\
+  Follows from definition of $\el{\cdot}$ and
+  Proposition~\ref{proposition:erase}.
+%
+\item Case: $\inferrule
+                  {\labelOf{l_3} = \labelOf{ l_1 \glb l_2}}
+                % --------------------------------------------
+                {E[l_1\ \glb\ l_2] \longrightarrow E[l_3]}$:\\
+  Follows from definition of $\el{\cdot}$ and
+  Proposition~\ref{proposition:erase}.
+%
+\item Case: $\inferrule
+                      {\store[\lbl\mapsto l, \clr\mapsto c]}
+      %----------------------------------------------------------------------
+      {\langle \emptyset, \withLblClr\ (l, c)\ \lioValp{e} \rangle
+                      \longrightarrow \langle \store,  \lioValp{e}\rangle}$:
+      \begin{align*}
+      &\ \langle \emptyset, \el{\withLblClr\ (l, c)\ \lioValp{e}} \rangle
+       = \langle \emptyset, \withLblClr\ (l, c)\ \lioValp{\el{e}} \rangle\\
+      &\ \longrightarrow_L  \langle \store,  \el{\lioValp{\el{e}}} \rangle
+                        =\langle \store,  \lioValp{\el{e}} \rangle
+                        =\langle \store,  \el{\lioValp{e}} \rangle
+      \end{align*}
+%
+\item Case: $\inferrule
+                      {\store(\lbl) \flows l_1 \flows \store(\clr)}
+      %----------------------------------------------------------------------
+      {\langle \store, E[\seal\ e\ l_1]\rangle
+            \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle}$:
+      \begin{itemize}
+          \item $l_1 \flows L$:
+          \begin{align*}
+                &\ \el{E[\seal\ e\ l_1]} = \el{E}[\seal\ \el{e}\ l_1]\\
+                \longrightarrow_L &\ 
+                \el{\el{E}[\lioValp{\Lv\ l_1\ \el{e}}]}
+                = \el{E}[\lioValp{\Lv\ l_1\ \el{e}}]\\
+                &\ = \el{E}[\el{\lioValp{\Lv\ l_1\ e}}]
+                = \el{E[\lioValp{\Lv\ l_1\ e}]}
+          \end{align*}
+          \item $l_1 \not\flows L$:
+          \begin{align*}
+                &\ \el{E[\seal\ e\ l_1]} = \el{E}[\seal\ \el{e}\ l_1]\\
+                \longrightarrow_L &\ 
+                \el{\el{E}[\lioValp{\Lv\ l_1\ \el{e}}]}
+                = \el{E}[\lioValp{\Lv\ l_1\ \hole}]\\
+                &\ = \el{E}[\el{\lioValp{\Lv\ l_1\ \hole}}]
+                = \el{E[\lioValp{\Lv\ l_1\ \hole}]}
+                = \el{E[\lioValp{\Lv\ l_1\ e}]}
+          \end{align*}
+      \end{itemize}
+%
+\item Case: $\inferrule
+              {l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \flows \store(\clr)
+                \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
+      % ------------------------------------------------------------------------
+      {\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle
+               \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle}$:
+      \begin{itemize}
+          \item $l_1 \flows L$:
+          \begin{align*}
+                   &\ \langle \store, \el{E[\open\ (\Lv\ l_1\ e_1)]}\rangle
+                    = \langle \store, \el{E}[\open\ (\Lv\ l_1\ \el{e_1})]\rangle\\
+                   \longrightarrow_L &\ 
+                    \langle \store^\prime, \el{\el{E}[\lioValp{\el{e_1}}]}\rangle
+                    =\langle \store^\prime, \el{E}[\lioValp{\el{e_1}}]\rangle\\
+                    &\ =\langle \store^\prime, \el{E}[\el{\lioValp{e_1}}]\rangle
+                       =\langle \store^\prime, \el{E[\lioValp{e_1}]}\rangle
+          \end{align*}
+          \item $l_1 \not\flows L$:
+          \begin{align*}
+                   &\ \langle \store, \el{E[\open\ (\Lv\ l_1\ e_1)]}\rangle
+                    = \langle \store, \el{E}[\open\ (\Lv\ l_1\ \hole)]\rangle\\
+                   \longrightarrow_L &\ 
+                    \langle \store^\prime, \el{\el{E}[\lioValp{\hole}]}\rangle
+                    =\langle \store^\prime, \el{E}[\lioValp{\hole}]\rangle\\
+                    &\ =\langle \store^\prime, \el{E}[\el{\lioValp{\hole}}]\rangle
+                       =\langle \store^\prime, \el{E[\lioValp{\hole}]}\rangle
+                       =\langle \store^\prime, \el{E[\lioValp{e_1}]}\rangle
+          \end{align*}
+      \end{itemize}
+%
+\Red{
+\item Case: $\inferrule
+             {\langle \store, \lioValp{e} \rangle \longrightarrow
+                         \langle \store^\prime, \lioValp{v} \rangle
+             \\ \store(\lbl) \flows \store^\prime(\lbl)
+                             \flows \store^\prime(\clr) = \store(\clr)}
+            % ------------------------------------------------------------------
+      {\langle \store, \close\ \lioValp{e}\rangle \longrightarrow
+          \langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ v} \rangle}$:\\
+
+In both cases we want to show simulation with:
+\begin{equation*}
+\inferrule
+        {\langle \store, \el{\lioValp{e}} \rangle \longrightarrow_L
+                \langle \store^\prime, \el{\lioValp{e^\prime}} \rangle 
+        \\ \store(\lbl) \flows \store^\prime(\lbl)
+                        \flows \store^\prime(\clr) = \store(\clr)}
+      % --------------------------------------------------------------------
+   {\langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L
+      \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle}
+\end{equation*}
+Assuming the premise follows, it remains for us to show:
+\begin{equation*}
+      \langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle
+\end{equation*}
+      \begin{itemize}
+          \item $\store^\prime(\lbl) \flows L$:
+          \begin{align*}
+             &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
+             = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
+             \longrightarrow_L &\ \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{e^\prime}}} \rangle
+             =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \el{e^\prime}} \rangle
+             =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle
+          \end{align*}
+
+          \item $\store^\prime(\lbl) \not\flows L$:
+          \begin{align*}
+             &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
+             = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
+             \longrightarrow_L &\ \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{e^\prime}}} \rangle
+             =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \hole} \rangle\\
+             &\ =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \hole}} \rangle
+             =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle
+          \end{align*}
+      \end{itemize}
+}
+%
+\item Case: $E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}]$:\\
+  Follows from definition of $\el{\cdot}$ and
+  Proposition~\ref{proposition:erase}.
+%
+\item Case: $E[\lioValp{e_1}\ \bindLIOp\ \lambda x. e_2]
+                \longrightarrow E[[e_1/x]e_2]$:\\
+  Follows similarly.
+%
+\item Case: $E[\lioValp{e_1}\ \bindLIOp\ \lambda x. \returnLIOp\ x]
+                  \longrightarrow E[\lioValp{e_1}]$:\\
+  Follows similarly.
+\end{enumerate}
+\end{proof}
+
+\begin{lemma}[Multi-step simulation]\label{lemma:multi-step}
+If $ \Gamma \vdash e : \tau$, and
+${\langle \store, e \rangle
+  \longrightarrow^* \langle \store^\prime, e^\prime\rangle}$
+then 
+$ \Gamma \vdash e^\prime : \tau$, and
+${\langle \store, \erase{L}{e} \rangle
+  \longrightarrow^*_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$.
+\end{lemma}
+\begin{proof}
+By induction on Lemma~\ref{lemma:single-step}.
+\end{proof}
+
+
+\pagebreak
+
+\begin{definition}[$L$-equivalence]
+Two values, each consisting of a pair of labeled values with labels
+${l}, l_j, j=1,2$ such that $ l_j \not\flows{l}$,
+are equivalent according to the equivalence
+relation $=_L$  if they agree on the low values. Specifically, 
+\begin{equation*}
+\inferrule
+  {\Gamma \vdash e_j :
+          (\Lvalue\ {\ell}\ \tau^\prime, \Lvalue\ {\ell}\ \tau)\\
+  e_j\longrightarrow^* (\Lv\ l_j\ v_j, \Lv\ l\ v)\\
+  l \flows L\\ l_j \not\flows L}
+ %------------------------------------------------------------------------
+                         {e_1 =_L e_2}
+  {(j=1,2)}
+\end{equation*}
+\Red{Does $\tau^\prime$ need to be the same type for both tuples, or can we
+just have $\tau_j$?}
+\end{definition}
+%
+The low-equivalence expresses the power of an observer, that may distinguish
+values labeled with at most $L$.
+For example, $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lH\ 9,\Lv\ \lL\ 2)$, but 
+$(\Lv\ \lH\ 8,\Lv\ \lL\ 2) \not =_{\lL} (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$.
+Similarly, if we extend the lattice with element
+$\lM : \lL\flows \lM \flows \lH$, then
+$(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lM\ 9,\Lv\ \lL\ 2)$.
+
+
+\begin{definition}[$L$-view]
+Two values (each consisting of a pair of labeled values) in environents
+$\store^1$ and $\store^2$, are equivalent according to the equivalence relation
+$\approx_L$ if they are not observable, i.e., $L$ is lower than
+$\store^j(\lbl), j={1,2}$, or the pairs are $L$-equivalent. Specifically, 
+\begin{equation*}
+\inferrule
+  {(\Gamma \vdash e_j :
+          (\Lvalue\ {\ell}\ \tau^\prime, \Lvalue\ {\ell}\ \tau))_{j=1,2} \\
+  (\store^1(\lbl)\not\flows L\land \store^2(\lbl)\not\flows L)\lor (e_1=_L e_2)}
+  % --------------------------------------------------------------------------
+     {\langle \store^1, \lioValp{e_1} \rangle
+                             \approx_L \langle \store^2, \lioValp{e_2}\rangle}
+\end{equation*}
+\end{definition}
+%
+The $L$-view simply states that an observer, who may read values with label at
+most $L$, cannot distinguish two labeled values if they are either 1) both in
+an environment with a label above $L$, or 2) the values are $L$-equivalent.
+%
+For example,
+\begin{align*}
+\langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle
+\approx_{\lL}
+\langle \{(\lbl,\lH), (\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 3)\rangle,
+\end{align*}
+even though the labeled pairs are not $L$-equivalent.
+%
+Similarly,
+\begin{align*}
+\langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle
+\approx_\lM
+\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 9,\Lv\ \lL\ 2) \rangle,
+\end{align*}
+but
+\begin{align*}
+\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle
+\not \approx_\lL
+\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 3)
+\rangle
+\end{align*}
+
+
+
+\begin{lemma}[Standard non-interference]
+Given labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$,
+a computation $e$ (with no $\hole$, $\Lv\ \cdot\ \cdot$,
+or $\lioValp{\cdot}$) where
+%
+$\Gamma \vdash e : (\Lvalue\ {\ell}\ \tau_i^\prime, \Lvalue\ {\ell}\ \tau_i)
+\rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o^\prime, \Lvalue\ {\ell}\ \tau_o)$
+%
+in environment $\store$, such that $\store(\lbl)\flows l_k \flows \store(\clr)$
+for $l_k = l,l'$,
+%
+and an observer with clearance $L$ such that
+${l} \flows L$ and ${l}' \not\flows L$,
+%
+\begin{align*}
+\forall e_1 e_2.
+& (\Gamma \vdash e_j : (\Lvalue\ \ell\ \tau_i^\prime
+                       ,\Lvalue\ \ell\ \tau_i))_{j=1,2}\\
+%
+&\land ( e_j = (\Lv\ l^\prime\ e_j^1, \Lv\ l\ e_j^2) )_{j=1,2}\\
+%
+&\land \withLblClr\ (\store(\lbl), \store(\clr))\ (e\ e_1) \longrightarrow^* \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_1^1, \Lv\ l\ v_1^2)}\rangle\\
+&\land \withLblClr\ (\store(\lbl), \store(\clr))\ (e\ e_2) \longrightarrow^* \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_2^1, \Lv\ l\ v_2^2)}\rangle\\
+&\Rightarrow 
+\langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_1^1, \Lv\ l\ v_1^2)}\rangle \approx_{L}
+\langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_2^1, \Lv\ l\ v_2^2)}\rangle\\
+\end{align*}
+\end{lemma}
+
+Simply, the lemma states that given two $L$-equivalent inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as read by the observer (at label level up to $L$) is indistinguishable. In other words, there is not information flow from the high-labeled input to the low-labeled output.
+
+
+\Red{
+\begin{proof}
+
+Using Lemma~\ref{lemma:multi-step},
+\begin{equation*}
+\el{\withLblClr\ (\store(\lbl), \store(\clr))\ (e\ (\Lv\ l^\prime\ e_j^1, \Lv\ l\ e_j^2))}
+\longrightarrow^*_L \langle \store^\prime, \el{\lioValp{(\Lv\ l^\prime\ v_j^1, \Lv\ l\ v_j^2)}}\rangle
+\end{equation*}
+can be either 
+\begin{enumerate}
+\item
+\begin{equation*}
+\inferrule{\store^\prime{\lbl}=l \lor \store^\prime(\lbl) = \store(\lbl)}{\withLblClr\ (\store(\lbl), \store(\clr))\ (\el{e}\ (\Lv\ l^\prime\ \hole, \Lv\ l\ \el{e_j^2}))
+\longrightarrow^*_L \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ \el{v_j^2})}\rangle}
+\end{equation*}
+\item
+\begin{equation*}
+\inferrule{\store^\second(\lbl) = l^\prime}{
+\withLblClr\ (\store(\lbl), \store(\clr))\ (\el{e}\ (\Lv\ l^\prime\ \hole, \Lv\ l\ \el{e_j^2}))
+\longrightarrow^*_L \langle \store^\second, \lioValp{\hole}\rangle}.
+\end{equation*}
+\end{enumerate}
+
+If $\store^\second(\lbl) = l^\prime \not\flows L$, the $L$-view equivalence holds, by definition.
+Otherwise, by Proposition~\ref{proposition:determinacy-evalL}, it must be that $v_1^2 = v_2^2$,
+and consequently, $\langle \store, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_1^2)}\rangle \approx_{L} \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_2^2)}\rangle$.
+\end{proof}
+}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+\appendix
+\section{OLD}
 \subsection{Well-behaved terms}
 We define a function ${\mathcal{W}\llbracket \rrbracket} : \textrm{Environment}\times\textrm{Term} \rightarrow \{\tT, \tF\}$, where $\tT{}$ denotes true, and $\tF{}$ denotes false.
 
@@ -479,7 +1400,7 @@ We define a function ${\mathcal{W}\llbracket \rrbracket} : \textrm{Environment}\
 
 We say that a term $e$ is well-behaved (at this point in the execution) in environment $\store$ if $\well{\store}{e}=\tT$.
 
-\begin{proposition}[Properties of $\mathcal{W}$]\label{proposition:well}
+\begin{proposition}[Properties of $\mathcal{W}$]\label{proposition:well-old}
 \quad
 \begin{enumerate}
 \item IFC is not violated if environment constraints are relaxed:\\ 
@@ -555,24 +1476,6 @@ We say that a term $e$ is well-behaved (at this point in the execution) in envir
 \end{proof}
 
 
-\subsection{Language properties}
-
-\begin{definition}[Pure term]
-A pure term $e$ does not depend on the environment and may take an evaluation step in a setting with or without an environment.
-\end{definition}
-
-\begin{proposition}[Determinacy of $(\longrightarrow)$]\label{proposition:determinacy-eval}
-\quad
-\begin{itemize}
-\item For term $e$ there is a unique term $e^\prime$ and unique evaluation context $E$: $e = E[e^\prime]$.
-\item If $e \longrightarrow\ e^\prime$ and $e \longrightarrow\ e^\second$ then $e^\prime = e^\second$.
-\end{itemize}
-\end{proposition}
-\begin{proof}
-By induction on terms and evaluation contexts.
-\end{proof}
-
-
 \begin{lemma}[Preservation of pure terms]
 If $\vdash e : \tau$ and $e \longrightarrow e^\prime$ then $\vdash e^\prime : \tau$.
 \end{lemma}
@@ -582,13 +1485,18 @@ Follows directly from the typing deriviatins.
 
 This lemma states that a well-typed term taking an evaluation step results in a term that is also well-typed.
 
-\begin{lemma}[Type and information flow preservation]\label{lemma:type-flow-preservation}
+
+
+\begin{lemma}[Type and information flow preservation]
+\label{lemma:type-flow-preservation-old}
 If $\vdash e : \tau$, $\well{\store}{e}$, and $\langle \store, e\rangle \longrightarrow \langle \store^\prime, e^\prime \rangle$ then $\vdash e^\prime : \tau$.
 \end{lemma}
 \begin{proofidea}
 Follows directly from the typing deriviatins, definition of $\mathcal{W}$ and Proposition~\ref{proposition:well}.
 \end{proofidea}
 A well-typed and well-behaved term taking an evaluation step results in a term that is also well-typed.
+
+
 
 \begin{lemma}[Progress of pure terms]
 If $\vdash e : \tau$ and $e$ does not depend on an environment (i.e., $e$ does not contain \seal{} or \open{}), then $e \longrightarrow v$, or there exists $e^\prime$ such that $e \longrightarrow e^\prime$.
@@ -606,586 +1514,6 @@ Follows directly from the typing deriviatins, definition of $\mathcal{W}$ and Pr
 \end{proofidea}
 This lemma states that a well-typed and well-behaved term is either a value or is not stuck. A well-typed term, however, may get``stuck'' if it not well-behaved, i.e., violates information flow.
 
-\subsection{Security properties}
-The main security properties we are interested in are non-interfrerence and
-confinement. In formalizing and proving our security guarantees we introduce
-a new syntactic term, `$\hole$', that denotes an ``erased'' term.
-\begin{language}
-\begin{align*}
-&& e    &\Coloneqq  \cdots\ |\ \hole
-\end{align*}
-\caption{Extending language with erased terms}
-\end{language}
-
-Terms are then erased to a $\hole$ according to the label-dependent erasure
-function $\erase{L}{e}$, that we define below:
-\begin{align*}
-\erase{L}{\hole} &= \hole\\
-\erase{L}{x} &= x\\
-\erase{L}{\lambda x. e} &= \lambda x.\erase{L}{e}\\
-\erase{L}{\true} &= \true\\
-\erase{L}{\false} &= \false\\
-\erase{L}{l} &= l\\
-\erase{L}{\fix\ e} &= \fix\ \erase{L}{e}\\
-\erase{L}{[\cdot]}=[\cdot]\\
-\erase{L}{E\ e} &= \erase{L}{E}\ \erase{L}{e}\\
-\erase{L}{(E,e)}  &= (\erase{L}{E}, \erase{L}{e})\\
-\erase{L}{\Lv\ l\ E} &= \begin{cases}
-                          \Lv\ l\ \hole &  l \not \flows L\\
-                          \Lv\ l\ \erase{L}{E} & \textrm{otherwise}\\
-                        \end{cases}\\
-\erase{L}{\ifel{E}{e}} &= \ifel{\erase{L}{E}}{\erase{L}{e}}{\erase{L}{e}} \\
-\erase{L}{\letbind{x}{E}{e}} &= \letbind{x}{\erase{L}{E}}{\erase{L}{e}} \\
-\erase{L}{\pi_i\ E}  &= \pi_i\ \erase{L}{E}\\
-\erase{L}{\return\ E}  &= \return\ \erase{L}{E}\\
-\erase{L}{E\ \diamond\ e}  &= \erase{L}{E}\ \diamond\ \erase{L}{e} \textrm{, where }\diamond = \{\bind, \lub, \glb, \bindLIOp\} \\
-\erase{L}{\seal\ E\ e}          &= \seal\ \erase{L}{E}\ \erase{L}{e}\\
-\erase{L}{\open\ E}             &= \open\ \erase{L}{E}\\
-\erase{L}{\close\ E}             &= \close\ \erase{L}{E}\\
-\erase{L}{\returnLIOp\ E} &= \returnLIOp\ \erase{L}{E}\\
-\erase{L}{E\ \bindLIOp\ e}  &= \erase{L}{E}\ \bindLIOp\ \erase{L}{e}\\
-\erase{L}{\lioValp{E}} &= \lioValp{\erase{L}{E}} \\
-\erase{L}{\withLblClr\ e_1\ e_2}  &= \withLblClr\ \erase{L}{e_1}\ \erase{L}{e_2}\\
-%\erase{L}{\langle \store, e \rangle} &=
-%                        \begin{cases}
-%                          \langle \store, \hole \rangle &  \store(\lbl) \not \flows L\\
-%                          \langle \store, \erase{L}{e} \rangle &\textrm{otherwise}\\
-%                        \end{cases}\\
-\end{align*}
-
-Informally, to an observer reading labeled values with label at most $L$,
-a computation $e$ is not distinguishable from $e^\prime$, where $e^\prime$ is 
-$e$ with all values labeled above $L$ erased to $\hole$.
-To prove our security guarantees we need to define a new evaluation relation, 
-${\longrightarrow_L}$, that performs the term erasures. For pure terms,
-
-\begin{equation*}
-\inferrule{e \longrightarrow e^\prime}
-          {e \longrightarrow_L \erase{L}{e^\prime}}
-\end{equation*}
-
-and, similarly, for terms in an environment,
-
-\begin{equation*}
-\inferrule{\langle \store, e \rangle \longrightarrow \langle \store^\prime, e^\prime \rangle}
-          {\langle \store, e \rangle \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime} \rangle}
-\end{equation*}
-
-\begin{proposition}[Determinacy of $(\longrightarrow_L)$]\label{proposition:determinacy-evalL}
-\item If $e \longrightarrow_L\ e^\prime$ and $e \longrightarrow_L\ e^\second$ then $e^\prime = e^\second$.
-\end{proposition}
-\begin{proof}
-From Proposition~\ref{proposition:determinacy-eval} and defintion of $\erase{L}{\cdot}$.
-\end{proof}
-
-\begin{example}[Example with term erasure on pure terms]
-Let us consider the previous example, working only on pure terms, and 
-using the erasure function $\erase{\lL}{\cdot}$.
-\begin{align*}
-&                     && \Lv\ \lL\ 1\ \bind\ \lambda x.\
-                         \Lv\ \lH\ 2\ \bind\ \lambda y.\
-                         \return\ (x + y) \\
-&\tref{E-Bind}:        & \longrightarrow_\lL\ &
-                         \Lv\ \lH\ \hole\ \bind\ \lambda y.
-                         \return\ (1 + y)\
-                         \bind\ \lambda x.\Lv\ \lL\ x\\
-&\tref{E-Bind}:        & \longrightarrow_\lL\ &
-                         \return\ (1 + \hole)\
-                         \bind\ \lambda x.\Lv\ \lL\ x
-                         \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Ret}          & \longrightarrow_\lL\ &
-                         \Lv\ l_\bot\ (1 + \hole)\ 
-                         \bind\ \lambda x.\Lv\ \lL\ x
-                         \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Runit}:       & \longrightarrow_\lL\ &
-                         \Lv\ (l_\bot\lub\lL)\ (1 + \hole)\ 
-                         \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Runit}:       & \longrightarrow_\lL\ &
-                         \Lv\ (\lL\lub\lH)\ (1 + \hole)\\
-&\tref{E-Join}:        & \longrightarrow_\lL\ &
-                         \Lv\ \lH\ (1 + \hole)\\
-&                      & \longrightarrow_\lL\ &
-                        \Lv\ \lH\ \hole
-\end{align*}
-\end{example}
-
-\begin{example}[Example with term erasure on terms with side-effects]
-Let us consider the previous example, working only on terms with side-effects, and 
-using the erasure function $\erase{\lL}{\cdot}$.
-\begin{align*}
-&                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\ \lambda x.
-                                                  y_l\ \bind\ \lambda y.
-                                                  \return\ (x + y)\\
-&                     && {\tt in}\ \withLblClr (\lL, \lH)\ (\
-                                \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
-                                \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
-                                \open\ (f\ x\ y)\ )\\
-&\tref{E-LetVal}      & \longrightarrow_\lL & \withLblClr (\lL, \lH)\ (\
-                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ x\ y)\ )\\
-&\tref{E-WithLblClr}  & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
-                                          \seal\ 1\ \lL\ \bindLIOp\ \lambda x.  
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ x\ y) \rangle\\
-&\tref{E-LIO-Seal}    & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.  
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ x\ y) \rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \seal\ 2\ \lH\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
-&\tref{E-LIO-Seal}    & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \lioValp{\Lv\ \lH\ \hole}\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
-&\tref{E-LIO'-Bind}   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \open\ (f\ (\Lv\ \lL\ 1)\ (\Lv\ \lH\ \hole)) \rangle\\
-&\textrm{Evaluate $f$}& \longrightarrow_\lL^* & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \open\ (\Lv\ \lH\ \hole) \rangle\\
-&\tref{E-LIO-Open}    & \longrightarrow_\lL & \langle \store=\{(\lbl,\lH),(\clr,\lH)\}, 
-                                          \lioValp{\hole} \rangle\\
-\end{align*}
-\end{example}
-
-\begin{proposition}[Properties of $ \varepsilon_L $]\label{proposition:erase}
-\quad
-\begin{enumerate}
-\item $\erase{L}{E[e]} = \erase{L}{E}[\erase{L}{e}]$
-\item $\erase{L}{[e_2/x]e_1} = [\erase{L}{e_2}/x]\erase{L}{e_1}$
-\item $\erase{L}{\erase{L}{e}} = \erase{L}{e}$
-\item $\erase{L}{\erase{L}{E}} = \erase{L}{E}$
-\item $\inferrule{\erase{L}{E}[e] \longrightarrow \erase{L}{E}[e^\prime] }
-                 {\erase{L}{E}[e] \longrightarrow_L \erase{L}{E}[\erase{L}{e^\prime}] }
-      $
-\end{enumerate}
-\end{proposition}
-\begin{proof}
-\quad
-\begin{enumerate}
-\item All follow directly from the induction on evaluation contexts and terms.
-      \begin{enumerate}
-      \item Let $E := [\cdot]\ e_0$, it follows that $\erase{L}{E} := [\cdot]\ \erase{L}{e_0}$, and\\
-            ${\erase{L}{E[e]}=\erase{L}{e\ e_0}=\erase{L}{e}\ \erase{L}{e_0}=\erase{L}{E}[\erase{L}{e}]}$
-      \item Let $E := ([\cdot], e_0)$, it follows that $\erase{L}{E} := ([\cdot], \erase{L}{e_0})$, and\\
-            ${\erase{L}{E[e]}=\erase{L}{(e, e_0)}=(\erase{L}{e}, \erase{L}{e_0})=\erase{L}{E}[\erase{L}{e}]}$
-      \item $ E := (v, [\cdot])$ is as above.
-      \item Let $ E := \Lv\ [\cdot]\ e_0$, it follows that 
-            \begin{equation*}
-             \erase{L}{E} := \begin{cases}
-                          \Lv\ [\cdot]\ \hole &  [\cdot] \not \flows L\\
-                          \Lv\ [\cdot]\ \erase{L}{e_0} & \textrm{otherwise}\\
-                        \end{cases}
-            \end{equation*}
-            and
-            \begin{equation*}
-            \erase{L}{E[e]}=\erase{L}{\Lv\ e\ e_0}= \begin{cases}
-                                                       \Lv\ e\ \hole &  e \not \flows L\\
-                                                       \Lv\ e\ \erase{L}{e_0} & \textrm{otherwise}\\
-                                                     \end{cases},
-            \end{equation*}
-            from which $\erase{L}{E[e]} = \erase{L}{E}[\erase{L}{e}]$ follows directly.
-      \item Let $ E := \Lv\ l\ [\cdot]$, it follows that 
-            \begin{equation*}
-             \erase{L}{E} := \begin{cases}
-                          \Lv\ l\ \hole &  l \not \flows L\\
-                          \Lv\ l\ \erase{L}{[\cdot]} & \textrm{otherwise}\\
-                        \end{cases}
-            \end{equation*}
-            and
-            \begin{equation*}
-            \erase{L}{E[e]}=\erase{L}{\Lv\ l\ e}= \begin{cases}
-                                                       \Lv\ l\ \hole &  l \not \flows L\\
-                                                       \Lv\ l\ \erase{L}{e} & \textrm{otherwise}\\
-                                                     \end{cases},
-            \end{equation*}
-            from which $\erase{L}{E[e]} = \erase{L}{E}[\erase{L}{e}]$ follows directly.
-      \item $\ldots$
-      \end{enumerate}
-
-\item $\erase{L}{[e_2/x]e_1} = \erase{L}{ (\lambda x . e_1)\ e_2}
-       = \erase{L}{\lambda x . e_1}\ \erase{L}{e_2}
-       = \lambda x . \erase{L}{e_1}\ \erase{L}{e_2}
-       = [\erase{L}{e_2}/x]\erase{L}{e_1}
-      $
-
-\item Directly from definition of the erasure function and induction on terms.
-
-\item Directly from definition of the erasure function and induction on terms and evaluation contexts.
-
-\item From the property of evaluation contexts: 
-      \begin{equation*}
-      \inferrule{e \longrightarrow e^\prime}{E[e] \longrightarrow E[e^\prime]},
-      \end{equation*}
-      definition of $\longrightarrow_L$, and properties 2 and 4, above, we have 
-      \begin{equation*}
-      \inferrule{E[e] \longrightarrow E[e^\prime]}{E[e] \longrightarrow_L \erase{L}{E[e^\prime]}}
-      =\inferrule{E[e] \longrightarrow E[e^\prime]}{E[e] \longrightarrow_L \erase{L}{E}[\erase{L}{e^\prime}]}
-      =\inferrule{\erase{L}{E^\prime}[e] \longrightarrow \erase{L}{E^\prime}[e^\prime] }
-                 {\erase{L}{E^\prime}[e] \longrightarrow_L \erase{L}{E^\prime}[\erase{L}{e^\prime}] }, \textrm{ for some $E=\erase{L}{E^\prime}$}.
-      \end{equation*}
-
-
-\end{enumerate}
-\end{proof}
-
-
-\begin{lemma}[Single-step simulation]\label{lemma:single-step}
-If $ \Gamma \vdash e : \tau$, $\well{\store}{e}$, and 
-${\langle \store, e \rangle \longrightarrow \langle \store^\prime, e^\prime\rangle}$
-then 
-$ \Gamma \vdash e^\prime : \tau$, and
-${\langle \store, \erase{L}{e} \rangle \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$
-\end{lemma}
-\begin{proof}
-Lemma~\ref{lemma:type-flow-preservation} proves type preservation of well-behaved terms, so we limit the proof to the simulation.
-In most cases we do not show the environment in the simulation, for clairity.
-\begin{enumerate}
-\item Case: $E[(\lambda x. e_1)\ e_2] \longrightarrow  E[ [e_2/x]e_1]$:
-            \begin{align*}
-            &\ \el{E[(\lambda x. e_1)\ e_2]} = \el{E}[\el{(\lambda x. e_1)\ e_2}] = \el{E}[(\lambda x. \el{e_1})\ \el{e_2}]\\
-            \longrightarrow_L &\  
-             \el{\el{E}[{[\el{e_2}/x]\el{e_1}}]} =\el{\el{E}}[\el{[\el{e_2}/x]\el{e_1}}] =\el{E}[\el{[\el{e_2}/x]\el{e_1}}]\\ 
-            &\ = \el{E}[{[\el{e_2}/x]\el{e_1}}]
-               = \el{E}[\el{[e_2/x]e_1}]
-               = \el{E[[e_2/x]e_1]} \textrm{ by Proposition~\ref{proposition:erase}.}
-            \end{align*}
-\item Case: $E[\fix\ e] \longrightarrow E[e (\fix\ e)]$:
-            \begin{align*}
-            &\ \el{E[\fix\ e]} = \el{E}[\el{\fix\ e}]= \el{E}[\fix\ \el{e}]\\
-            \longrightarrow_L &\  
-            \el{\el{E}[\el{e}\ (\fix\ \el{e})]}
-            = \el{E}[\el{e}\ (\fix\ \el{e})]\\
-            &\ = \el{E}[\el{e\ (\fix\ e)}]
-            = \el{E[e\ (\fix\ e)]} \textrm{ by definition of $\el{\cdot}$ and Proposition~\ref{proposition:erase}.}
-            \end{align*}
-\item Case: $E[\ifel{\true}{e_1}{e_2}] \longrightarrow E[e_1]$: \\ Follows similarly.
-\item Case: $E[\ifel{\false}{e_1}{e_2}] \longrightarrow E[e_2]$: \\ Follows similarly.
-\item Case: $\inferrule{e_1 \longrightarrow {e_1}^\prime}{E[\letbind{x}{e_1}{e_2}] \longrightarrow E[\letbind{x}{{e_1}^\prime}{e_2}]}$: \\ Follows similarly.
-\item Case: $E[\letbind{x}{v}{e}] \longrightarrow E[[v/x]e]$: \\ Follows similarly.
-\item Case: $E[\pi_i\ (e_1,e_2)]  \longrightarrow E[e_i]$: \\ Follows similarly.
-\item Case: $E[\return\ e]\longrightarrow E[\Lv\ l_\bot\ e]$:
-      \begin{itemize}
-      \item $l_\bot \flows L$:
-            \begin{align*}
-            &\ \el{E[\return\ e]}
-            = \el{E}[\el{\return\ e}]
-            = \el{E}[\return\ \el{e}]\\
-            \longrightarrow_L &\  
-            \el{\el{E}[\Lv\ l_\bot\ \el{e}]}
-            =\el{E}[\el{\Lv\ l_\bot\ \el{e}}]
-            =\el{E}[\Lv\ l_\bot\ \el{e}]\\
-            &\ =\el{E}[\el{\Lv\ l_\bot\ e}]
-               =\el{E[\Lv\ l_\bot\ e]}
-            \end{align*}
-      \item $l_\bot \not\flows L$:
-            \begin{align*}
-            &\ \el{E[\return\ e]}
-            = \el{E}[\el{\return\ e}]
-            = \el{E}[\return\ \el{e}]\\
-            \longrightarrow_L &\  
-            \el{\el{E}[\Lv\ l_\bot\ \el{e}]}
-            =\el{E}[\el{\Lv\ l_\bot\ \el{e}}]
-            =\el{E}[\Lv\ l_\bot\ \hole]\\
-            &\ =\el{E}[\el{\Lv\ l_\bot\ \hole}]
-               =\el{E[\Lv\ l_\bot\ \hole]}
-               =\el{E[\Lv\ l_\bot\ e]}
-            \end{align*}
-      \end{itemize}
-\item Case: $\inferrule{e_2 \ne \Lv\ e_l\ e_2^\prime}
-             {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2] \longrightarrow E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}$:
-      \begin{itemize}
-      \item $l_1 \flows L$:
-            \begin{align*}
-            &\ \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]}
-            = \el{E}[\el{\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2}]
-            = \el{E}[\Lv\ l_1\ \el{e_1}\ \bind\ \lambda x.\el{e_2}]\\
-            \longrightarrow_L &\  
-            \el{\el{E}[[\el{e_1}/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x]}
-            = \el{E}[\el{[\el{e_1}/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x}]\\
-            &\ = \el{E}[[\el{e_1}/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x]
-               = \el{E}[\el{[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x}]\\
-            &\ = \el{E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}
-            \end{align*}
-      \item $l_1 \not\flows L$:
-            \begin{align*}
-            &\ \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]}
-            = \el{E}[\el{\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2}]
-            = \el{E}[\Lv\ l_1\ \hole\ \bind\ \lambda x.\el{e_2}]\\
-            \longrightarrow_L &\  
-            \el{\el{E}[[\hole/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x]}
-            = \el{E}[\el{[\hole/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ x}]\\
-            &\ = \el{E}[[\hole/x]\el{e_2}\ \bind\ \lambda x.\Lv\ l_1\ \hole]
-               = \el{E}[\el{[\hole/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ \hole}]\\
-            &\ = \el{E[[\hole/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ \hole]}
-               = \el{E[[e_1/x]e_2\ \bind\ \lambda x.\Lv\ l_1\ x]}
-            \end{align*}
-      \end{itemize}
-\item Case: $E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2] \longrightarrow E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]$:
-      \begin{itemize}
-      \item $l_1 \flows L \land l_2 \flows L$:
-            \begin{align*}
-            &\  \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]}
-               = \el{E}[\Lv\ l_1\ \el{e_1}\ \bind\ \lambda x.\Lv\ l_2\ \el{e_2}] \\
-            \longrightarrow_L &\
-               \el{\el{E}[\Lv\ (l_1\lub l_2)\ [\el{e_1}/x]\el{e_2}]}
-               =  \el{E}[\Lv\ (l_1\lub l_2)\ [\el{e_1}/x]\el{e_2}]\\
-            &\ =   \el{E}[\el{\Lv\ (l_1\lub l_2)\ [e_1/x]e_2}]
-               =   \el{E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]}
-            \end{align*}
-      \item $l_1 \not\flows L \land l_2 \flows L$:
-            \begin{align*}
-            &\  \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]}
-               = \el{E}[\Lv\ l_1\ \hole\ \bind\ \lambda x.\Lv\ l_2\ \el{e_2}] \\
-            \longrightarrow_L &\
-               \el{\el{E}[\Lv\ (l_1\lub l_2)\ [\hole/x]\el{e_2}]}
-               =  \el{E}[\Lv\ (l_1\lub l_2)\ \hole ]\\
-            &\ =   \el{E}[\el{\Lv\ (l_1\lub l_2)\ \hole}]
-               =   \el{E[\Lv\ (l_1\lub l_2)\ \hole]}
-               =   \el{E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]}
-            \end{align*}
-      \item $l_1 \flows L \land l_2 \not\flows L$:
-            \begin{align*}
-            &\  \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]}
-               = \el{E}[\Lv\ l_1\ \el{e_1}\ \bind\ \lambda x.\Lv\ l_2\ \hole] \\
-            \longrightarrow_L &\
-               \el{\el{E}[\Lv\ (l_1\lub l_2)\ [\el{e_1}/x]\hole]}
-               =  \el{E}[\Lv\ (l_1\lub l_2)\ \hole ]\\
-            &\ =   \el{E}[\el{\Lv\ (l_1\lub l_2)\ \hole}]
-               =   \el{E[\Lv\ (l_1\lub l_2)\ \hole]}
-               =   \el{E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]}
-            \end{align*}
-      \item $l_1 \not\flows L \land l_2 \not\flows L$:
-            \begin{align*}
-            &\  \el{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\Lv\ l_2\ e_2]}
-               = \el{E}[\Lv\ l_1\ \hole\ \bind\ \lambda x.\Lv\ l_2\ \hole] \\
-            \longrightarrow_L &\
-               \el{\el{E}[\Lv\ (l_1\lub l_2)\ [\hole/x]\hole]}
-               =  \el{E}[\Lv\ (l_1\lub l_2)\ \hole ]\\
-            &\ =   \el{E}[\el{\Lv\ (l_1\lub l_2)\ \hole}]
-               =   \el{E[\Lv\ (l_1\lub l_2)\ \hole]}
-               =   \el{E[\Lv\ (l_1\lub l_2)\ [e_1/x]e_2]}
-            \end{align*}
-      \end{itemize}
-
-\item Case: $\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \lub l_2\rrbracket} {E[l_1\ \lub\ l_2] \longrightarrow E[l_3]}$: \\ Follows from definition of $\el{\cdot}$ and Proposition~\ref{proposition:erase}.
-\item Case: $\inferrule{\mathcal{L}\llbracket l_3\rrbracket = \mathcal{L}\llbracket l_1 \glb l_2\rrbracket} {E[l_1\ \glb\ l_2] \longrightarrow E[l_3]}$: \\ Follows from definition of $\el{\cdot}$ and Proposition~\ref{proposition:erase}.
-
-\item Case: $\inferrule{\store(\lbl)=l \\ \store(\clr)=c}
-      {\langle \emptyset, \withLblClr\ (l, c)\ \lioValp{e} \rangle \longrightarrow \langle \store,  \lioValp{e}\rangle}$:
-      \begin{align*}
-      &\ \langle \emptyset, \el{\withLblClr\ (l, c)\ \lioValp{e}} \rangle
-       = \langle \emptyset, \withLblClr\ (l, c)\ \lioValp{\el{e}} \rangle\\
-      &\ \longrightarrow_L  \langle \store,  \el{\lioValp{\el{e}}} \rangle
-                        =\langle \store,  \lioValp{\el{e}} \rangle
-                        =\langle \store,  \el{\lioValp{e}} \rangle
-      \end{align*}
-\item Case: $\inferrule{\store(\lbl) \flows l_1 \flows \store(\clr)}
-            {\langle \store, E[\seal\ e\ l_1]\rangle \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle}$:
-      \begin{itemize}
-          \item $l_1 \flows L$:
-          \begin{align*}
-                &\ \el{E[\seal\ e\ l_1]} = \el{E}[\seal\ \el{e}\ l_1]\\
-                \longrightarrow_L &\ 
-                \el{\el{E}[\lioValp{\Lv\ l_1\ \el{e}}]}
-                = \el{E}[\lioValp{\Lv\ l_1\ \el{e}}]\\
-                &\ = \el{E}[\el{\lioValp{\Lv\ l_1\ e}}]
-                = \el{E[\lioValp{\Lv\ l_1\ e}]}
-          \end{align*}
-          \item $l_1 \not\flows L$:
-          \begin{align*}
-                &\ \el{E[\seal\ e\ l_1]} = \el{E}[\seal\ \el{e}\ l_1]\\
-                \longrightarrow_L &\ 
-                \el{\el{E}[\lioValp{\Lv\ l_1\ \el{e}}]}
-                = \el{E}[\lioValp{\Lv\ l_1\ \hole}]\\
-                &\ = \el{E}[\el{\lioValp{\Lv\ l_1\ \hole}}]
-                = \el{E[\lioValp{\Lv\ l_1\ \hole}]}
-                = \el{E[\lioValp{\Lv\ l_1\ e}]}
-          \end{align*}
-      \end{itemize}
-\item Case: $\inferrule{l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \flows \store(\clr) \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
-      {\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle}$:
-      \begin{itemize}
-          \item $l_1 \flows L$:
-          \begin{align*}
-                   &\ \langle \store, \el{E[\open\ (\Lv\ l_1\ e_1)]}\rangle
-                    = \langle \store, \el{E}[\open\ (\Lv\ l_1\ \el{e_1})]\rangle\\
-                   \longrightarrow_L &\ 
-                    \langle \store^\prime, \el{\el{E}[\lioValp{\el{e_1}}]}\rangle
-                    =\langle \store^\prime, \el{E}[\lioValp{\el{e_1}}]\rangle\\
-                    &\ =\langle \store^\prime, \el{E}[\el{\lioValp{e_1}}]\rangle
-                       =\langle \store^\prime, \el{E[\lioValp{e_1}]}\rangle
-          \end{align*}
-          \item $l_1 \not\flows L$:
-          \begin{align*}
-                   &\ \langle \store, \el{E[\open\ (\Lv\ l_1\ e_1)]}\rangle
-                    = \langle \store, \el{E}[\open\ (\Lv\ l_1\ \hole)]\rangle\\
-                   \longrightarrow_L &\ 
-                    \langle \store^\prime, \el{\el{E}[\lioValp{\hole}]}\rangle
-                    =\langle \store^\prime, \el{E}[\lioValp{\hole}]\rangle\\
-                    &\ =\langle \store^\prime, \el{E}[\el{\lioValp{\hole}}]\rangle
-                       =\langle \store^\prime, \el{E[\lioValp{\hole}]}\rangle
-                       =\langle \store^\prime, \el{E[\lioValp{e_1}]}\rangle
-          \end{align*}
-      \end{itemize}
-\item Case: $\inferrule{\langle \store, \lioValp{e} \rangle \longrightarrow \langle \store^\prime, \lioValp{e^\prime} \rangle  \\ \store(\lbl) \flows \store^\prime(\lbl) \flows \store^\prime(\clr) = \store(\clr)}
-      {\langle \store, \close\ \lioValp{e}\rangle \longrightarrow \langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime} \rangle}$:\\
-In both cases we want to show:
-\begin{equation*}
-\inferrule{\langle \store, \el{\lioValp{e}} \rangle \longrightarrow_L \langle \store^\prime, \el{\lioValp{e^\prime}} \rangle  \\ \store(\lbl) \flows \store^\prime(\lbl) \flows \store^\prime(\clr) = \store(\clr)}
-      {\langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle}
-\end{equation*}
-The premise follows directly from $\well{\store}{\close\ \lioValp{e}}$ and Proposition~\ref{proposition:erase}. 
-It remains for us to show
-\begin{equation*}
-      \langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle
-\end{equation*}
-      \begin{itemize}
-          \item $\store^\prime(\lbl) \flows L$:
-          \begin{align*}
-             &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
-             = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
-             \longrightarrow_L &\ \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{e^\prime}}} \rangle
-             =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \el{e^\prime}} \rangle
-             =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle
-          \end{align*}
-
-          \item $\store^\prime(\lbl) \not\flows L$:
-          \begin{align*}
-             &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
-             = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
-             \longrightarrow_L &\ \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{e^\prime}}} \rangle
-             =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \hole} \rangle\\
-             &\ =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \hole}} \rangle
-             =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle
-          \end{align*}
-      \end{itemize}
-
-\item Case: $E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}]$:\\ Follows from definition of $\el{\cdot}$ and Proposition~\ref{proposition:erase}.
-\item Case: $E[\lioValp{e_1}\ \bindLIOp\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2]$:\\ Follows similarly.
-\item Case: $E[\lioValp{e_1}\ \bindLIOp\ \lambda x. \returnLIOp\ x] \longrightarrow E[\lioValp{e_1}]$:\\ Follows similarly.
-\end{enumerate}
-\end{proof}
-
-\begin{lemma}[Multi-step simulation]\label{lemma:multi-step}
-If $ \Gamma \vdash e : \tau$, $\well{\store}{e}$, and 
-${\langle \store, e \rangle \longrightarrow^* \langle \store^\prime, e^\prime\rangle}$
-then 
-$ \Gamma \vdash e^\prime : \tau$, and
-${\langle \store, \erase{L}{e} \rangle \longrightarrow^*_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$
-\end{lemma}
-\begin{proof}
-By induction on Lemma~\ref{lemma:single-step}.
-\end{proof}
-
-
-\pagebreak
-
-\begin{definition}[$L$-equivalence]
-Two values, each consisting of a pair of values with labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$, are equivalent according to the equivalence relation $=_L$  if they agree on the low values. Specifically, 
-\begin{equation*}
-\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {\ell}\ \tau^\prime, \Lvalue\ {\ell}\ \tau))_{j=1,2} \\
-           (e_j\longrightarrow^* (\Lv\ l^\prime {v_j}^\prime, \Lv\ l\ v))_{j=1,2}\\ l \flows L\\ l^\prime \not\flows L}
-{e_1 =_L e_2}
-\end{equation*}
-\end{definition}
-
-The low-equivalence expresses the power of an observer; an observer may distinguish  values labeled with at most $L$.
-
-For example, $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lH\ 9,\Lv\ \lL\ 2)$, but 
-$(\Lv\ \lH\ 8,\Lv\ \lL\ 2) \not =_{\lL} (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$.
-Similarly, if we extend the lattice with element $\lM : \lL\flows \lM \flows \lH$, 
-$(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lM\ 9,\Lv\ \lL\ 2)$.
-
-
-\begin{definition}[$L$-view]
-Two values (each consisting of a pair of labeled values) in environents $\store^1$ and $\store^2$,
-are equivalent according to the equivalence relation $\approx_L$ if they are
-not observable, i.e., $L$ is lower than $\store^j(\lbl), j={1,2}$,
-or the pairs are $L$-equivalent. Specifically, 
-\begin{equation*}
-\inferrule{(\Gamma \vdash e_j : (\Lvalue\ {\ell}\ \tau^\prime, \Lvalue\ {\ell}\ \tau))_{j=1,2} \\
-           (\store^1(\lbl) \not\flows L \land \store^2(\lbl)\not\flows L)\lor (e_1=_L e_2)}
-          {\langle \store^1, \lioValp{e_1} \rangle \approx_L \langle \store^2, \lioValp{e_2}\rangle}
-\end{equation*}
-\end{definition}
-
-The $L$-view simply states that an observer, who may read values with label at most $L$, cannot distinguish two labeled values if they are either 1) both in an environment with a label above $L$, or 2) the values are $L$-equivalent.
-
-For example,
-\begin{align*}
-\langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle \approx_{\lL} \langle \{(\lbl,\lH), (\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 3)\rangle,
-\end{align*}
-even though the labeled pairs are not $L$-equivalent.
-Similarly,
-\begin{align*}
-\langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle \approx_\lM
-\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 9,\Lv\ \lL\ 2) \rangle,
-\end{align*}
-but
-\begin{align*}
-\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle \not \approx_\lL
-\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 3)
-\rangle
-\end{align*}
-
-
-
-\begin{theorem}[Non-interference]
-Given labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$,
-a computation $e$ (with no $\hole$, $\Lv\ l^\second\ \cdot$, or $\lioValp{\cdot}$) where $\Gamma \vdash e : (\Lvalue\ {\ell}\ {\tau_i}^\prime, \Lvalue\ {\ell}\ \tau_i) \rightarrow \LIOp\ (\Lvalue\ {\ell}\ {\tau_o}^\prime, \Lvalue\ {\ell}\ \tau_o)$
-in environment $\store$, such that $\store(\lbl)\flows l_i \flows \store(\clr)$ for $l_i = \{l,l'\}$,
-and an observer with clearance $L$ such that ${l} \flows L$ and ${l}' \not\flows L$,
-\begin{align*}
-\forall e_1 e_2.&(\Gamma \vdash e_j : (\Lvalue\ \ell\ {\tau_i}^\prime,\Lvalue\ \ell\ \tau_i))_{j=1,2}\\
-&\land ( e_j = (\Lv\ l^\prime\ e_j^1, \Lv\ l\ e_j^2) )_{j=1,2}\\
-&\land \withLblClr\ (\store(\lbl), \store(\clr))\ (e\ e_1) \longrightarrow^* \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_1^1, \Lv\ l\ v_1^2)}\rangle\\
-&\land \withLblClr\ (\store(\lbl), \store(\clr))\ (e\ e_2) \longrightarrow^* \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_2^1, \Lv\ l\ v_2^2)}\rangle\\
-&\Rightarrow 
-\langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_1^1, \Lv\ l\ v_1^2)}\rangle \approx_{L}
-\langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_2^1, \Lv\ l\ v_2^2)}\rangle\\
-\end{align*}
-\end{theorem}
-
-Simply, the theorem states that given two $L$-equivalent inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as read by the observer (at label level up to $L$) is indistinguishable. In other words, there is not information flow from the high-labeled input to the low-labeled output.
-
-
-\begin{proof}
-
-Using Lemma~\ref{lemma:multi-step},
-\begin{equation*}
-\el{\withLblClr\ (\store(\lbl), \store(\clr))\ (e\ (\Lv\ l^\prime\ e_j^1, \Lv\ l\ e_j^2))}
-\longrightarrow^*_L \langle \store^\prime, \el{\lioValp{(\Lv\ l^\prime\ v_j^1, \Lv\ l\ v_j^2)}}\rangle
-\end{equation*}
-can be either 
-\begin{enumerate}
-\item
-\begin{equation*}
-\inferrule{\store^\prime{\lbl}=l \lor \store^\prime(\lbl) = \store(\lbl)}{\withLblClr\ (\store(\lbl), \store(\clr))\ (\el{e}\ (\Lv\ l^\prime\ \hole, \Lv\ l\ \el{e_j^2}))
-\longrightarrow^*_L \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ \el{v_j^2})}\rangle}
-\end{equation*}
-\item
-\begin{equation*}
-\inferrule{\store^\second(\lbl) = l^\prime}{
-\withLblClr\ (\store(\lbl), \store(\clr))\ (\el{e}\ (\Lv\ l^\prime\ \hole, \Lv\ l\ \el{e_j^2}))
-\longrightarrow^*_L \langle \store^\second, \lioValp{\hole}\rangle}.
-\end{equation*}
-\end{enumerate}
-
-If $\store^\second(\lbl) = l^\prime \not\flows L$, the $L$-view equivalence holds, by definition.
-Otherwise, by Proposition~\ref{proposition:determinacy-evalL}, it must be that $v_1^2 = v_2^2$,
-and consequently, $\langle \store, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_1^2)}\rangle \approx_{L} \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_2^2)}\rangle$.
-\end{proof}
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1197,63 +1525,3 @@ and consequently, $\langle \store, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_1^2
 
 
 \end{document} 
-The parametrized evaluation relations directly translate to non-parametrized evalution relations in a state transformer monad (with the underlying monad being {\tt IO} and the state being the label $l$ and clearance $c$); this monad is the Labeled IO monad---{\tt LIO}.
-More specifically, ${\tt LIO} :: (\ell,\ell)\rightarrow {\tt IO}\ (\tau,(\ell,\ell))$, which can be read as ``starting from an initial state haviung label and clearance $(l,c)::(\ell,\ell)$ an {\tt LIO} action is executed in the {\tt IO} monad and produces a value of type $\tau$ and a new state $(l',c')$''.
-
-Consider the semantics of \seal{} with non-paremetric evaluation context:
-\begin{equation*}
-\inferrule{l \flows l_1 \flows c} {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e]}
-\end{equation*}
-can be rewritten to
-\begin{align*}
-E[\seal\ e\ l_1] \longrightarrow E[&\getS\ \bindLIOp\ \lambda(l,c).\\
-                                   &{\tt if}\ { l \flows l_1 }\\
-                                   &{\tt then}\ \ifel{l_1 \flows c}{\returnLIOp\ (\Lv\ l\ e)}{\texttt{lerror}\ l\ \textrm{``$\ldots$''}}\\
-                                   &{\tt else}\ {\texttt{lerror}\ l\ \textrm{``$\ldots$''}}]
-\end{align*}
-where bind and return are lift to and sequence {\tt LIO} actions and not \Lvalue{}s. 
-Additionally the error function {\tt lerror} returns a labeled error in {\tt IO}.
-Finally, \getS{} and \putS{} are functions of the MonadState type class (of which {\tt LIO} is an instance).
-
-Similarly,
-\begin{equation*}
-\inferrule{l^\prime = l \lub l_1 \\ l^\prime \flows c}{E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]}
-\end{equation*}
-can be rewritten to:
-\begin{align*}
-E[\open\ \Lv\ l_1\ e_1] \longrightarrow
-E[&\getS\ \bindLIOp\ \lambda(l,c).\\
-  &{\tt let}\ {l^\prime}={l\lub l_1}\\
-  &{\tt in }\ {\tt if}\ {l^\prime \flows c}\\
-  &\quad\quad {\tt then}\ {\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1}\\
-  &\quad\quad {\tt else}\ {\texttt{lerror}\ l\ \textrm{``$\ldots$''}}]
-%  {\ifel{l^\prime \flows c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
-%\letbind{l^\prime}{l\lub l_1}{\ifel{l^\prime \flows c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
-\end{align*}
-%\begin{equation*}
-%E[\open\ \Lv\ l_1\ e_1] \longrightarrow E[\getS\ \bindLIOp\ \lambda(l,c).\letbind{l^\prime}{l\lub l_1}{
-%\ifel{l^\prime \flows c}{(\putS\ (l^\prime,c)\ \seqLIO\ \returnLIOp\ e_1)}{(\texttt{lerror}\ l\ \textrm{``$\ldots$''})}}]
-%\end{equation*}
-
-
-We note that any program using the \seal{}, \open{} functions must be executed as an {\tt LIO} action, using to set the initial state.
-\pagebreak
-
-\begin{sos}
-\begin{align*}
-&&&E[\return\ e] \evalrel{l}{c}{l}{c} E[\Lv\ l\ e] \tag{E-Ret}  \\
-&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \flows c}
-      {E[\return^\prime\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l_1\ e]} \tag{E-Ret$^\prime$}  \\
-&&&\inferrule{E[[e_1/x]e_2] \transevalrel{l}{c}{l^\prime}{c} E[\Lv\ l_2\ {e_2}^\prime]\\ {l_2}^\prime=l_1\lub l_2 \lub l^\prime \\ {l_2}^\prime\flows c}
-      {E[\Lv\ l_1\ e_1\ \bind\ \lambda x.e_2]   \evalrel{l}{c}{l^\prime}{c} E[[e_1/x]e_2\ \bind\ \lambda x.\return^\prime\ x\ {l_2}^\prime]}\tag{E-Bind} \\
-&&&\inferrule{{l_1}^\prime = l_1\lub l_2 \\ {l_1}^\prime \flows c}{E[\Lv\ l_1\ e_1\ \bind\ \lambda x.\return^\prime\ x\ l_2] \evalrel{l}{c}{l}{c} E[\Lv\ l_1^\prime\ e_1]}\tag{E-Runit}\\
-&&&\inferrule{{l_1}^\prime=l\lub l_1 \\ {l_1}^\prime \flows c}
-      {E[\seal\ e\ l_1] \evalrel{l}{c}{l}{c} E[\Lv\ l_1\ e]} \tag{E-Seal}  \\
-&&&\inferrule{l^\prime = l \lub l_1 \\ l^\prime \flows c}
-      {E[\open\ \Lv\ l_1\ e_1] \evalrel{l}{c}{l^\prime}{c} E[e_1]} \tag{E-Open} 
-\end{align*}
-\caption{Semantics for terms with side effects; \texttt{Lvalue} case}
-\end{sos}
-\begin{lemma}[Type preservation under substitution]
-If $\Gamma[x \mapsto \tau] \vdash e : \tau'$ and $\Gamma \vdash v : \tau$ then $\Gamma \vdash [v/x]e : \tau'$.
-\end{lemma}
