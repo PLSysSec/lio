@@ -23,9 +23,10 @@
 \newcommand{\ifel}[3]{\texttt{if}\ #1\ \texttt{then}\ #2\ \texttt{else}\ #3}
 \newcommand{\letbind}[3]{\texttt{let}\ #1=#2\ \texttt{in}\ #3}
 \newcommand{\Lv}{\texttt{Lv}}
-\newcommand{\flows}{\sqsubseteq}
-\newcommand{\lub}{\sqcup}
-\newcommand{\glb}{\sqcap}
+\newcommand{\flows}{\sqsubseteq^\ell}
+\newcommand{\lub}{\sqcup^\ell}
+\newcommand{\glb}{\sqcap^\ell}
+\newcommand{\lpure}{l_\bot^\ell}
 \newcommand{\labelOf}[1]{\mathcal{L} \llbracket #1 \rrbracket}
 \newcommand{\lL}{\texttt{L}}
 \newcommand{\lM}{\texttt{M}}
@@ -97,15 +98,16 @@ labels to elements of lattice $\mathbb{L}$, i.e.,
 $\labelOf{l} \in \mathsf{L}\cup\{\bot,\top\}$.
 We use the meta-variables $l$ to denote Label values of type $\ell$.
 
-We highlight that $\mathcal{L}$ is homomorphically defined over label operations
-$op \in \{\lub, \glb\}$, so
-$\labelOf{l_1\ op\ l_2} = \labelOf{l_1}\ op\ \labelOf{l_2}$.
-
 The label type ($\ell$) and lattice may be arbitrary defined as long as
 $\mathcal{L}$ is bijective.
 However, we require that every label kind provide a default label for pure
-values, denoted by $l_\bot$ such that 
-$\labelOf{l_\bot} \in \mathsf{L}\cup\{\bot,\top\}$.
+values, denoted by $\lpure$ such that 
+$\labelOf{\lpure} \in \mathsf{L}\cup\{\bot,\top\}$, and binary operators
+$\lub, \glb, \flows$.
+We highlight that $\mathcal{L}$ is homomorphically defined over label operations
+$op \in \{\lub, \glb, \flows\}$, so
+$\labelOf{l_1\ op\ l_2} = \labelOf{l_1}\ op\ \labelOf{l_2}$.
+
 
 We overload operator $\flows$ to allow for comparison of syntactic labels in
 the premise of evaluation rules. For example, $l_1 \flows l_2$ can be 
@@ -167,7 +169,7 @@ flow control.
 For the ongoing examples we assume the following lattice elements:
 $\{\lL, \lH\}$ with partial order $\bot \flows \lL \flows \lH \flows \top$,
 and $\cdot \lub \lH = \lH$ and $\cdot \glb \lL = \lL$.
-Additionally, we let $l_\bot = \lL$.
+Additionally, we let $\lpure = \lL$.
 For simplicity, we refer to \lL{} as the ``public label'' and
 \lH{} as the ``secret label''. We assume the language supports
 integer types and integer operations, e.g., addition.
@@ -179,38 +181,46 @@ integer types and integer operations, e.g., addition.
 \\
 \textrm{Label:}   && l  &\\
 \\
-\textrm{Value:}   && v    &\Coloneqq   x                 \\ % variable
-                  &&      &\ |\  \lambda x.e             \\ % abstraction
-                  &&      &\ |\  (e, e)                  \\ % tuple
-                  &&      &\ |\  \Lv\ e\ e               \\ % val of type Lvalue
-                  &&      &\ |\  \lioValp{e}             \\ % value of type LIO'
-                  &&      &\ |\  \true                   \\ % value of type Bool
-                  &&      &\ |\  \false                  \\ % value of type Bool
-                  &&      &\ |\  l                       \\ % label
-                  &&      &\ |\  \fix\ e                 \\ % recursion
+\textrm{Value:}   && v    &\Coloneqq   x                    % variable
+                           \ |\  \lambda x.e                % abstraction
+                           \ |\  (v, v)                     % tuple
+                           \ |\  \Lv\ v\ v                  % val of type Lvalue
+                           \ |\  \lioValp{v}                % value of type LIO'
+                           \ |\  \true                      % value of type Bool
+                           \ |\  \false                     % value of type Bool
+                           \ |\  l                          % label
+                           \ |\  \fix\ e                 \\ % recursion
 \\
-\textrm{Term:}    && e    &\Coloneqq  v                  \\ % values
-                  &&      &\ |\  e\ e                    \\ % application
-                  &&      &\ |\  \ifel{e}{e}{e}          \\ % recursion
-                  &&      &\ |\  \letbind{x}{e}{e}       \\ % let-bindings
-                  &&      &\ |\  \pi_i\ e                \\ % pi_1=fst,pi_2=snd
-                  &&      &\ |\  \return\ e              \\ % return
-                  &&      &\ |\  e\ \bind\ e             \\ % bind two exprs
-                  &&      &\ |\  \withLblClr\ e\ e       \\ % withLblClr
-                  &&      &\ |\  \seal\ e\ e             \\ % seal
-                  &&      &\ |\  \open\ e                \\ % open
-                  &&      &\ |\  \close\ e               \\ % close
-                  &&      &\ |\  \returnLIOp\ e\         \\ % returnLIOp
-                  &&      &\ |\  e\ \bindLIOp\ e         \\ % bind two exprs
-                  &&      &\ |\  e\ \lub\ e              \\ % lub
-                  &&      &\ |\  e\ \glb\ e              \\ % glb
+\textrm{Term:}    && e    &\Coloneqq  x                     % values
+                           \ |\  \lambda x.e                % abstraction
+                           \ |\  (e, e)                     % tuple
+                           \ |\  \Lv\ e\ e                  % val of type Lvalue
+                           \ |\  \lioValp{e}                % value of type LIO'
+                           \ |\  \true                      % value of type Bool
+                           \ |\  \false                     % value of type Bool
+                           \ |\  l                          % label
+                           \ |\  \fix\ e                 \\ % recursion
+                  &&      &\ |\  e\ e                       % application
+                           \ |\  \ifel{e}{e}{e}             % recursion
+                           \ |\  \letbind{x}{e}{e}          % let-bindings
+                           \ |\  \pi_i\ e                \\ % pi_1=fst,pi_2=snd
+                  &&      &\ |\  \return\ e                 % return
+                           \ |\  e\ \bind\ e             \\ % bind two exprs
+                  &&      &\ |\  \withLblClr\ e\ e          % withLblClr
+                           \ |\  \seal\ e\ e                % seal
+                           \ |\  \open\ e                   % open
+                           \ |\  \close\ e               \\ % close
+                  &&      &\ |\  \returnLIOp\ e\            % returnLIOp
+                           \ |\  e\ \bindLIOp\ e         \\ % bind two exprs
+                  &&      &\ |\  e\ \lub\ e                 % lub
+                           \ |\  e\ \glb\ e              \\ % glb
 \\
-\textrm{Type:}    && \tau &\Coloneqq  \tau\rightarrow\tau\\ % function
-                  &&      &\ |\  (\tau,\tau)             \\ % tuple
-                  &&      &\ |\  \Bool                   \\ % bool
-                  &&      &\ |\  \ell                    \\ % Label
-                  &&      &\ |\  \Lvalue\ \ell\ e        \\ % Lvalue
-                  &&      &\ |\  \LIOp\ e                \\ % LIO'
+\textrm{Type:}    && \tau &\Coloneqq  \tau\rightarrow\tau   % function
+                           \ |\  (\tau,\tau)                % tuple
+                           \ |\  \Bool                      % bool
+                           \ |\  \ell                       % Label
+                           \ |\  \Lvalue\ \ell\ e           % Lvalue
+                           \ |\  \LIOp\ e                \\ % LIO'
 \\
 \textrm{Program:} && p    &\Coloneqq  (\letbind{x}{e}{})^*(\withLblClr\ e\ e)\\
 \\
@@ -342,11 +352,14 @@ bind are distinct from those of \Lvalue{}.}
 %{E[\letbind{x}{e_1}{e_2}] \longrightarrow E[\letbind{x}{{e_1}^\prime}{e_2}]}
 %\tag{E-Let}\\
 %
-&&&E[\letbind{x}{v}{e}] \longrightarrow E[[v/x]e] \tag{E-Let}\\
+%&&&E[\letbind{x}{v}{e}] \longrightarrow E[[v/x]e] \tag{E-Let}\\
+%
+%&&&E[\letbind{x}{v}{e}] \longrightarrow E[[v/x]e] \tag{E-Let}\\
+&&&E[\letbind{x}{e_1}{e_2}] \longrightarrow E[[e_1/x]e] \tag{E-Let}\\
 %
 &&&E[\pi_i\ (e_1,e_2)] \longrightarrow E[e_i] \tag{E-Proj}\\
 %
-&&&E[\return\ e] \longrightarrow E[\Lv\ l_\bot\ e] \tag{E-Ret}\\
+&&&E[\return\ e] \longrightarrow E[\Lv\ \lpure\ e] \tag{E-Ret}\\
 %
 &&&\inferrule
                         {e_2 \ne \Lv\ e_1^\prime\ e_2^\prime}
@@ -391,8 +404,8 @@ any context.}
 \inferrule
               {\store[\lbl\mapsto l_1, \clr\mapsto l_2]}
 % --------------------------------------------------------------------------
-{\langle \emptyset, \withLblClr\ (l_1, l_2)\ \lioValp{e} \rangle
-                        \longrightarrow \langle \store,  \lioValp{e}\rangle}
+{\langle \emptyset, E[\withLblClr\ (l_1, l_2)\ \lioValp{e}] \rangle
+                        \longrightarrow \langle \store, E[\lioValp{e}]\rangle}
 \tag{E-WithLblClr}\\
 %
 &&&\inferrule
@@ -417,8 +430,8 @@ any context.}
     \flows \store^\prime(\clr) \flows \store(\clr)
 \\ l = \store^\prime(\lbl)}
 % --------------------------------------------------------------------------
-{\langle \store, \close\ \lioValp{e}\rangle
-  \longrightarrow \langle \store, \lioValp{\Lv\ l\ v} \rangle}
+{\langle \store, E[\close\ \lioValp{e}]\rangle
+  \longrightarrow \langle \store, E[\lioValp{\Lv\ l\ v}]\rangle}
 \tag{E-LIO-Close} \\
 %
 \\
@@ -441,35 +454,43 @@ any context.}
 
 \begin{example}[Example with no side-effects]\label{ex:pure}
 Let us consider a simple example, working only on pure terms. In this example
-we are given two labeled values, one with a public label \lL{} and another with
-a secret label \lH. Adding the two we expect the resulting value to be a labeled
-value with the secret label the secret label.
+we are given two labeled values, one public, with a label \lL{}, and another, secret,
+with label \lH. Adding the two we expect the resulting value to be a labeled \lH.
 
 \begin{align*}
-&                     && \Lv\ \lL\ 1\ \bind\ \lambda x.\
+&                     && \fbox{\Lv\ \lL\ 1}\ \bind\ \lambda x.\
                          \Lv\ \lH\ 2\ \bind\ \lambda y.\
                          \return\ (x + y) \\
 &\tref{E-Bind}:        & \longrightarrow &
-                         \Lv\ \lH\ 2\ \bind\ \lambda y.
+                         \fbox{\Lv\ \lH\ 2}\ \bind\ \lambda y.
                          \return\ (1 + y)\
                          \bind\ \lambda x.\Lv\ \lL\ x\\
 &\tref{E-Bind}:        & \longrightarrow &
-                         \return\ (1 + 2)\
+                         \return\ \fbox{(1 + 2)}\
                          \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Ret}          & \longrightarrow &
-                         \Lv\ l_\bot\ (1 + 2)\ 
+&\tref{E-Add}:         & \longrightarrow &
+                         \fbox{\return\ 3}\
                          \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Runit}:       & \longrightarrow &
-                         \Lv\ (l_\bot\lub\lL)\ (1 + 2)\ 
+&\tref{E-Ret}:         & \longrightarrow &
+                         \Lv\ \lpure\ (\fbox{1 + 2})\ 
+                         \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Runit}:       & \longrightarrow &
-                         \Lv\ (\lL\lub\lH)\ (1 + 2)\\
+&\tref{E-Add}:         & \longrightarrow &
+                         \fbox{$\Lv\ \lpure\ 3$}\ 
+                         \bind\ \lambda x.\Lv\ \lL\ x
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-RUnit}:       & \longrightarrow &
+                         \Lv\ (\fbox{$\lpure\lub\lL$})\ 3\ 
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
 &\tref{E-Join}:        & \longrightarrow &
-                         \Lv\ \lH\ (1 + 2)\\
-&                      & \longrightarrow &
-                        \Lv\ \lH\ 3
+                         \fbox{\Lv\ \lL\ 3}\ 
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-RUnit}:       & \longrightarrow &
+                         \Lv\ (\fbox{$\lL\lub\lH$})\ 3\\
+&\tref{E-Join}:        & \longrightarrow &
+                         \Lv\ \lH\ 3\\
 \end{align*}
 \end{example}
 
@@ -486,34 +507,39 @@ do not expand $f$.
                                 \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
                                 \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                 \open\ (f\ x\ y)\ )\\
-&\tref{E-Let}:        & \longrightarrow & \withLblClr\ (\lL, \lH)\ (\
+&\tref{E-Let}:        & \longrightarrow & \langle \emptyset,
+                                          \fbox{$\withLblClr\ (\lL, \lH)\ (\
                                           \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
                                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ x\ y)\ )\\
+                                          \open\ (f\ x\ y)\ )$}\rangle\\
 &\tref{E-WithLblClr}: & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
-                                          \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
+                                          \fbox{\seal\ \lL\ 1}\ \bindLIOp\
+                                          \lambda x.  
                                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y) \rangle\\
 &\tref{E-LIO-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\
+                                          \fbox{$\lioValp{\Lv\ \lL\ 1}$}\
+                                          \bindLIOp\
                                           \lambda x.  
                                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y) \rangle\\
 &\tref{E-LIO$^\prime$-Bind}:
                       & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
+                                          \fbox{\seal\ \lH\ 2}\ \bindLIOp\
+                                          \lambda y. 
                                           \open\ (f\ (\Lv\ \lL\ 1) \ y)\rangle\\
 &\tref{E-LIO-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \lioValp{\Lv\ \lH\ 2}\ \bindLIOp\
+                                          \fbox{$\lioValp{\Lv\ \lH\ 2}$}\
+                                          \bindLIOp\
                                           \lambda y. 
                                           \open\ (f\ (\Lv\ \lL\ 1) \ y)\rangle\\
 &\tref{E-LIO$^\prime$-Bind}:
                       & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \open\ (f\ (\Lv\ \lL\ 1)\
-                                                     (\Lv\ \lH\ 2)) \rangle\\
+                                          \open\ (\fbox{f\ (\Lv\ \lL\ 1)\
+                                                     (\Lv\ \lH\ 2)}) \rangle\\
 &\textrm{Evaluate $f$}:
                       & \longrightarrow^* & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
-                                          \open\ (\Lv\ \lH\ 3) \rangle\\
+                                          \fbox{\open\ (\Lv\ \lH\ 3)} \rangle\\
 &\tref{E-LIO-Open}:   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\}, 
                                           \lioValp{3} \rangle\\
 \end{align*}
@@ -531,16 +557,17 @@ For simplicity, we do not repeat the steps shown in the previous example.
                                 \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
                                 \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                 \open\ (f\ x\ y))\ )\\
-&\tref{E-Let}:        & \longrightarrow & \withLblClr\ (\lL, \lH)\ (\ \close\ (
+&\tref{E-Let}:        & \longrightarrow & \langle \emptyset,\fbox{$
+                                          \withLblClr\ (\lL, \lH)\ (\ \close\ (
                                           \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
                                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ x\ y))\ )\\
+                                          \open\ (f\ x\ y))\ )$}\rangle\\
 &\tref{E-WithLblClr}: & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
-                                          \close\ (
+                                          \fbox{$\close\ (
                                             \seal\ \lL\ 1\ \bindLIOp\ \lambda x.
                                             \seal\ \lH\ 2\ \bindLIOp\ \lambda y.
                                             \open\ (f\ x\ y)
-                                                  ) \rangle\\
+                                               )$} \rangle\\
 &\tref{E-LIO-Close}:   & \longrightarrow &
 \inferrule{\textrm{\footnotesize $
     \langle \{(\lbl,\lL),(\clr,\lH)\}, 
@@ -558,30 +585,34 @@ For simplicity, we do not repeat the steps shown in the previous example.
 As above, we consider a full program, but in this case one that would violates
 information flow (flow from a secret value to a public value).
 \begin{align*}
-&                     && \withLblClr\ (\lL, \lH)\ (\
+&                     && \langle \emptyset, \fbox{$\withLblClr\ (\lL, \lH)\ (\
                          \seal\ \lH\ 1\ \bindLIOp\ \lambda x.  
                          \open\ x\ \bindLIOp\ \lambda y. 
-                         \seal\ \lL\ y)\\
+                         \seal\ \lL\ y)$}\rangle\\
 &\tref{E-WithLblClr}: & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
-                                          \seal\ \lH\ 1\ \bindLIOp\ \lambda x.  
+                                          \fbox{$\seal\ \lH\ 1$}\
+                                          \bindLIOp\ \lambda x.  
                                           \open\ x\ \bindLIOp\ \lambda y. 
                                           \seal\ \lL\ y)\rangle\\
 &\tref{E-LIO-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
-                                          \lioValp{\Lv\ \lH\ 1}\ \bindLIOp\
+                                          \fbox{$\lioValp{\Lv\ \lH\ 1}$}\
+                                          \bindLIOp\
                                           \lambda x.  
                                           \open\ x\ \bindLIOp\ \lambda y. 
                                           \seal\ \lL\ y\rangle\\
 &\tref{E-LIO$^\prime$-Bind}:
                       & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
-                                          \open\ (\Lv\ \lH\ 1)\ \bindLIOp\
+                                          \open\ (\fbox{$\Lv\ \lH\ 1$})\
+                                          \bindLIOp\
                                           \lambda y. 
                                           \seal\ \lL\ y\rangle\\
 &\tref{E-LIO-Open}:   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
-                                          \lioValp{1}\ \bindLIOp\ \lambda y. 
+                                          \fbox{$\lioValp{1}$}\ \bindLIOp\
+                                          \lambda y. 
                                           \seal\ \lL\ y\rangle\\
 &\tref{E-LIO$^\prime$-Bind}:
                       & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
-                                          \seal\ \lL\ 1\rangle\\
+                                          \fbox{$\seal\ \lL\ 1$}\rangle\\
 &\tref{E-LIO-Seal}:   & \texttt{STUCK: }& \textrm{Premise for rule is not
                                                satisfied: $\lH \not\flows \lL$.}
 \end{align*}
@@ -738,13 +769,13 @@ using the erasure function $\erase{\lL}{\cdot}$.
                          \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
 &\tref{E-Ret}          & \longrightarrow_\lL\ &
-                         \Lv\ l_\bot\ (1 + \hole)\ 
+                         \Lv\ \lpure\ (1 + \hole)\ 
                          \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Runit}:       & \longrightarrow_\lL\ &
-                         \Lv\ (l_\bot\lub\lL)\ (1 + \hole)\ 
+&\tref{E-RUnit}:       & \longrightarrow_\lL\ &
+                         \Lv\ (\lpure\lub\lL)\ (1 + \hole)\ 
                          \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Runit}:       & \longrightarrow_\lL\ &
+&\tref{E-RUnit}:       & \longrightarrow_\lL\ &
                          \Lv\ (\lL\lub\lH)\ (1 + \hole)\\
 &\tref{E-Join}:        & \longrightarrow_\lL\ &
                          \Lv\ \lH\ (1 + \hole)\\
@@ -956,32 +987,32 @@ In most cases we do not show the environment in the simulation, for clarity.
 \item Case: $E[\pi_i\ (e_1,e_2)]  \longrightarrow E[e_i]$:\\
   Follows similarly.
 %
-\item Case: $E[\return\ e]\longrightarrow E[\Lv\ l_\bot\ e]$:
+\item Case: $E[\return\ e]\longrightarrow E[\Lv\ \lpure\ e]$:
   \begin{itemize}
-  \item $l_\bot \flows L$:
+  \item $\lpure \flows L$:
         \begin{align*}
         &\ \el{E[\return\ e]}
         = \el{E}[\el{\return\ e}]
         = \el{E}[\return\ \el{e}]\\
         \longrightarrow_L &\  
-        \el{\el{E}[\Lv\ l_\bot\ \el{e}]}
-        =\el{E}[\el{\Lv\ l_\bot\ \el{e}}]
-        =\el{E}[\Lv\ l_\bot\ \el{e}]\\
-        &\ =\el{E}[\el{\Lv\ l_\bot\ e}]
-           =\el{E[\Lv\ l_\bot\ e]}
+        \el{\el{E}[\Lv\ \lpure\ \el{e}]}
+        =\el{E}[\el{\Lv\ \lpure\ \el{e}}]
+        =\el{E}[\Lv\ \lpure\ \el{e}]\\
+        &\ =\el{E}[\el{\Lv\ \lpure\ e}]
+           =\el{E[\Lv\ \lpure\ e]}
         \end{align*}
-  \item $l_\bot \not\flows L$:
+  \item $\lpure \not\flows L$:
         \begin{align*}
         &\ \el{E[\return\ e]}
         = \el{E}[\el{\return\ e}]
         = \el{E}[\return\ \el{e}]\\
         \longrightarrow_L &\  
-        \el{\el{E}[\Lv\ l_\bot\ \el{e}]}
-        =\el{E}[\el{\Lv\ l_\bot\ \el{e}}]
-        =\el{E}[\Lv\ l_\bot\ \hole]\\
-        &\ =\el{E}[\el{\Lv\ l_\bot\ \hole}]
-           =\el{E[\Lv\ l_\bot\ \hole]}
-           =\el{E[\Lv\ l_\bot\ e]}
+        \el{\el{E}[\Lv\ \lpure\ \el{e}]}
+        =\el{E}[\el{\Lv\ \lpure\ \el{e}}]
+        =\el{E}[\Lv\ \lpure\ \hole]\\
+        &\ =\el{E}[\el{\Lv\ \lpure\ \hole}]
+           =\el{E[\Lv\ \lpure\ \hole]}
+           =\el{E[\Lv\ \lpure\ e]}
         \end{align*}
   \end{itemize}
 %
