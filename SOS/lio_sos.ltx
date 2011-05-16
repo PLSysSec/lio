@@ -405,7 +405,7 @@ any context.}
 &&&
 %
 \inferrule
-              {\store[\lbl\mapsto l_1, \clr\mapsto l_2]}
+              {\store[\lbl\mapsto l_1, \clr\mapsto l_2] \\ l_1 \flows l_2}
 % --------------------------------------------------------------------------
 {\langle \emptyset, E[\withLblClr\ (l_1, l_2)\ \lioValp{e}] \rangle
                         \longrightarrow \langle \store, E[\lioValp{e}]\rangle}
@@ -1158,16 +1158,20 @@ In most cases we do not show the environment in the simulation, for clarity.
   Proposition~\ref{proposition:erase}.
 %
 \item Case: $\inferrule
-                      {\store[\lbl\mapsto l, \clr\mapsto c]}
+      {\store[\lbl\mapsto l_1, \clr\mapsto l_2]\\ l_1\flows l_2}
       %----------------------------------------------------------------------
-      {\langle \emptyset, \withLblClr\ (l, c)\ \lioValp{e} \rangle
-                      \longrightarrow \langle \store,  \lioValp{e}\rangle}$:
+      {\langle \emptyset, E[\withLblClr\ (l_1, l_2)\ \lioValp{e}]\rangle
+                      \longrightarrow \langle \store, E[\lioValp{e}]\rangle}$:
       \begin{align*}
-      &\ \langle \emptyset, \el{\withLblClr\ (l, c)\ \lioValp{e}} \rangle
-       = \langle \emptyset, \withLblClr\ (l, c)\ \lioValp{\el{e}} \rangle\\
-      &\ \longrightarrow_L  \langle \store,  \el{\lioValp{\el{e}}} \rangle
-                        =\langle \store,  \lioValp{\el{e}} \rangle
-                        =\langle \store,  \el{\lioValp{e}} \rangle
+      &\ \langle \emptyset, \el{E[\withLblClr\ (l_1,l_2)\ \lioValp{e}]}
+         \rangle
+       = \langle \emptyset,
+         \el{E}[\withLblClr\ (l, c)\ \lioValp{\el{e}}]\rangle\\
+      &\ \longrightarrow_L 
+          \langle \store,  \el{\el{E}[\lioValp{\el{e}}]}\rangle
+          =\langle \store,  \el{E}[\lioValp{\el{e}}]\rangle
+          =\langle \store,  \el{E}[\el{\lioValp{e}}]\rangle
+          =\langle \store,  \el{E[\lioValp{e}]} \rangle
       \end{align*}
 %
 \item Case: $\inferrule
@@ -1265,8 +1269,8 @@ If $\Gamma \vdash e : \tau$, $e$ does not contain any \close{} terms, and
              \\ \store(\lbl) \flows \store^\prime(\lbl)
                              \flows \store^\prime(\clr) = \store(\clr)}
             % ------------------------------------------------------------------
-      {\langle \store, \close\ \lioValp{e}\rangle \longrightarrow
-          \langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ v} \rangle}
+      {\langle \store, E[\close\ \lioValp{e}]\rangle \longrightarrow
+          \langle \store, E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}] \rangle}
 \end{equation*}
 then 
 $ \Gamma \vdash v : \tau$, and
@@ -1277,8 +1281,8 @@ $ \Gamma \vdash v : \tau$, and
         \\ \store(\lbl) \flows \store^\prime(\lbl)
                         \flows \store^\prime(\clr) = \store(\clr)}
       % --------------------------------------------------------------------
-   {\langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L
-      \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ v}} \rangle}.
+   {\langle \store, \el{E[\close\ \lioValp{e}]}\rangle \longrightarrow_L
+      \langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}]} \rangle}.
 \end{equation*}
 \end{lemma}
 \begin{proof}
@@ -1286,30 +1290,30 @@ $ \Gamma \vdash v : \tau$, and
 The premise directly follows from Lemma~\ref{lemma:multi-step-noclose}, it
 remains for us to show:
 \begin{equation*}
-      \langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L
-      \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ v}} \rangle
+      \langle \store, \el{E[\close\ \lioValp{e}]}\rangle \longrightarrow_L
+      \langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}]} \rangle
 \end{equation*}
 for cases:
 \begin{itemize}
 \item $\store^\prime(\lbl) \flows L$:
 \begin{align*}
-   &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
-   = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
+   &\ \langle \store, \el{E[\close\ \lioValp{e}]}\rangle
+   = \langle \store, \el{e}[\close\ \lioValp{\el{e}}]\rangle\\
    \longrightarrow_L &\ \langle \store,
-               \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}} \rangle
-   =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}} \rangle
-   =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ v}} \rangle
+               \el{\el{E}[\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}]} \rangle
+   =\langle \store, \el{E}[\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}] \rangle\\
+   &\ =\langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}]} \rangle
 \end{align*}
 
 \item $\store^\prime(\lbl) \not\flows L$:
 \begin{align*}
-   &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
-   = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
+   &\ \langle \store, \el{E[\close\ \lioValp{e}]}\rangle
+   = \langle \store, \el{e}[\close\ \lioValp{\el{e}}]\rangle\\
    \longrightarrow_L &\ \langle \store,
-               \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}} \rangle
-   =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \hole} \rangle\\
-   &\ =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \hole}} \rangle
-   =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ v}} \rangle
+               \el{\el{E}[\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}]} \rangle
+   =\langle \store, \el{E}[\lioValp{\Lv\ \store^\prime(\lbl)\ \hole}] \rangle\\
+   &\ =\langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ \hole}]} \rangle
+   =\langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}]} \rangle
 \end{align*}
 \end{itemize}
 \end{proof}
