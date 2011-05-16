@@ -39,12 +39,7 @@
 \newcommand{\close}{\texttt{close}}
 \newcommand{\nolabel}{\obslash}
 \newcommand{\unit}{\texttt{()}}
-\newcommand{\getS}{\texttt{get}}
-\newcommand{\putS}{\texttt{put}}
-\newcommand{\evalLIO}{\texttt{evalLIO}}
-%\newcommand{\evalrel}[4]{{}^_{#1}^{#2}{\longrightarrow}_{#3}^{#4}\ } %#3\xrightarrow[{#1 \quad #3}]{{#2 \quad #4}}}
-\newcommand{\evalrel}[4]{\xrightarrow[{#1 \quad #3}]{{#2 \quad #4}}}
-\newcommand{\transevalrel}[4]{{\xrightarrow[{#1 \quad #3}]{{#2 \quad #4}}}^{*}}
+
 
 \newcommand{\LIO}{\texttt{LIO}}
 \newcommand{\LIOp}{\texttt{LIO$^\prime$}} %$^\prime\ell$}}
@@ -57,7 +52,7 @@
 \newcommand{\tref}[1]{\textrm{#1}}
 
 \newcommand{\withLblClr}{\texttt{withLblClr}}
-\newcommand{\store}{\Delta_\ell}
+\newcommand{\env}{\Delta_\ell}
 \newcommand{\lbl}{\texttt{lbl}}
 \newcommand{\clr}{\texttt{clr}}
 
@@ -68,6 +63,13 @@
 \newcommand{\hole}{\bullet}
 \newcommand{\erase}[2]{\varepsilon_{#1}(#2)}
 \newcommand{\el}[1]{\erase{L}{#1}}
+
+% --
+\newcommand{\str}{\phi}
+\newcommand{\Ref}[2]{\texttt{Ref}\ #1\ #2}
+\newcommand{\newRef}[2]{\texttt{newRef}\ #1\ #2}
+\newcommand{\readRef}[1]{\texttt{readRef}\ #1}
+\newcommand{\writeRef}[2]{\texttt{writeRef}\ #1\ #2}
 
 \floatstyle{ruled}
 \newfloat{typerules}{htbp}{lop} \floatname{typerules}{Typing Rule}
@@ -125,7 +127,7 @@ It is important to note that, for a unique $E$,
 
 \item
 We use the notion of an environment
-$\store : \{\lbl, \clr\} \rightarrow \textrm{Label}$ that maps
+$\env : \{\lbl, \clr\} \rightarrow \textrm{Label}$ that maps
 the {\em current label}, \lbl{}, and {\em current clearance}, \clr{}, to a
 label value.
 The current label is effectively a ceiling over the labels of all data the
@@ -136,7 +138,7 @@ labeled by the current label. We provide labeled values ($\Lv{}\ l\ v$) to allow
 for values ($v$) to be protected by labels ($l$) other than the current label.
 
 
-The function \withLblClr{} is used to initialize $\store{}$, which may be
+The function \withLblClr{} is used to initialize $\env{}$, which may be
 updated with functions such as \open{}.
 In the actual implementation, we use a state transformer monad to
 ``thread'' the current label and clearance over the computation.
@@ -147,14 +149,14 @@ interesting properties. Hence, our semantics are akin to modular monadic
 semantics.
 
 \item
-Side-effects of certain functions may modify the environment $\store$.
+Side-effects of certain functions may modify the environment $\env$.
 The evaluation relation that may have side-effects in the environment is
 \begin{equation*}
 \inferrule{e\longrightarrow e^\prime}
-{\langle \store, e\rangle \longrightarrow \langle \store^\prime, e^\prime\rangle}
+{\langle \env, e\rangle \longrightarrow \langle \env^\prime, e^\prime\rangle}
 \end{equation*}
-which may be read as ``term $e$ in environment $\store$ evaluates to
-$e^\prime$ in environment $\store^\prime$''.
+which may be read as ``term $e$ in environment $\env$ evaluates to
+$e^\prime$ in environment $\env^\prime$''.
 
 
 \item
@@ -183,6 +185,8 @@ integer types and integer operations, e.g., addition.
 \\
 \textrm{Label:}   && l  &\\
 \\
+\textrm{Store address:}   && a  &\\
+\\
 \textrm{Value:}   && v    &\Coloneqq   x                    % variable
                            \ |\  \lambda x.e                % abstraction
                            \ |\  (v, v)                     % tuple
@@ -191,6 +195,8 @@ integer types and integer operations, e.g., addition.
                            \ |\  \true                      % value of type Bool
                            \ |\  \false                     % value of type Bool
                            \ |\  l                          % label
+                           \ |\  a                          % address
+                           \ |\  \unit                      % unit
                            \ |\  \fix\ e                 \\ % recursion
 \\
 \textrm{Term:}    && e    &\Coloneqq  x                     % values
@@ -201,6 +207,8 @@ integer types and integer operations, e.g., addition.
                            \ |\  \true                      % value of type Bool
                            \ |\  \false                     % value of type Bool
                            \ |\  l                          % label
+                           \ |\  a                          % address
+                           \ |\  \unit                      % unit
                            \ |\  \fix\ e                 \\ % recursion
                   &&      &\ |\  e\ e                       % application
                            \ |\  \ifel{e}{e}{e}             % recursion
@@ -214,19 +222,25 @@ integer types and integer operations, e.g., addition.
                            \ |\  \close\ e               \\ % close
                   &&      &\ |\  \returnLIOp\ e\            % returnLIOp
                            \ |\  e\ \bindLIOp\ e         \\ % bind two exprs
+                  &&      &\ |\  \newRef{e}{e}              % new ref
+                           \ |\  \writeRef{e}{e}            % write ref
+                           \ |\  \readRef{e}             \\ % read ref
                   &&      &\ |\  e\ \lub\ e                 % lub
                            \ |\  e\ \glb\ e              \\ % glb
 \\
 \textrm{Type:}    && \tau &\Coloneqq  \tau\rightarrow\tau   % function
                            \ |\  (\tau,\tau)                % tuple
+                           \ |\  \Lvalue\ \tau_1\ \tau_2    % Lvalue
+                           \ |\  \LIOp\ \tau                % LIO'
+                           \ |\  \Ref{\tau_1}{\tau_2}       % Ref
                            \ |\  \Bool                      % bool
                            \ |\  \ell                       % Label
-                           \ |\  \Lvalue\ \tau_1\ \tau_2    % Lvalue
-                           \ |\  \LIOp\ \tau             \\ % LIO'
+                           \ |\  \unit                   \\ % unit
 \\
 \textrm{Program:} && p    &\Coloneqq  (\letbind{x}{e}{})^*(\withLblClr\ e\ e)\\
 \\
-\textrm{Environment:} && \store & : \{\lbl,\clr\} \rightarrow \textrm{Label}
+\textrm{Environment:} && \env & : \{\lbl,\clr\} \rightarrow l\\
+                      && \str & : a \rightarrow (l, e)
 \end{align*}
 \caption{Haskell embedded information flow control language. $\Lv\ e\ e$ is the
 runtime representation of a labeled value and it does not appear in the source.
@@ -236,17 +250,17 @@ Similarly $\lioValp{e}$ is the runtime representation of a \LIOp{} value.}
 
 \begin{typerules}
 \begin{align}
-\inferrule{\Gamma(x)=\tau} 
-     {\Gamma \vdash x : \tau}\tag{T-Var}
+\inferrule{\Gamma;\Phi(x)=\tau} 
+     {\Gamma;\Phi \vdash x : \tau}\tag{T-Var}
 \\
-\inferrule{\Gamma[x \mapsto \tau_1] \vdash e : \tau_2} 
-     {\Gamma \vdash \lambda x.e : \tau_1 \rightarrow \tau_2}\tag{T-Abs}
+\inferrule{\Gamma;\Phi[x \mapsto \tau_1] \vdash e : \tau_2} 
+     {\Gamma;\Phi \vdash \lambda x.e : \tau_1 \rightarrow \tau_2}\tag{T-Abs}
 \\
-\inferrule{\Gamma \vdash e_1 : \tau_1 \\ \Gamma \vdash e_2 : \tau_2 }
-     {\Gamma \vdash (e_1,e_2) : (\tau_1, \tau_2)}\tag{T-Tup}
+\inferrule{\Gamma;\Phi \vdash e_1 : \tau_1 \\ \Gamma;\Phi \vdash e_2 : \tau_2 }
+     {\Gamma;\Phi \vdash (e_1,e_2) : (\tau_1, \tau_2)}\tag{T-Tup}
 \\
-\inferrule{\Gamma \vdash e_1 : \ell \\ \Gamma \vdash e_2 : \tau}
-     {\Gamma \vdash \Lv\ e_1\ e_2 : \Lvalue\ \ell\ \tau}\tag{T-Lv}
+\inferrule{\Gamma;\Phi \vdash e_1 : \ell \\ \Gamma;\Phi \vdash e_2 : \tau}
+     {\Gamma;\Phi \vdash \Lv\ e_1\ e_2 : \Lvalue\ \ell\ \tau}\tag{T-Lv}
 \\
 \inferrule{}{\vdash \true : \Bool}\tag{T-True}
 \\
@@ -254,73 +268,47 @@ Similarly $\lioValp{e}$ is the runtime representation of a \LIOp{} value.}
 \\
 \inferrule{}{\vdash l : \ell}\tag{T-Label}
 \\
-\inferrule{\Gamma \vdash e : \tau \rightarrow \tau}
-     {\Gamma \vdash \fix\ e : \tau}\tag{T-Fix}
+\inferrule{}{\vdash \unit : \unit}\tag{T-Unit}
+\\
+\inferrule{\Gamma;\Phi \vdash e : \tau \rightarrow \tau}
+     {\Gamma;\Phi \vdash \fix\ e : \tau}\tag{T-Fix}
 \\
 \inferrule
-{\Gamma \vdash e_1 : \tau_1 \rightarrow \tau_2 \\ \Gamma \vdash e_2 : \tau_1}
-{\Gamma \vdash e_1\ e_2 : \tau_2}\tag{T-App}
+{\Gamma;\Phi \vdash e_1 : \tau_1 \rightarrow \tau_2
+\\ \Gamma;\Phi \vdash e_2 : \tau_1}
+{\Gamma;\Phi \vdash e_1\ e_2 : \tau_2}\tag{T-App}
 \\
 \inferrule
-{\Gamma \vdash e_1 : \Bool \\ \Gamma \vdash e_2 : \tau
-                           \\ \Gamma \vdash e_3 : \tau}
-{\Gamma \vdash \ifel{e_1}{e_2}{e_3} : \tau}\tag{T-IfEl}
+{\Gamma;\Phi \vdash e_1 : \Bool \\ \Gamma;\Phi \vdash e_2 : \tau
+                           \\ \Gamma;\Phi \vdash e_3 : \tau}
+{\Gamma;\Phi \vdash \ifel{e_1}{e_2}{e_3} : \tau}\tag{T-IfEl}
 \\
 \inferrule
-{\Gamma \vdash e_1 : \tau_1 \\ \Gamma [x \mapsto \tau_1] \vdash e_2 : \tau_2}
-{\Gamma \vdash \letbind{x}{e_1}{e_2} : \tau_2}\tag{T-Let}
+{\Gamma;\Phi \vdash e_1 : \tau_1
+\ \Gamma;\Phi [x \mapsto \tau_1] \vdash e_2 : \tau_2}
+{\Gamma;\Phi \vdash \letbind{x}{e_1}{e_2} : \tau_2}\tag{T-Let}
 \\
-\inferrule{\Gamma \vdash e : (\tau_1, \tau_2)}
-     {\Gamma \vdash \pi_i\ e : \tau_i}
+\inferrule{\Gamma;\Phi \vdash e : (\tau_1, \tau_2)}
+     {\Gamma;\Phi \vdash \pi_i\ e : \tau_i}
      {(i\in\{1,2\})}\tag{T-Proj}
 \\
-\inferrule{\Gamma \vdash e : \tau}
-     {\Gamma \vdash \return\ e : \Lvalue\ \ell\ \tau}\tag{T-Ret}
+\inferrule{\Gamma;\Phi \vdash e : \tau}
+     {\Gamma;\Phi \vdash \return\ e : \Lvalue\ \ell\ \tau}\tag{T-Ret}
 \\
 \inferrule
-{\Gamma \vdash e_1 : \Lvalue\ \ell\ \tau_1
- \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
-{\Gamma \vdash e_1\ \bind\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Bind}
+{\Gamma;\Phi \vdash e_1 : \Lvalue\ \ell\ \tau_1
+ \\ \Gamma;\Phi \vdash e_2 : \tau_1 \rightarrow \Lvalue\ \ell\ \tau_2}
+{\Gamma;\Phi \vdash e_1\ \bind\ e_2 : \Lvalue\ \ell\ \tau_2}\tag{T-Bind}
 \\
-\inferrule{\Gamma \vdash e_1 : \ell\\ \Gamma \vdash e_2 : \ell}
-     {\Gamma \vdash e_1\ \lub\ e_2 : \ell}\tag{T-Join}
+\inferrule{\Gamma;\Phi \vdash e_1 : \ell\\ \Gamma;\Phi \vdash e_2 : \ell}
+     {\Gamma;\Phi \vdash e_1\ \lub\ e_2 : \ell}\tag{T-Join}
 \\
-\inferrule{\Gamma \vdash e_1 : \ell\\ \Gamma \vdash e_2 : \ell}
-     {\Gamma \vdash e_1\ \glb\ e_2 : \ell}\tag{T-Meet}
+\inferrule{\Gamma;\Phi \vdash e_1 : \ell\\ \Gamma;\Phi \vdash e_2 : \ell}
+     {\Gamma;\Phi \vdash e_1\ \glb\ e_2 : \ell}\tag{T-Meet}
 \end{align}
 \caption{Type rules for pure terms. The monadic return and bind are only
 defined for type \Lvalue{}.}
 \end{typerules}
-
-\begin{typerules}
-\begin{align}
-\inferrule{\Gamma \vdash e : \tau}
-     {\Gamma \vdash \lioValp{e} : \LIOp\ \tau}\tag{T-LIO$^\prime$-Val}
-\\
-\inferrule{\Gamma \vdash e_1 : (\ell,\ell) \\ \Gamma \vdash e_2 : \LIOp\ \tau}
-     {\Gamma \vdash \withLblClr\ e_1\ e_2: \LIOp\ \tau}\tag{T-WithLblClr}
-\\
-\inferrule{\Gamma \vdash e_1 : \ell \\ \Gamma \vdash e_2 : \tau}
-     {\Gamma \vdash \seal\ e_1\ e_2: \LIOp\ (\Lvalue\ \ell\ \tau)}\tag{T-Seal}
-\\
-\inferrule{\Gamma \vdash e : \Lvalue\ \ell\ \tau}
-     {\Gamma \vdash \open\ e : \LIOp\ \tau}\tag{T-Open}
-\\
-\inferrule{\Gamma \vdash e : \LIOp\ \tau}
-     {\Gamma \vdash \close\ e : \LIOp\ (\Lvalue\ \ell\ \tau)}\tag{T-Close}
-\\
-\inferrule{\Gamma \vdash e : \tau}
-     {\Gamma \vdash \returnLIOp\ e  : \LIOp\ \tau}\tag{T-LIO$^\prime$-Ret}
-\\
-\inferrule
-{\Gamma \vdash e_1 : \LIOp\ \tau_1
- \\ \Gamma \vdash e_2 : \tau_1 \rightarrow \LIOp\ \tau_2}
-{\Gamma \vdash e_1\ \bindLIOp\ e_2 : \LIOp\ \tau_2}\tag{T-LIO$^\prime$-Bind}
-\end{align}
-\caption{Type rules for terms with side-effects. Monadic return and
-bind are distinct from those of \Lvalue{}.}
-\end{typerules}
-
 
 \begin{sos}
 \begin{align*}
@@ -389,62 +377,145 @@ any context.}
 \label{sos:pure}
 \end{sos}
 
+\begin{typerules}
+\begin{align}
+\inferrule{\Gamma;\Phi \vdash e : \tau}
+     {\Gamma;\Phi \vdash \lioValp{e} : \LIOp\ \tau}\tag{T-LIO$^\prime$-Val}
+\\
+\inferrule{\Gamma;\Phi \vdash e_1 : (\ell,\ell)
+\\ \Gamma;\Phi \vdash e_2 : \LIOp\ \tau}
+     {\Gamma;\Phi \vdash \withLblClr\ e_1\ e_2: \LIOp\ \tau}\tag{T-WithLblClr}
+\\
+\inferrule{\Gamma;\Phi \vdash e_1 : \ell \\ \Gamma;\Phi \vdash e_2 : \tau}
+  {\Gamma;\Phi \vdash \seal\ e_1\ e_2: \LIOp\ (\Lvalue\ \ell\ \tau)}\tag{T-Seal}
+\\
+\inferrule{\Gamma;\Phi \vdash e : \Lvalue\ \ell\ \tau}
+     {\Gamma;\Phi \vdash \open\ e : \LIOp\ \tau}\tag{T-Open}
+\\
+\inferrule{\Gamma;\Phi \vdash e : \LIOp\ \tau}
+     {\Gamma;\Phi \vdash \close\ e : \LIOp\ (\Lvalue\ \ell\ \tau)}\tag{T-Close}
+\\
+\inferrule{\Gamma;\Phi \vdash e : \tau}
+     {\Gamma;\Phi \vdash \returnLIOp\ e  : \LIOp\ \tau}\tag{T-LIO$^\prime$-Ret}
+\\
+\inferrule
+{\Gamma;\Phi \vdash e_1 : \LIOp\ \tau_1
+ \\ \Gamma;\Phi \vdash e_2 : \tau_1 \rightarrow \LIOp\ \tau_2}
+{\Gamma;\Phi \vdash e_1\ \bindLIOp\ e_2 : \LIOp\ \tau_2}
+\tag{T-LIO$^\prime$-Bind}
+\\
+\inferrule
+{\Phi(a) = (\ell, \tau)}
+{\Gamma;\Phi \vdash a : \Ref{\ell}{\tau}}\tag{T-RefAddr}
+\\
+\inferrule
+{\Gamma;\Phi \vdash e_1 : \ell \\ \Gamma;\Phi \vdash e_2 : \tau}
+{\Gamma;\Phi \vdash \newRef{e_1}{e_2}: \LIOp\ (\Ref{\ell}{\tau})}\tag{T-NewRef}
+\\
+\inferrule
+{\Gamma;\Phi \vdash e : \Ref{\ell}{\tau}}
+{\Gamma;\Phi \vdash \readRef{e}: \LIOp\ \tau}\tag{T-ReadRef}
+\\
+\inferrule
+{\Gamma;\Phi \vdash e_1 : \Ref{\ell}{\tau} \\ \Gamma;\Phi \vdash e_2 : \tau}
+{\Gamma;\Phi \vdash \writeRef{e_1}{e_2}: \LIOp\ \unit}\tag{T-WriteRef}
+\end{align}
+\caption{Type rules for terms with side-effects. Monadic return and
+bind are distinct from those of \Lvalue{}.}
+\end{typerules}
+
+
 \begin{sos}
 \begin{align*}
 &&E&   ::=  \cdots
+       \ |\  \lioValp{E}
        \ |\  \withLblClr\ E\ e
        \ |\  \seal\ E\ e
        \ |\  \seal\ v\ E
        \ |\  \open\ E                 
-       \ |\  \close\ E                 
-       \ |\  \returnLIOp\ E
+       \ |\  \close\ E\\
+&&&    \ |\  \returnLIOp\ E
        \ |\  E\ \bindLIOp\ e
        \ |\  v\ \bindLIOp\ E
-       \ |\  \lioValp{E}
+       \ |\  \newRef{E}{e}
+       \ |\  \newRef{v}{E}
+       \ |\  \writeRef{v}{E}
        \\
-&&&
+       \\
 %
-\inferrule
-              {\store[\lbl\mapsto l_1, \clr\mapsto l_2] \\ l_1 \flows l_2}
+&&&\inferrule
+              {\env[\lbl\mapsto l_1, \clr\mapsto l_2] \\ l_1 \flows l_2}
 % --------------------------------------------------------------------------
 {\langle \emptyset, E[\withLblClr\ (l_1, l_2)\ \lioValp{e}] \rangle
-                        \longrightarrow \langle \store, E[\lioValp{e}]\rangle}
+                        \longrightarrow \langle \env, E[\lioValp{e}]\rangle}
 \tag{E-WithLblClr}\\
 %
 &&&\inferrule
-             {\store(\lbl) \flows l_1 \flows \store(\clr)}
+             {\env(\lbl) \flows l_1 \flows \env(\clr)}
 % --------------------------------------------------------------------------
-{\langle \store, E[\seal\ l_1\ e]\rangle
-            \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle}
-\tag{E-LIO-Seal}\\
+{\langle \env, E[\seal\ l_1\ e]\rangle
+            \longrightarrow \langle \env, E[\lioValp{\Lv\ l_1\ e}]\rangle}
+\tag{E-Seal}\\
 %
 &&&\inferrule
-{l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \flows \store(\clr)
-                           \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
+{l^\prime = \env(\lbl) \lub l_1 \\ l^\prime \flows \env(\clr)
+                           \\ \env^\prime = \env[\lbl \mapsto l^\prime]}
 % --------------------------------------------------------------------------
-{\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle
-             \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle}
-\tag{E-LIO-Open} \\
+{\langle \env, E[\open\ (\Lv\ l_1\ e_1)]\rangle
+             \longrightarrow \langle \env^\prime, E[\lioValp{e_1}]\rangle}
+\tag{E-Open} \\
 %
 &&&\inferrule
-{\langle \store, \lioValp{e} \rangle
-    \longrightarrow^* \langle \store^\prime, \lioValp{v} \rangle
-\\ \store(\lbl) \flows \store^\prime(\lbl)
-    \flows \store^\prime(\clr) \flows \store(\clr)
-\\ l = \store^\prime(\lbl)}
+{\langle \env, \lioValp{e} \rangle
+    \longrightarrow^* \langle \env^\prime, \lioValp{v} \rangle
+\\ \env(\lbl) \flows \env^\prime(\lbl)
+    \flows \env^\prime(\clr) \flows \env(\clr)
+\\ l = \env^\prime(\lbl)}
 % --------------------------------------------------------------------------
-{\langle \store, E[\close\ \lioValp{e}]\rangle
-  \longrightarrow \langle \store, E[\lioValp{\Lv\ l\ v}]\rangle}
-\tag{E-LIO-Close} \\
+{\langle \env, E[\close\ \lioValp{e}]\rangle
+  \longrightarrow \langle \env, E[\lioValp{\Lv\ l\ v}]\rangle}
+\tag{E-Close} \\
 %
-\\
 &&&E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}] \tag{E-LIO$^\prime$-Ret}\\
 %
 &&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. e_2] \longrightarrow E[[e_1/x]e_2]
 \tag{E-LIO$^\prime$-Bind}\\
 %
 &&&E[\lioValp{e_1}\ \bindLIOp\ \lambda x. \returnLIOp\ x]
-           \longrightarrow E[\lioValp{e_1}] \tag{E-LIO$^\prime$-RUnit}
+           \longrightarrow E[\lioValp{e_1}] \tag{E-LIO$^\prime$-RUnit} \\
+%
+&&&\inferrule
+{a \not\in\dom(\str) \\ \str^\prime=\str[a\mapsto (l,e)]
+\\ \env(\lbl)\flows l
+\\ l^\prime=\env(\lbl)\lub l
+\\ l^\prime \flows \env(\clr)
+\\ \env^\prime=\env[\lbl\mapsto l^\prime]
+}
+{\langle \env;\str, E[\newRef{l}{e}]\rangle \longrightarrow
+\langle \env^\prime;\str^\prime, E[\lioValp{a}]\rangle}
+\tag{E-NewRef}\\
+%
+&&&\inferrule
+{\str(a)=(l,e)
+\\ l^\prime=\env(\lbl)\lub l
+\\ l^\prime \flows \env(\clr)
+\\ \env^\prime=\env[\lbl\mapsto l^\prime]
+}
+{\langle \env;\str, E[\readRef{a}]\rangle \longrightarrow
+\langle \env^\prime;\str, E[\lioValp{e}]\rangle}
+\tag{E-ReadRef}\\
+%
+&&&\inferrule
+{\str(a)=(l,e)
+\\\str^\prime=\str[a\mapsto (l,e^\prime)]
+\\ \env(\lbl)\flows l
+\\ l^\prime=\env(\lbl)\lub l
+\\ l^\prime \flows \env(\clr)
+\\ \env^\prime=\env[\lbl\mapsto l^\prime]
+}
+{\langle \env;\str, E[\writeRef{a}{e^\prime}]\rangle \longrightarrow
+\langle \env^\prime;\str^\prime, E[\lioValp{\unit}]\rangle}
+\tag{E-WriteRef}
 %
 \end{align*}
 \caption{Semantics for terms with side effects.}
@@ -517,7 +588,7 @@ do not expand $f$.
                                           \lambda x.  
                                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y) \rangle\\
-&\tref{E-LIO-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
+&\tref{E-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
                                           \fbox{$\lioValp{\Lv\ \lL\ 1}$}\
                                           \bindLIOp\
                                           \lambda x.  
@@ -528,7 +599,7 @@ do not expand $f$.
                                           \fbox{\seal\ \lH\ 2}\ \bindLIOp\
                                           \lambda y. 
                                           \open\ (f\ (\Lv\ \lL\ 1) \ y)\rangle\\
-&\tref{E-LIO-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
+&\tref{E-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
                                           \fbox{$\lioValp{\Lv\ \lH\ 2}$}\
                                           \bindLIOp\
                                           \lambda y. 
@@ -540,7 +611,7 @@ do not expand $f$.
 &\textrm{Evaluate $f$}:
                       & \longrightarrow^* & \langle \{(\lbl,\lL),(\clr,\lH)\}, 
                                           \fbox{\open\ (\Lv\ \lH\ 3)} \rangle\\
-&\tref{E-LIO-Open}:   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\}, 
+&\tref{E-Open}:   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\}, 
                                           \lioValp{3} \rangle\\
 \end{align*}
 \end{example}
@@ -568,7 +639,7 @@ For simplicity, we do not repeat the steps shown in the previous example.
                                             \seal\ \lH\ 2\ \bindLIOp\ \lambda y.
                                             \open\ (f\ x\ y)
                                                )$} \rangle\\
-&\tref{E-LIO-Close}:   & \longrightarrow &
+&\tref{E-Close}:   & \longrightarrow &
 \inferrule{\textrm{\footnotesize $
     \langle \{(\lbl,\lL),(\clr,\lH)\}, 
     \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.  
@@ -594,7 +665,7 @@ information flow (flow from a secret value to a public value).
                                           \bindLIOp\ \lambda x.  
                                           \open\ x\ \bindLIOp\ \lambda y. 
                                           \seal\ \lL\ y)\rangle\\
-&\tref{E-LIO-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
+&\tref{E-Seal}:   & \longrightarrow & \langle \{(\lbl,\lL),(\clr,\lH)\},
                                           \fbox{$\lioValp{\Lv\ \lH\ 1}$}\
                                           \bindLIOp\
                                           \lambda x.  
@@ -606,14 +677,14 @@ information flow (flow from a secret value to a public value).
                                           \bindLIOp\
                                           \lambda y. 
                                           \seal\ \lL\ y\rangle\\
-&\tref{E-LIO-Open}:   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
+&\tref{E-Open}:   & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
                                           \fbox{$\lioValp{1}$}\ \bindLIOp\
                                           \lambda y. 
                                           \seal\ \lL\ y\rangle\\
 &\tref{E-LIO$^\prime$-Bind}:
                       & \longrightarrow & \langle \{(\lbl,\lH),(\clr,\lH)\},
                                           \fbox{$\seal\ \lL\ 1$}\rangle\\
-&\tref{E-LIO-Seal}:   & \texttt{STUCK: }& \textrm{Premise for rule is not
+&\tref{E-Seal}:   & \texttt{STUCK: }& \textrm{Premise for rule is not
                                                satisfied: $\lH \not\flows \lL$.}
 \end{align*}
 \end{example}
@@ -626,12 +697,12 @@ information flow (flow from a secret value to a public value).
 
 \subsection{Language properties}
 \begin{definition}[Environment equivalence]
-Equivalence of two environments $\store$ and $\store^\prime$ is given by:
+Equivalence of two environments $\env$ and $\env^\prime$ is given by:
 \begin{equation*}
 \inferrule
-  {\dom(\store) = \dom(\store^\prime) \\
-  \forall x\in \dom(\store).\ \store(x)=\store^\prime(x)}
-  {\store \cong \store^\prime}.
+  {\dom(\env) = \dom(\env^\prime) \\
+  \forall x\in \dom(\env).\ \env(x)=\env^\prime(x)}
+  {\env \cong \env^\prime}.
 \end{equation*}
 \end{definition}
 
@@ -655,12 +726,12 @@ then $e^\prime = e^\second$.
 %
 \item
 If
-$\langle\store, e\rangle
-      \longrightarrow\ \langle\store^\prime, e^\prime\rangle$
+$\langle\env, e\rangle
+      \longrightarrow\ \langle\env^\prime, e^\prime\rangle$
 and
-$\langle \store, e \rangle
-      \longrightarrow\ \langle\store^\second e^\second\rangle$
-then $e^\prime = e^\second$ and $\store^\prime\cong\store^\second$.
+$\langle \env, e \rangle
+      \longrightarrow\ \langle\env^\second e^\second\rangle$
+then $e^\prime = e^\second$ and $\env^\prime\cong\env^\second$.
 \end{itemize}
 \end{proposition}
 \begin{proof}
@@ -672,8 +743,8 @@ By induction on terms and evaluation contexts.
 \begin{lemma}[Type preservation under information flow preservation]
 \label{lemma:type-flow-preservation}
 If $\vdash e : \tau$, and
-$\langle \store, e\rangle \longrightarrow
-  \langle \store^\prime, e^\prime \rangle$ then $\vdash e^\prime : \tau$.
+$\langle \env, e\rangle \longrightarrow
+  \langle \env^\prime, e^\prime \rangle$ then $\vdash e^\prime : \tau$.
 \end{lemma}
 \begin{proofidea}
 Follows directly from the typing derivations.
@@ -683,7 +754,7 @@ well-typed. Note that if a term takes an evaluation step, then it has not
 violated information flow. Since information flow control rules are described
 as premises to evaluation rules, an information flow violation results
 in a term getting stuck. Note that this lemma encompasses the pure case
-where $\store=\emptyset$.
+where $\env=\emptyset$.
 
 Proving progress for the pure case, i.e., terms that do not depend on an 
 environment is standard. However, the proof of progress for terms relying
@@ -762,11 +833,11 @@ and, similarly, for terms in an environment,
 %
 \begin{equation*}
 \inferrule
-{\langle \store, e \rangle
-            \longrightarrow \langle \store^\prime, e^\prime \rangle}
+{\langle \env, e \rangle
+            \longrightarrow \langle \env^\prime, e^\prime \rangle}
 %-------------------------------------------------------------------------------
-{\langle \store, e \rangle
-           \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime} \rangle}
+{\langle \env, e \rangle
+           \longrightarrow_L \langle \env^\prime, \erase{L}{e^\prime} \rangle}
 \end{equation*}
 
 \begin{proposition}[Determinacy of $(\longrightarrow_L)$]
@@ -777,12 +848,12 @@ $e \longrightarrow_L\ e^\second$ then $e^\prime = e^\second$.
 %
 \item
 If
-$\langle\store, e\rangle
-      \longrightarrow_L\ \langle\store^\prime, e^\prime\rangle$
+$\langle\env, e\rangle
+      \longrightarrow_L\ \langle\env^\prime, e^\prime\rangle$
 and
-$\langle \store, e \rangle
-      \longrightarrow_L\ \langle\store^\second e^\second\rangle$
-then $e^\prime = e^\second$ and $\store^\prime\cong\store^\second$.
+$\langle \env, e \rangle
+      \longrightarrow_L\ \langle\env^\second e^\second\rangle$
+then $e^\prime = e^\second$ and $\env^\prime\cong\env^\second$.
 \end{proposition}
 \begin{proof}
 From Proposition~\ref{proposition:determinacy-eval} and definition
@@ -841,12 +912,13 @@ side-effects, and using the erasure function $\erase{\lL}{\cdot}$.
                                           \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
                                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y)\ )$}\rangle\\
-&\tref{E-WithLblClr}: &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
+&\tref{E-WithLblClr}:
+                      &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
                                           \fbox{\seal\ \lL\ 1}\ \bindLIOp\
                                           \lambda x.  
                                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                           \open\ (f\ x\ y) \rangle\\
-&\tref{E-LIO-Seal}:   &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
+&\tref{E-Seal}:   &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
                                           \fbox{$\lioValp{\Lv\ \lL\ 1}$}\
                                           \bindLIOp\
                                           \lambda x.  
@@ -857,7 +929,7 @@ side-effects, and using the erasure function $\erase{\lL}{\cdot}$.
                                           \fbox{\seal\ \lH\ 2}\ \bindLIOp\
                                           \lambda y. 
                                           \open\ (f\ (\Lv\ \lL\ 1) \ y)\rangle\\
-&\tref{E-LIO-Seal}:   &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
+&\tref{E-Seal}:   &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
                                           \fbox{$\lioValp{\Lv\ \lH\ \hole}$}\
                                           \bindLIOp\
                                           \lambda y. 
@@ -869,7 +941,7 @@ side-effects, and using the erasure function $\erase{\lL}{\cdot}$.
 &\textrm{Evaluate $f$}:
                      &\longrightarrow_\lL^*\ &\langle \{(\lbl,\lL),(\clr,\lH)\},
                                      \fbox{$\open\ (\Lv\ \lH\ \hole)$} \rangle\\
-&\tref{E-LIO-Open}:   &\longrightarrow_\lL\ & \langle \{(\lbl,\lH),(\clr,\lH)\},
+&\tref{E-Open}:   &\longrightarrow_\lL\ & \langle \{(\lbl,\lH),(\clr,\lH)\},
                                           \lioValp{\hole} \rangle\\
 \end{align*}
 \end{example}
@@ -980,12 +1052,12 @@ side-effects, and using the erasure function $\erase{\lL}{\cdot}$.
 \begin{lemma}[Single-step simulation without close]
 \label{lemma:single-step-noclose}
 If $\Gamma \vdash e : \tau$, $e$ does not contain any \close{} terms, and
-${\langle \store, e \rangle
-       \longrightarrow \langle \store^\prime, e^\prime\rangle}$
+${\langle \env, e \rangle
+       \longrightarrow \langle \env^\prime, e^\prime\rangle}$
 then 
 $ \Gamma \vdash e^\prime : \tau$, and
-${\langle \store, \erase{L}{e} \rangle
-       \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$.
+${\langle \env, \erase{L}{e} \rangle
+       \longrightarrow_L \langle \env^\prime, \erase{L}{e^\prime\rangle}}$.
 \end{lemma}
 \begin{proof}
 Lemma~\ref{lemma:type-flow-preservation} proves type preservation, so we limit
@@ -1158,27 +1230,27 @@ In most cases we do not show the environment in the simulation, for clarity.
   Proposition~\ref{proposition:erase}.
 %
 \item Case: $\inferrule
-      {\store[\lbl\mapsto l_1, \clr\mapsto l_2]\\ l_1\flows l_2}
+      {\env[\lbl\mapsto l_1, \clr\mapsto l_2]\\ l_1\flows l_2}
       %----------------------------------------------------------------------
       {\langle \emptyset, E[\withLblClr\ (l_1, l_2)\ \lioValp{e}]\rangle
-                      \longrightarrow \langle \store, E[\lioValp{e}]\rangle}$:
+                      \longrightarrow \langle \env, E[\lioValp{e}]\rangle}$:
       \begin{align*}
       &\ \langle \emptyset, \el{E[\withLblClr\ (l_1,l_2)\ \lioValp{e}]}
          \rangle
        = \langle \emptyset,
          \el{E}[\withLblClr\ (l, c)\ \lioValp{\el{e}}]\rangle\\
       &\ \longrightarrow_L 
-          \langle \store,  \el{\el{E}[\lioValp{\el{e}}]}\rangle
-          =\langle \store,  \el{E}[\lioValp{\el{e}}]\rangle
-          =\langle \store,  \el{E}[\el{\lioValp{e}}]\rangle
-          =\langle \store,  \el{E[\lioValp{e}]} \rangle
+          \langle \env,  \el{\el{E}[\lioValp{\el{e}}]}\rangle
+          =\langle \env,  \el{E}[\lioValp{\el{e}}]\rangle
+          =\langle \env,  \el{E}[\el{\lioValp{e}}]\rangle
+          =\langle \env,  \el{E[\lioValp{e}]} \rangle
       \end{align*}
 %
 \item Case: $\inferrule
-                      {\store(\lbl) \flows l_1 \flows \store(\clr)}
+                      {\env(\lbl) \flows l_1 \flows \env(\clr)}
       %----------------------------------------------------------------------
-      {\langle \store, E[\seal\ l_1\ e]\rangle
-            \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle}$:
+      {\langle \env, E[\seal\ l_1\ e]\rangle
+            \longrightarrow \langle \env, E[\lioValp{\Lv\ l_1\ e}]\rangle}$:
       \begin{itemize}
           \item $l_1 \flows L$:
           \begin{align*}
@@ -1202,32 +1274,32 @@ In most cases we do not show the environment in the simulation, for clarity.
       \end{itemize}
 %
 \item Case: $\inferrule
-              {l^\prime = \store(\lbl) \lub l_1 \\ l^\prime \flows \store(\clr)
-                \\ \store^\prime = \store[\lbl \mapsto l^\prime]}
+              {l^\prime = \env(\lbl) \lub l_1 \\ l^\prime \flows \env(\clr)
+                \\ \env^\prime = \env[\lbl \mapsto l^\prime]}
       % ------------------------------------------------------------------------
-      {\langle \store, E[\open\ (\Lv\ l_1\ e_1)]\rangle
-               \longrightarrow \langle \store^\prime, E[\lioValp{e_1}]\rangle}$:
+      {\langle \env, E[\open\ (\Lv\ l_1\ e_1)]\rangle
+               \longrightarrow \langle \env^\prime, E[\lioValp{e_1}]\rangle}$:
       \begin{itemize}
           \item $l_1 \flows L$:
           \begin{align*}
-                   &\ \langle \store, \el{E[\open\ (\Lv\ l_1\ e_1)]}\rangle
-                    = \langle \store, \el{E}[\open\ (\Lv\ l_1\ \el{e_1})]\rangle\\
+                   &\ \langle \env, \el{E[\open\ (\Lv\ l_1\ e_1)]}\rangle
+                    = \langle \env, \el{E}[\open\ (\Lv\ l_1\ \el{e_1})]\rangle\\
                    \longrightarrow_L &\ 
-                    \langle \store^\prime, \el{\el{E}[\lioValp{\el{e_1}}]}\rangle
-                    =\langle \store^\prime, \el{E}[\lioValp{\el{e_1}}]\rangle\\
-                    &\ =\langle \store^\prime, \el{E}[\el{\lioValp{e_1}}]\rangle
-                       =\langle \store^\prime, \el{E[\lioValp{e_1}]}\rangle
+                    \langle \env^\prime, \el{\el{E}[\lioValp{\el{e_1}}]}\rangle
+                    =\langle \env^\prime, \el{E}[\lioValp{\el{e_1}}]\rangle\\
+                    &\ =\langle \env^\prime, \el{E}[\el{\lioValp{e_1}}]\rangle
+                       =\langle \env^\prime, \el{E[\lioValp{e_1}]}\rangle
           \end{align*}
           \item $l_1 \not\flows L$:
           \begin{align*}
-                   &\ \langle \store, \el{E[\open\ (\Lv\ l_1\ e_1)]}\rangle
-                    = \langle \store, \el{E}[\open\ (\Lv\ l_1\ \hole)]\rangle\\
+                   &\ \langle \env, \el{E[\open\ (\Lv\ l_1\ e_1)]}\rangle
+                    = \langle \env, \el{E}[\open\ (\Lv\ l_1\ \hole)]\rangle\\
                    \longrightarrow_L &\ 
-                    \langle \store^\prime, \el{\el{E}[\lioValp{\hole}]}\rangle
-                    =\langle \store^\prime, \el{E}[\lioValp{\hole}]\rangle\\
-                    &\ =\langle \store^\prime, \el{E}[\el{\lioValp{\hole}}]\rangle
-                       =\langle \store^\prime, \el{E[\lioValp{\hole}]}\rangle
-                       =\langle \store^\prime, \el{E[\lioValp{e_1}]}\rangle
+                    \langle \env^\prime, \el{\el{E}[\lioValp{\hole}]}\rangle
+                    =\langle \env^\prime, \el{E}[\lioValp{\hole}]\rangle\\
+                    &\ =\langle \env^\prime, \el{E}[\el{\lioValp{\hole}}]\rangle
+                       =\langle \env^\prime, \el{E[\lioValp{\hole}]}\rangle
+                       =\langle \env^\prime, \el{E[\lioValp{e_1}]}\rangle
           \end{align*}
       \end{itemize}
 %
@@ -1248,12 +1320,12 @@ In most cases we do not show the environment in the simulation, for clarity.
 \begin{lemma}[Multi-step simulation wihout close]
 \label{lemma:multi-step-noclose}
 If $ \Gamma \vdash e : \tau$, $e$ does not contain any \close{} terms, and
-${\langle \store, e \rangle
-  \longrightarrow^* \langle \store^\prime, e^\prime\rangle}$
+${\langle \env, e \rangle
+  \longrightarrow^* \langle \env^\prime, e^\prime\rangle}$
 then 
 $ \Gamma \vdash e^\prime : \tau$, and
-${\langle \store, \erase{L}{e} \rangle
-  \longrightarrow^*_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$.
+${\langle \env, \erase{L}{e} \rangle
+  \longrightarrow^*_L \langle \env^\prime, \erase{L}{e^\prime\rangle}}$.
 \end{lemma}
 \begin{proof}
 By induction on Lemma~\ref{lemma:single-step-noclose}.
@@ -1264,25 +1336,25 @@ By induction on Lemma~\ref{lemma:single-step-noclose}.
 If $\Gamma \vdash e : \tau$, $e$ does not contain any \close{} terms, and
 \begin{equation*}
 \inferrule
-             {\langle \store, \lioValp{e} \rangle \longrightarrow^*
-                         \langle \store^\prime, \lioValp{v} \rangle
-             \\ \store(\lbl) \flows \store^\prime(\lbl)
-                             \flows \store^\prime(\clr) = \store(\clr)}
+             {\langle \env, \lioValp{e} \rangle \longrightarrow^*
+                         \langle \env^\prime, \lioValp{v} \rangle
+             \\ \env(\lbl) \flows \env^\prime(\lbl)
+                             \flows \env^\prime(\clr) = \env(\clr)}
             % ------------------------------------------------------------------
-      {\langle \store, E[\close\ \lioValp{e}]\rangle \longrightarrow
-          \langle \store, E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}] \rangle}
+      {\langle \env, E[\close\ \lioValp{e}]\rangle \longrightarrow
+          \langle \env, E[\lioValp{\Lv\ \env^\prime(\lbl)\ v}] \rangle}
 \end{equation*}
 then 
 $ \Gamma \vdash v : \tau$, and
 \begin{equation*}
 \inferrule
-        {\langle \store, \el{\lioValp{e}} \rangle \longrightarrow_L^*
-                \langle \store^\prime, \el{\lioValp{v}} \rangle 
-        \\ \store(\lbl) \flows \store^\prime(\lbl)
-                        \flows \store^\prime(\clr) = \store(\clr)}
+        {\langle \env, \el{\lioValp{e}} \rangle \longrightarrow_L^*
+                \langle \env^\prime, \el{\lioValp{v}} \rangle 
+        \\ \env(\lbl) \flows \env^\prime(\lbl)
+                        \flows \env^\prime(\clr) = \env(\clr)}
       % --------------------------------------------------------------------
-   {\langle \store, \el{E[\close\ \lioValp{e}]}\rangle \longrightarrow_L
-      \langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}]} \rangle}.
+   {\langle \env, \el{E[\close\ \lioValp{e}]}\rangle \longrightarrow_L
+      \langle \env, \el{E[\lioValp{\Lv\ \env^\prime(\lbl)\ v}]} \rangle}.
 \end{equation*}
 \end{lemma}
 \begin{proof}
@@ -1290,30 +1362,30 @@ $ \Gamma \vdash v : \tau$, and
 The premise directly follows from Lemma~\ref{lemma:multi-step-noclose}, it
 remains for us to show:
 \begin{equation*}
-      \langle \store, \el{E[\close\ \lioValp{e}]}\rangle \longrightarrow_L
-      \langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}]} \rangle
+      \langle \env, \el{E[\close\ \lioValp{e}]}\rangle \longrightarrow_L
+      \langle \env, \el{E[\lioValp{\Lv\ \env^\prime(\lbl)\ v}]} \rangle
 \end{equation*}
 for cases:
 \begin{itemize}
-\item $\store^\prime(\lbl) \flows L$:
+\item $\env^\prime(\lbl) \flows L$:
 \begin{align*}
-   &\ \langle \store, \el{E[\close\ \lioValp{e}]}\rangle
-   = \langle \store, \el{e}[\close\ \lioValp{\el{e}}]\rangle\\
-   \longrightarrow_L &\ \langle \store,
-               \el{\el{E}[\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}]} \rangle
-   =\langle \store, \el{E}[\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}] \rangle\\
-   &\ =\langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}]} \rangle
+   &\ \langle \env, \el{E[\close\ \lioValp{e}]}\rangle
+   = \langle \env, \el{e}[\close\ \lioValp{\el{e}}]\rangle\\
+   \longrightarrow_L &\ \langle \env,
+               \el{\el{E}[\lioValp{\Lv\ \env^\prime(\lbl)\ \el{v}}]} \rangle
+   =\langle \env, \el{E}[\lioValp{\Lv\ \env^\prime(\lbl)\ \el{v}}] \rangle\\
+   &\ =\langle \env, \el{E[\lioValp{\Lv\ \env^\prime(\lbl)\ v}]} \rangle
 \end{align*}
 
-\item $\store^\prime(\lbl) \not\flows L$:
+\item $\env^\prime(\lbl) \not\flows L$:
 \begin{align*}
-   &\ \langle \store, \el{E[\close\ \lioValp{e}]}\rangle
-   = \langle \store, \el{e}[\close\ \lioValp{\el{e}}]\rangle\\
-   \longrightarrow_L &\ \langle \store,
-               \el{\el{E}[\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}]} \rangle
-   =\langle \store, \el{E}[\lioValp{\Lv\ \store^\prime(\lbl)\ \hole}] \rangle\\
-   &\ =\langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ \hole}]} \rangle
-   =\langle \store, \el{E[\lioValp{\Lv\ \store^\prime(\lbl)\ v}]} \rangle
+   &\ \langle \env, \el{E[\close\ \lioValp{e}]}\rangle
+   = \langle \env, \el{e}[\close\ \lioValp{\el{e}}]\rangle\\
+   \longrightarrow_L &\ \langle \env,
+               \el{\el{E}[\lioValp{\Lv\ \env^\prime(\lbl)\ \el{v}}]} \rangle
+   =\langle \env, \el{E}[\lioValp{\Lv\ \env^\prime(\lbl)\ \hole}] \rangle\\
+   &\ =\langle \env, \el{E[\lioValp{\Lv\ \env^\prime(\lbl)\ \hole}]} \rangle
+   =\langle \env, \el{E[\lioValp{\Lv\ \env^\prime(\lbl)\ v}]} \rangle
 \end{align*}
 \end{itemize}
 \end{proof}
@@ -1321,12 +1393,12 @@ for cases:
 \begin{lemma}[Single-step simulation]
 \label{lemma:single-step}
 If $\Gamma \vdash e : \tau$, and
-${\langle \store, e \rangle
-       \longrightarrow \langle \store^\prime, e^\prime\rangle}$
+${\langle \env, e \rangle
+       \longrightarrow \langle \env^\prime, e^\prime\rangle}$
 then 
 $ \Gamma \vdash e^\prime : \tau$, and
-${\langle \store, \erase{L}{e} \rangle
-       \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$.
+${\langle \env, \erase{L}{e} \rangle
+       \longrightarrow_L \langle \env^\prime, \erase{L}{e^\prime\rangle}}$.
 \end{lemma}
 \begin{proof}
 Follows directly from
@@ -1337,12 +1409,12 @@ and~\ref{lemma:single-step-close}.
 \begin{lemma}[Multi-step simulation]
 \label{lemma:multi-step}
 If $ \Gamma \vdash e : \tau$, and
-${\langle \store, e \rangle
-  \longrightarrow^* \langle \store^\prime, e^\prime\rangle}$
+${\langle \env, e \rangle
+  \longrightarrow^* \langle \env^\prime, e^\prime\rangle}$
 then 
 $ \Gamma \vdash e^\prime : \tau$, and
-${\langle \store, \erase{L}{e} \rangle
-  \longrightarrow^*_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$.
+${\langle \env, \erase{L}{e} \rangle
+  \longrightarrow^*_L \langle \env^\prime, \erase{L}{e^\prime\rangle}}$.
 \end{lemma}
 \begin{proof}
 By induction on Lemma~\ref{lemma:single-step}.
@@ -1373,17 +1445,17 @@ $\Lv\ \lH\ 8 =_\lL \Lv\ \lM\ 9$.
 
 
 \begin{definition}[$L$-view]
-Two values in environents $\store^1$ and $\store^2$, are equivalent according
+Two values in environents $\env^1$ and $\env^2$, are equivalent according
 to the equivalence relation $\approx_L$ if they are not observable,
 or the pairs are $L$-equivalent.
 Specifically, 
 \begin{equation*}
 \inferrule
   {(\Gamma \vdash e_j : \Lvalue\ {\ell}\ \tau)_{j=1,2} \\
-  (\store^j(\lbl)\not\flows L)_{j=1,2}\lor (e_1=_L e_2)}
+  (\env^j(\lbl)\not\flows L)_{j=1,2}\lor (e_1=_L e_2)}
   % --------------------------------------------------------------------------
-     {\langle \store^1, \lioValp{e_1} \rangle
-                             \approx_L \langle \store^2, \lioValp{e_2}\rangle}
+     {\langle \env^1, \lioValp{e_1} \rangle
+                             \approx_L \langle \env^2, \lioValp{e_2}\rangle}
 \end{equation*}
 \end{definition}
 %
@@ -1418,16 +1490,16 @@ $l_\lE \flows L \flows l_\lE^\prime$ and $l \not\flows L$,
 &\land
   \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_1)\rangle
   \longrightarrow^*
-  \langle \store^1, \lioValp{\Lv\ l_1\ v_1}\rangle\\
+  \langle \env^1, \lioValp{\Lv\ l_1\ v_1}\rangle\\
 %
 &\land
   \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_2)\rangle
   \longrightarrow^*
-  \langle \store^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
+  \langle \env^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
 &\Rightarrow 
-  \langle \store^1, \lioValp{\Lv\ l_1\ v_1}\rangle
+  \langle \env^1, \lioValp{\Lv\ l_1\ v_1}\rangle
   \approx_{L}
-  \langle \store^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
+  \langle \env^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
 \end{align*}
 \end{theorem}
 
@@ -1449,36 +1521,36 @@ From Lemma~\ref{lemma:multi-step}, for $j=1,2$, we have
 = \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\
       (\el{e}\ (\Lv\ l\ \hole))\rangle
 \longrightarrow^*_L
-\langle \store^j, \el{\lioValp{\Lv\ l_j\ v_j}}\rangle
+\langle \env^j, \el{\lioValp{\Lv\ l_j\ v_j}}\rangle
 \end{equation*}
 From the determinacy of $\longrightarrow_L$, given in
 Proposition~\ref{proposition:determinacy-evalL},
 the end environments and terms are equivalent, i.e.,
-$\store^1\cong\store^2$, and
+$\env^1\cong\env^2$, and
 $\el{\lioValp{\Lv\ l_1\ v_1}}=\el{\lioValp{\Lv\ l_2\ v_2}}$.
 Hence, we have cases:
 \begin{enumerate}
 \item For both $l_j\flows L$ and $l_j \not\flows L$, but
-$\store^j(\lbl) \not\flows L$,
-$\langle \store^1, \el{\lioValp{\hole}}\rangle
+$\env^j(\lbl) \not\flows L$,
+$\langle \env^1, \el{\lioValp{\hole}}\rangle
 \approx_{L}
-\langle \store^2, \el{\lioValp{\hole}}\rangle$
+\langle \env^2, \el{\lioValp{\hole}}\rangle$
 follows from 
-$\store^1\cong\store^2$ and definition of~$\approx_{L}$.
+$\env^1\cong\env^2$ and definition of~$\approx_{L}$.
 %
-\item Similarly, for $l_j\not\flows L$ and $\store^j(\lbl) \flows L$,
-$\langle \store^1, \el{\lioValp{\Lv\ l_1\ \hole}}\rangle
+\item Similarly, for $l_j\not\flows L$ and $\env^j(\lbl) \flows L$,
+$\langle \env^1, \el{\lioValp{\Lv\ l_1\ \hole}}\rangle
 \approx_{L}
-\langle \store^2, \el{\lioValp{\Lv\ l_2\ \hole}}\rangle$
+\langle \env^2, \el{\lioValp{\Lv\ l_2\ \hole}}\rangle$
 follows from
-$\store^1\cong\store^2, l_1=l_2$ and definition of~$\approx_{L}$.
+$\env^1\cong\env^2, l_1=l_2$ and definition of~$\approx_{L}$.
 %
-\item For $l_j\not\flows L$ and $\store^j(\lbl) \flows L$,
-$\langle \store^1, {\lioValp{\Lv\ l_1\ v_1}}\rangle
+\item For $l_j\not\flows L$ and $\env^j(\lbl) \flows L$,
+$\langle \env^1, {\lioValp{\Lv\ l_1\ v_1}}\rangle
 \approx_{L}
-\langle \store^2, {\lioValp{\Lv\ l_2\ v_2}}\rangle$
+\langle \env^2, {\lioValp{\Lv\ l_2\ v_2}}\rangle$
 follows from
-$\store^1\cong\store^2, l_1=l_2, v_1=v_2$
+$\env^1\cong\env^2, l_1=l_2, v_1=v_2$
 and definition of~$\approx_{L}$.
 \end{enumerate}
 \end{proof}
@@ -1506,16 +1578,16 @@ $l_\lE \flows L \flows l_\lE^\prime$ and $l_j \not\flows L$ for $j=1,2$,
 &\land
   \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_1)\rangle
   \longrightarrow^*
-  \langle \store^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle\\
+  \langle \env^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle\\
 %
 &\land
   \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_2)\rangle
   \longrightarrow^*
-  \langle \store^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
+  \langle \env^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
 &\Rightarrow 
-  \langle \store^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle
+  \langle \env^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle
   \approx_{L}
-  \langle \store^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
+  \langle \env^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
 \end{align*}
 \end{corollary}
 \begin{proof}
