@@ -219,8 +219,8 @@ integer types and integer operations, e.g., addition.
                            \ |\  (\tau,\tau)                % tuple
                            \ |\  \Bool                      % bool
                            \ |\  \ell                       % Label
-                           \ |\  \Lvalue\ \ell\ e           % Lvalue
-                           \ |\  \LIOp\ e                \\ % LIO'
+                           \ |\  \Lvalue\ \tau_1\ \tau_2    % Lvalue
+                           \ |\  \LIOp\ \tau             \\ % LIO'
 \\
 \textrm{Program:} && p    &\Coloneqq  (\letbind{x}{e}{})^*(\withLblClr\ e\ e)\\
 \\
@@ -390,6 +390,7 @@ any context.}
 \begin{sos}
 \begin{align*}
 &&E&   ::=  \cdots
+       \ |\  \withLblClr\ E\ e
        \ |\  \seal\ E\ e
        \ |\  \seal\ v\ E
        \ |\  \open\ E                 
@@ -454,8 +455,9 @@ any context.}
 
 \begin{example}[Example with no side-effects]\label{ex:pure}
 Let us consider a simple example, working only on pure terms. In this example
-we are given two labeled values, one public, with a label \lL{}, and another, secret,
-with label \lH. Adding the two we expect the resulting value to be a labeled \lH.
+we are given two labeled values, one public, with a label \lL{}, and another,
+secret, with label \lH. Adding the two we expect the resulting value to be
+labeled \lH.
 
 \begin{align*}
 &                     && \fbox{\Lv\ \lL\ 1}\ \bind\ \lambda x.\
@@ -474,10 +476,6 @@ with label \lH. Adding the two we expect the resulting value to be a labeled \lH
                          \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
 &\tref{E-Ret}:         & \longrightarrow &
-                         \Lv\ \lpure\ (\fbox{1 + 2})\ 
-                         \bind\ \lambda x.\Lv\ \lL\ x
-                         \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Add}:         & \longrightarrow &
                          \fbox{$\Lv\ \lpure\ 3$}\ 
                          \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
@@ -628,7 +626,8 @@ information flow (flow from a secret value to a public value).
 
 \begin{definition}[Pure term]
 A pure term $e$ does not depend on the environment and may take an evaluation
-step regardless of whether the environment is empty or not.
+step regardless of whether the environment is empty or not. The semantics of
+pure terms is given in Operational~Semantics~\ref{sos:pure}.
 \end{definition}
 
 \begin{proposition}[Determinacy of $(\longrightarrow)$]
@@ -666,7 +665,7 @@ as premises to evaluation rules, an information flow violation results
 in a term getting stuck. Note that this lemma encompasses the pure case
 where $\store=\emptyset$.
 
-Proving progress for the pure case, i.e. terms that do not depend on an 
+Proving progress for the pure case, i.e., terms that do not depend on an 
 environment is standard. However, the proof of progress for terms relying
 on an environment, e.g., \seal{}, requires the definition of ``well-behaved''
 terms. A term that does not violate the information flow control premises
@@ -701,6 +700,11 @@ function $\erase{L}{e}$, that we define below:
 \erase{L}{[\cdot]}&=[\cdot]\\
 \erase{L}{E\ e} &= \erase{L}{E}\ \erase{L}{e}\\
 \erase{L}{(E,e)}  &= (\erase{L}{E}, \erase{L}{e})\\
+\erase{L}{(v,E)}  &= (\erase{L}{v}, \erase{L}{E})\\
+\erase{L}{\Lv\ E\ e} &= \begin{cases}
+                          \Lv\ \erase{L}{E}\ \hole & \erase{L}{E} \not\flows L\\
+                          \Lv\ \erase{L}{E}\ \erase{L}{e} & \textrm{otherwise}\\
+                        \end{cases}\\
 \erase{L}{\Lv\ l\ E} &= \begin{cases}
                           \Lv\ l\ \hole &  l \not \flows L\\
                           \Lv\ l\ \erase{L}{E} & \textrm{otherwise}\\
@@ -711,13 +715,16 @@ function $\erase{L}{e}$, that we define below:
 \erase{L}{\return\ E}  &= \return\ \erase{L}{E}\\
 \erase{L}{E\ \diamond\ e}  &= \erase{L}{E}\ \diamond\ \erase{L}{e}
                       \textrm{, where }\diamond = \{\bind, \lub, \glb\} \\
+\\
+\erase{L}{\withLblClr\ E\ e}&= \withLblClr\ \erase{L}{E}\ \erase{L}{e}\\
 \erase{L}{\seal\ E\ e}          &= \seal\ \erase{L}{E}\ \erase{L}{e}\\
+\erase{L}{\seal\ v\ E}          &= \seal\ \erase{L}{v}\ \erase{L}{E}\\
 \erase{L}{\open\ E}             &= \open\ \erase{L}{E}\\
 \erase{L}{\close\ E}             &= \close\ \erase{L}{E}\\
 \erase{L}{\returnLIOp\ E} &= \returnLIOp\ \erase{L}{E}\\
 \erase{L}{E\ \bindLIOp\ e}  &= \erase{L}{E}\ \bindLIOp\ \erase{L}{e}\\
+\erase{L}{v\ \bindLIOp\ E}  &= \erase{L}{v}\ \bindLIOp\ \erase{L}{E}\\
 \erase{L}{\lioValp{E}} &= \lioValp{\erase{L}{E}} \\
-\erase{L}{\withLblClr\ e_1\ e_2}&= \withLblClr\ \erase{L}{e_1}\ \erase{L}{e_2}\\
 \end{align*}
 
 Informally, to an observer reading labeled values with label at most $L$,
@@ -757,30 +764,35 @@ of $\erase{L}{\cdot}$.
 Let us consider Example~\ref{ex:pure}, working only on pure terms, and 
 using the erasure function $\erase{\lL}{\cdot}$.
 \begin{align*}
-&                     && \Lv\ \lL\ 1\ \bind\ \lambda x.\
+&                     && \fbox{\Lv\ \lL\ 1}\ \bind\ \lambda x.\
                          \Lv\ \lH\ 2\ \bind\ \lambda y.\
                          \return\ (x + y) \\
-&\tref{E-Bind}:        & \longrightarrow_\lL\ &
-                         \Lv\ \lH\ \hole\ \bind\ \lambda y.
+&\tref{E-Bind}:        & \longrightarrow_\lL\  &
+                         \fbox{$\Lv\ \lH\ \hole$}\ \bind\ \lambda y.
                          \return\ (1 + y)\
                          \bind\ \lambda x.\Lv\ \lL\ x\\
-&\tref{E-Bind}:        & \longrightarrow_\lL\ &
-                         \return\ (1 + \hole)\
+&\tref{E-Bind}:        & \longrightarrow_\lL\  &
+                         \return\ \fbox{$(1 + \hole)$}\
                          \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-Ret}          & \longrightarrow_\lL\ &
-                         \Lv\ \lpure\ (1 + \hole)\ 
+&\tref{E-Add}:         & \longrightarrow_\lL\  &
+                         \fbox{$\return\ \hole$}\
                          \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-RUnit}:       & \longrightarrow_\lL\ &
-                         \Lv\ (\lpure\lub\lL)\ (1 + \hole)\ 
+&\tref{E-Ret}:         & \longrightarrow_\lL\  &
+                         \fbox{$\Lv\ \lpure\ \hole$}\ 
+                         \bind\ \lambda x.\Lv\ \lL\ x
                          \bind\ \lambda x.\Lv\ \lH\ x\\
-&\tref{E-RUnit}:       & \longrightarrow_\lL\ &
-                         \Lv\ (\lL\lub\lH)\ (1 + \hole)\\
-&\tref{E-Join}:        & \longrightarrow_\lL\ &
-                         \Lv\ \lH\ (1 + \hole)\\
-&                      & \longrightarrow_\lL\ &
-                        \Lv\ \lH\ \hole
+&\tref{E-RUnit}:       & \longrightarrow_\lL\  &
+                         \Lv\ (\fbox{$\lpure\lub\lL$})\ \hole\ 
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-Join}:        & \longrightarrow_\lL\  &
+                         \fbox{$\Lv\ \lL\ \hole$}\ 
+                         \bind\ \lambda x.\Lv\ \lH\ x\\
+&\tref{E-RUnit}:       & \longrightarrow_\lL\  &
+                         \Lv\ (\fbox{$\lL\lub\lH$})\ \hole\\
+&\tref{E-Join}:        & \longrightarrow_\lL\  &
+                         \Lv\ \lH\ \hole\\
 \end{align*}
 \end{example}
 
@@ -789,43 +801,47 @@ Let us consider Example~\ref{ex:sideeffect}, working on terms with
 side-effects, and using the erasure function $\erase{\lL}{\cdot}$.
 \begin{align*}
 &                     && {\tt let}\ f\ =\lambda x_l. \lambda y_l. x_l\ \bind\
-                                        \lambda x.  y_l\ \bind\
-                                        \lambda y.  \return\ (x + y)\\
-&                     && {\tt in}\ \withLblClr (\lL, \lH)\ (\
+                                        \lambda x. y_l\ \bind\
+                                        \lambda y. \return\ (x + y)\\
+&                     && {\tt in}\ \withLblClr\ (\lL, \lH)\ (\
                                 \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
                                 \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
                                 \open\ (f\ x\ y)\ )\\
-&\tref{E-LetVal}:     & \longrightarrow_\lL & \withLblClr (\lL, \lH)\ (\
+&\tref{E-Let}:        & \longrightarrow_\lL\  & \langle \emptyset,
+                                          \fbox{$\withLblClr\ (\lL, \lH)\ (\
                                           \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
                                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
-                                          \open\ (f\ x\ y)\ )\\
-&\tref{E-WithLblClr}:
-   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
-                           \seal\ \lL\ 1\ \bindLIOp\ \lambda x.  
-                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
-                           \open\ (f\ x\ y) \rangle\\
-&\tref{E-LIO-Seal}:
-   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\},
-                           \lioValp{\Lv\ \lL\ 1}\ \bindLIOp\ \lambda x.
-                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
-                           \open\ (f\ x\ y) \rangle\\
+                                          \open\ (f\ x\ y)\ )$}\rangle\\
+&\tref{E-WithLblClr}: &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \fbox{\seal\ \lL\ 1}\ \bindLIOp\
+                                          \lambda x.  
+                                          \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y) \rangle\\
+&\tref{E-LIO-Seal}:   &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \fbox{$\lioValp{\Lv\ \lL\ 1}$}\
+                                          \bindLIOp\
+                                          \lambda x.  
+                                          \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
+                                          \open\ (f\ x\ y) \rangle\\
 &\tref{E-LIO$^\prime$-Bind}:
-   & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                           \seal\ \lH\ 2\ \bindLIOp\ \lambda y. 
-                           \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
-&\tref{E-LIO-Seal}:
-  & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                          \lioValp{\Lv\ \lH\ \hole}\ \bindLIOp\ \lambda y.
-                          \open\ (f\ (\Lv\ \lL\ 1) \ y) \rangle\\
-&\tref{E-LIO$^\prime$-Bind}
-  & \longrightarrow_\lL & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                          \open\ (f\ (\Lv\ \lL\ 1)\ (\Lv\ \lH\ \hole)) \rangle\\
+                      &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \fbox{\seal\ \lH\ 2}\ \bindLIOp\
+                                          \lambda y. 
+                                          \open\ (f\ (\Lv\ \lL\ 1) \ y)\rangle\\
+&\tref{E-LIO-Seal}:   &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \fbox{$\lioValp{\Lv\ \lH\ \hole}$}\
+                                          \bindLIOp\
+                                          \lambda y. 
+                                          \open\ (f\ (\Lv\ \lL\ 1) \ y)\rangle\\
+&\tref{E-LIO$^\prime$-Bind}:
+                      &\longrightarrow_\lL\ & \langle \{(\lbl,\lL),(\clr,\lH)\},
+                                          \open\ (\fbox{$f\ (\Lv\ \lL\ 1)\
+                                                 (\Lv\ \lH\ \hole)$}) \rangle\\
 &\textrm{Evaluate $f$}:
-  & \longrightarrow_\lL^* & \langle \store=\{(\lbl,\lL),(\clr,\lH)\}, 
-                            \open\ (\Lv\ \lH\ \hole) \rangle\\
-&\tref{E-LIO-Open}:
-  & \longrightarrow_\lL & \langle \store=\{(\lbl,\lH),(\clr,\lH)\}, 
-                          \lioValp{\hole} \rangle\\
+                     &\longrightarrow_\lL^*\ &\langle \{(\lbl,\lL),(\clr,\lH)\},
+                                     \fbox{$\open\ (\Lv\ \lH\ \hole)$} \rangle\\
+&\tref{E-LIO-Open}:   &\longrightarrow_\lL\ & \langle \{(\lbl,\lH),(\clr,\lH)\},
+                                          \lioValp{\hole} \rangle\\
 \end{align*}
 \end{example}
 
@@ -848,6 +864,7 @@ side-effects, and using the erasure function $\erase{\lL}{\cdot}$.
 \begin{enumerate}
 %
 \item All follow directly from the induction on evaluation contexts and terms.
+      We show several cases below.
   \begin{enumerate}
   \item Let $E := [\cdot]\ e_0$, it follows that
         $\erase{L}{E} := [\cdot]\ \erase{L}{e_0}$, and\\
@@ -892,7 +909,6 @@ side-effects, and using the erasure function $\erase{\lL}{\cdot}$.
         \end{equation*}
         from which $\erase{L}{E[e]} = \erase{L}{E}[\erase{L}{e}]$ follows
         directly.
-  \item $\ldots$
   \end{enumerate}
 %
 \item $\erase{L}{[e_2/x]e_1} = \erase{L}{ (\lambda x . e_1)\ e_2}
@@ -932,8 +948,9 @@ side-effects, and using the erasure function $\erase{\lL}{\cdot}$.
 \end{proof}
 
 
-\begin{lemma}[Single-step simulation]\label{lemma:single-step}
-If $ \Gamma \vdash e : \tau$, and
+\begin{lemma}[Single-step simulation without close]
+\label{lemma:single-step-noclose}
+If $\Gamma \vdash e : \tau$, $e$ does not contain any \close{} terms, and
 ${\langle \store, e \rangle
        \longrightarrow \langle \store^\prime, e^\prime\rangle}$
 then 
@@ -975,13 +992,13 @@ In most cases we do not show the environment in the simulation, for clarity.
 \item Case: $E[\ifel{\false}{e_1}{e_2}] \longrightarrow E[e_2]$: \\
   Follows similarly.
 %
-\item Case: $\inferrule
-             {e_1 \longrightarrow {e_1}^\prime}
-  %-----------------------------------------------------------------------------
-  {E[\letbind{x}{e_1}{e_2}] \longrightarrow E[\letbind{x}{{e_1}^\prime}{e_2}]}$:
-  \\ Follows similarly.
+%\item Case: $\inferrule
+%             {e_1 \longrightarrow {e_1}^\prime}
+%  %-----------------------------------------------------------------------------
+%  {E[\letbind{x}{e_1}{e_2}] \longrightarrow E[\letbind{x}{{e_1}^\prime}{e_2}]}$:
+%  \\ Follows similarly.
 %
-\item Case: $E[\letbind{x}{v}{e}] \longrightarrow E[[v/x]e]$:\\
+\item Case: $E[\letbind{x}{e_1}{e_2}] \longrightarrow E[[e_1/x]e_2]$:\\
   Follows similarly.
 %
 \item Case: $E[\pi_i\ (e_1,e_2)]  \longrightarrow E[e_i]$:\\
@@ -1127,12 +1144,12 @@ In most cases we do not show the environment in the simulation, for clarity.
 \item Case: $\inferrule
                       {\store(\lbl) \flows l_1 \flows \store(\clr)}
       %----------------------------------------------------------------------
-      {\langle \store, E[\seal\ e\ l_1]\rangle
+      {\langle \store, E[\seal\ l_1\ e]\rangle
             \longrightarrow \langle \store, E[\lioValp{\Lv\ l_1\ e}]\rangle}$:
       \begin{itemize}
           \item $l_1 \flows L$:
           \begin{align*}
-                &\ \el{E[\seal\ e\ l_1]} = \el{E}[\seal\ \el{e}\ l_1]\\
+                &\ \el{E[\seal\ l_1\ e]} = \el{E}[\seal\ l_1\ \el{e}]\\
                 \longrightarrow_L &\ 
                 \el{\el{E}[\lioValp{\Lv\ l_1\ \el{e}}]}
                 = \el{E}[\lioValp{\Lv\ l_1\ \el{e}}]\\
@@ -1141,7 +1158,7 @@ In most cases we do not show the environment in the simulation, for clarity.
           \end{align*}
           \item $l_1 \not\flows L$:
           \begin{align*}
-                &\ \el{E[\seal\ e\ l_1]} = \el{E}[\seal\ \el{e}\ l_1]\\
+                &\ \el{E[\seal\ l_1\ e]} = \el{E}[\seal\ l_1\ \el{e}]\\
                 \longrightarrow_L &\ 
                 \el{\el{E}[\lioValp{\Lv\ l_1\ \el{e}}]}
                 = \el{E}[\lioValp{\Lv\ l_1\ \hole}]\\
@@ -1181,53 +1198,6 @@ In most cases we do not show the environment in the simulation, for clarity.
           \end{align*}
       \end{itemize}
 %
-\Red{
-\item Case: $\inferrule
-             {\langle \store, \lioValp{e} \rangle \longrightarrow
-                         \langle \store^\prime, \lioValp{v} \rangle
-             \\ \store(\lbl) \flows \store^\prime(\lbl)
-                             \flows \store^\prime(\clr) = \store(\clr)}
-            % ------------------------------------------------------------------
-      {\langle \store, \close\ \lioValp{e}\rangle \longrightarrow
-          \langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ v} \rangle}$:\\
-
-In both cases we want to show simulation with:
-\begin{equation*}
-\inferrule
-        {\langle \store, \el{\lioValp{e}} \rangle \longrightarrow_L
-                \langle \store^\prime, \el{\lioValp{e^\prime}} \rangle 
-        \\ \store(\lbl) \flows \store^\prime(\lbl)
-                        \flows \store^\prime(\clr) = \store(\clr)}
-      % --------------------------------------------------------------------
-   {\langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L
-      \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle}
-\end{equation*}
-Assuming the premise follows, it remains for us to show:
-\begin{equation*}
-      \langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle
-\end{equation*}
-      \begin{itemize}
-          \item $\store^\prime(\lbl) \flows L$:
-          \begin{align*}
-             &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
-             = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
-             \longrightarrow_L &\ \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{e^\prime}}} \rangle
-             =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \el{e^\prime}} \rangle
-             =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle
-          \end{align*}
-
-          \item $\store^\prime(\lbl) \not\flows L$:
-          \begin{align*}
-             &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
-             = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
-             \longrightarrow_L &\ \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{e^\prime}}} \rangle
-             =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \hole} \rangle\\
-             &\ =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \hole}} \rangle
-             =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ e^\prime}} \rangle
-          \end{align*}
-      \end{itemize}
-}
-%
 \item Case: $E[\returnLIOp\ e] \longrightarrow E[\lioValp{e}]$:\\
   Follows from definition of $\el{\cdot}$ and
   Proposition~\ref{proposition:erase}.
@@ -1242,7 +1212,97 @@ Assuming the premise follows, it remains for us to show:
 \end{enumerate}
 \end{proof}
 
-\begin{lemma}[Multi-step simulation]\label{lemma:multi-step}
+\begin{lemma}[Multi-step simulation wihout close]
+\label{lemma:multi-step-noclose}
+If $ \Gamma \vdash e : \tau$, $e$ does not contain any \close{} terms, and
+${\langle \store, e \rangle
+  \longrightarrow^* \langle \store^\prime, e^\prime\rangle}$
+then 
+$ \Gamma \vdash e^\prime : \tau$, and
+${\langle \store, \erase{L}{e} \rangle
+  \longrightarrow^*_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$.
+\end{lemma}
+\begin{proof}
+By induction on Lemma~\ref{lemma:single-step-noclose}.
+\end{proof}
+
+\begin{lemma}[Single-step simulation of $\close$]
+\label{lemma:single-step-close}
+If $\Gamma \vdash e : \tau$, $e$ does not contain any \close{} terms, and
+\begin{equation*}
+\inferrule
+             {\langle \store, \lioValp{e} \rangle \longrightarrow^*
+                         \langle \store^\prime, \lioValp{v} \rangle
+             \\ \store(\lbl) \flows \store^\prime(\lbl)
+                             \flows \store^\prime(\clr) = \store(\clr)}
+            % ------------------------------------------------------------------
+      {\langle \store, \close\ \lioValp{e}\rangle \longrightarrow
+          \langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ v} \rangle}
+\end{equation*}
+then 
+$ \Gamma \vdash v : \tau$, and
+\begin{equation*}
+\inferrule
+        {\langle \store, \el{\lioValp{e}} \rangle \longrightarrow_L^*
+                \langle \store^\prime, \el{\lioValp{v}} \rangle 
+        \\ \store(\lbl) \flows \store^\prime(\lbl)
+                        \flows \store^\prime(\clr) = \store(\clr)}
+      % --------------------------------------------------------------------
+   {\langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L
+      \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ v}} \rangle}.
+\end{equation*}
+\end{lemma}
+\begin{proof}
+%
+The premise directly follows from Lemma~\ref{lemma:multi-step-noclose}, it
+remains for us to show:
+\begin{equation*}
+      \langle \store, \el{\close\ \lioValp{e}}\rangle \longrightarrow_L
+      \langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ v}} \rangle
+\end{equation*}
+for cases:
+\begin{itemize}
+\item $\store^\prime(\lbl) \flows L$:
+\begin{align*}
+   &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
+   = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
+   \longrightarrow_L &\ \langle \store,
+               \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}} \rangle
+   =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}} \rangle
+   =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ v}} \rangle
+\end{align*}
+
+\item $\store^\prime(\lbl) \not\flows L$:
+\begin{align*}
+   &\ \langle \store, \el{\close\ \lioValp{e}}\rangle
+   = \langle \store, \close\ \lioValp{\el{e}}\rangle\\
+   \longrightarrow_L &\ \langle \store,
+               \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \el{v}}} \rangle
+   =\langle \store, \lioValp{\Lv\ \store^\prime(\lbl)\ \hole} \rangle\\
+   &\ =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ \hole}} \rangle
+   =\langle \store, \el{\lioValp{\Lv\ \store^\prime(\lbl)\ v}} \rangle
+\end{align*}
+\end{itemize}
+\end{proof}
+
+\begin{lemma}[Single-step simulation]
+\label{lemma:single-step}
+If $\Gamma \vdash e : \tau$, and
+${\langle \store, e \rangle
+       \longrightarrow \langle \store^\prime, e^\prime\rangle}$
+then 
+$ \Gamma \vdash e^\prime : \tau$, and
+${\langle \store, \erase{L}{e} \rangle
+       \longrightarrow_L \langle \store^\prime, \erase{L}{e^\prime\rangle}}$.
+\end{lemma}
+\begin{proof}
+Follows directly from
+Lemma~\ref{lemma:single-step-noclose},~\ref{lemma:multi-step-noclose},
+and~\ref{lemma:single-step-close}.
+\end{proof}
+
+\begin{lemma}[Multi-step simulation]
+\label{lemma:multi-step}
 If $ \Gamma \vdash e : \tau$, and
 ${\langle \store, e \rangle
   \longrightarrow^* \langle \store^\prime, e^\prime\rangle}$
