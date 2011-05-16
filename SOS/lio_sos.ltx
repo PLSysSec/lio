@@ -2,6 +2,7 @@
 \usepackage[margin=1in]{geometry} 
 \usepackage{float}
 \usepackage{amsmath,amssymb,amsfonts,amsthm,stmaryrd,txfonts, mathabx}
+\DeclareMathOperator{\dom}{dom}
 \usepackage{float}
 \usepackage{mathpartir}
 \usepackage{hyperref}
@@ -624,6 +625,15 @@ information flow (flow from a secret value to a public value).
 
 
 \subsection{Language properties}
+\begin{definition}[Environment equivalence]
+Equivalence of two environments $\store$ and $\store^\prime$ is given by:
+\begin{equation*}
+\inferrule
+  {\dom(\store) = \dom(\store^\prime) \\
+  \forall x\in \dom(\store).\ \store(x)=\store^\prime(x)}
+  {\store \cong \store^\prime}.
+\end{equation*}
+\end{definition}
 
 \begin{definition}[Pure term]
 A pure term $e$ does not depend on the environment and may take an evaluation
@@ -642,6 +652,15 @@ $E$: $e = E[e^\prime]$.
 \item
 If $e \longrightarrow\ e^\prime$ and $e \longrightarrow\ e^\second$
 then $e^\prime = e^\second$.
+%
+\item
+If
+$\langle\store, e\rangle
+      \longrightarrow\ \langle\store^\prime, e^\prime\rangle$
+and
+$\langle \store, e \rangle
+      \longrightarrow\ \langle\store^\second e^\second\rangle$
+then $e^\prime = e^\second$ and $\store^\prime\cong\store^\second$.
 \end{itemize}
 \end{proposition}
 \begin{proof}
@@ -755,6 +774,15 @@ and, similarly, for terms in an environment,
 \item
 If $e \longrightarrow_L\ e^\prime$ and
 $e \longrightarrow_L\ e^\second$ then $e^\prime = e^\second$.
+%
+\item
+If
+$\langle\store, e\rangle
+      \longrightarrow_L\ \langle\store^\prime, e^\prime\rangle$
+and
+$\langle \store, e \rangle
+      \longrightarrow_L\ \langle\store^\second e^\second\rangle$
+then $e^\prime = e^\second$ and $\store^\prime\cong\store^\second$.
 \end{proposition}
 \begin{proof}
 From Proposition~\ref{proposition:determinacy-eval} and definition
@@ -1316,346 +1344,179 @@ ${\langle \store, \erase{L}{e} \rangle
 By induction on Lemma~\ref{lemma:single-step}.
 \end{proof}
 
-
-\pagebreak
-
 \begin{definition}[$L$-equivalence]
-Two values, each consisting of a pair of labeled values with labels
-${l}, l_j, j=1,2$ such that $ l_j \not\flows{l}$,
-are equivalent according to the equivalence
-relation $=_L$  if they agree on the low values. Specifically, 
+Two labeled values, are equivalent according to the equivalence
+relation $=_L$  if they agree on (labels and) values or if their
+labeles are above $L$. Specifically, 
 \begin{equation*}
 \inferrule
-  {\Gamma \vdash e_j :
-          (\Lvalue\ {\ell}\ \tau^\prime, \Lvalue\ {\ell}\ \tau)\\
-  e_j\longrightarrow^* (\Lv\ l_j\ v_j, \Lv\ l\ v)\\
-  l \flows L\\ l_j \not\flows L}
+  {(\Gamma \vdash e_j : \Lvalue\ {\ell}\ \tau)_{j=1,2}
+  \\ (e_j\longrightarrow^* \Lv\ l_j\ v_j)_{j=1,2}
+  \\ (l_j \not\flows L)_{j=1,2} \lor (l_1 = l_2 \land v_1=v_2)
+  }
  %------------------------------------------------------------------------
                          {e_1 =_L e_2}
-  {(j=1,2)}
 \end{equation*}
-\Red{Does $\tau^\prime$ need to be the same type for both tuples, or can we
-just have $\tau_j$?}
 \end{definition}
 %
-The low-equivalence expresses the power of an observer, that may distinguish
-values labeled with at most $L$.
-For example, $(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lH\ 9,\Lv\ \lL\ 2)$, but 
-$(\Lv\ \lH\ 8,\Lv\ \lL\ 2) \not =_{\lL} (\Lv\ \lH\ 8,\Lv\ \lL\ 3)$.
+\noindent The low-equivalence expresses the power of an observer, that may
+distinguish values labeled with at most $L$.
+For example, $\Lv\ \lH\ 8 =_\lL \Lv\ \lH\ 9$, but 
+$\Lv\ \lL\ 2 \not =_{\lL} \Lv\ \lL\ 3$.
 Similarly, if we extend the lattice with element
 $\lM : \lL\flows \lM \flows \lH$, then
-$(\Lv\ \lH\ 8,\Lv\ \lL\ 2) =_\lL (\Lv\ \lM\ 9,\Lv\ \lL\ 2)$.
+$\Lv\ \lH\ 8 =_\lL \Lv\ \lM\ 9$.
 
 
 \begin{definition}[$L$-view]
-Two values (each consisting of a pair of labeled values) in environents
-$\store^1$ and $\store^2$, are equivalent according to the equivalence relation
-$\approx_L$ if they are not observable, i.e., $L$ is lower than
-$\store^j(\lbl), j={1,2}$, or the pairs are $L$-equivalent. Specifically, 
+Two values in environents $\store^1$ and $\store^2$, are equivalent according
+to the equivalence relation $\approx_L$ if they are not observable,
+or the pairs are $L$-equivalent.
+Specifically, 
 \begin{equation*}
 \inferrule
-  {(\Gamma \vdash e_j :
-          (\Lvalue\ {\ell}\ \tau^\prime, \Lvalue\ {\ell}\ \tau))_{j=1,2} \\
-  (\store^1(\lbl)\not\flows L\land \store^2(\lbl)\not\flows L)\lor (e_1=_L e_2)}
+  {(\Gamma \vdash e_j : \Lvalue\ {\ell}\ \tau)_{j=1,2} \\
+  (\store^j(\lbl)\not\flows L)_{j=1,2}\lor (e_1=_L e_2)}
   % --------------------------------------------------------------------------
      {\langle \store^1, \lioValp{e_1} \rangle
                              \approx_L \langle \store^2, \lioValp{e_2}\rangle}
 \end{equation*}
 \end{definition}
 %
-The $L$-view simply states that an observer, who may read values with label at
-most $L$, cannot distinguish two labeled values if they are either 1) both in
-an environment with a label above $L$, or 2) the values are $L$-equivalent.
+\noindent The $L$-view equivalence directly extends the $L$-equivalance to
+values in non-empty environments.
+It states that an observer, who may read values with label at
+most $L$, cannot distinguish two labeled values if they are either both in
+an environment with a label above $L$, or the values are $L$-equivalent.
 %
-For example,
-\begin{align*}
-\langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle
-\approx_{\lL}
-\langle \{(\lbl,\lH), (\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 3)\rangle,
-\end{align*}
-even though the labeled pairs are not $L$-equivalent.
-%
-Similarly,
-\begin{align*}
-\langle \{(\lbl,\lM),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle
-\approx_\lM
-\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 9,\Lv\ \lL\ 2) \rangle,
-\end{align*}
-but
-\begin{align*}
-\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 2) \rangle
-\not \approx_\lL
-\langle \{(\lbl,\lL),(\clr,\lH)\}, (\Lv\ \lH\ 8,\Lv\ \lL\ 3)
-\rangle
-\end{align*}
 
-
-
-\begin{lemma}[Standard non-interference]
-Given labels $l_\lH, l_\lL$ such that $ l_\lH \not\flows l_\lL$,
+\begin{theorem}[Non-interference]
+\label{theorem:non-interference}
+Given label $l$,
 a computation $e$ (with no $\hole$, $\Lv\ \cdot\ \cdot$,
 or $\lioValp{\cdot}$) where
 %
-$\Gamma \vdash e : (\Lvalue\ {\ell}\ \tau_i, \Lvalue\ {\ell}\ \tau_i^\prime)
-\rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o, \Lvalue\ {\ell}\ \tau_o^\prime)$
+$\Gamma \vdash e : \Lvalue\ {\ell}\ \tau_i
+                      \rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o)$
 %
-in environment with label $l_\lE$ and clearance $l_\lE^\prime$, such
-that $l_\lE \flows l_k \flows l_\lE^\prime$ for $l_k = l_\lH, l_\lL$,
+, environment with current label $l_\lE$ and current clearance $l_\lE^\prime$,
+such that $l_\lE \flows l \flows l_\lE^\prime$, and
 %
-and an observer with clearance $L$ such that
-$l_\lL \flows L$ and $l_\lH \not\flows L$,
-%
-then
+an observer with clearance $L$ such that
+$l_\lE \flows L \flows l_\lE^\prime$ and $l \not\flows L$,
 %
 \begin{align*}
-\forall e^1 e^2.
-& (\Gamma \vdash e^j : (\Lvalue\ \ell\ \tau_j
-                       ,\Lvalue\ \ell\ \tau_j^\prime))_{j=1,2}\\
+\forall e_1 e_2.
+& (\Gamma \vdash e_j : \Lvalue\ \ell\ \tau_j)_{j=1,2} \\
 %
-&\land ( e^j = (\Lv\ l_\lH\ e_j, \Lv\ l_\lL\ e_j^\prime) )_{j=1,2}\\
-%
-&\land
-  \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e^1)\rangle
-  \longrightarrow^*
-  \langle \store^\prime,
-    \lioValp{(\Lv\ l_\lH\ v_1, \Lv\ l_\lL\ v_1^\prime)}\rangle\\
+&\land ( e_j = \Lv\ l\ e_j^\prime)_{j=1,2}\\
 %
 &\land
-  \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e^2)\rangle
+  \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_1)\rangle
   \longrightarrow^*
-  \langle \store^\prime,
-    \lioValp{(\Lv\ l_\lH\ v_2, \Lv\ l_\lL\ v_2^\prime)}\rangle\\
+  \langle \store^1, \lioValp{\Lv\ l_1\ v_1}\rangle\\
+%
+&\land
+  \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_2)\rangle
+  \longrightarrow^*
+  \langle \store^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
 &\Rightarrow 
-  \langle \store^\prime,
-    \lioValp{(\Lv\ l_\lH\ v_1, \Lv\ l_\lL\ v_1^\prime)}\rangle
-\approx_{L}
-  \langle \store^\prime,
-    \lioValp{(\Lv\ l_\lH\ v_2, \Lv\ l_\lL\ v_2^\prime)}\rangle\\
+  \langle \store^1, \lioValp{\Lv\ l_1\ v_1}\rangle
+  \approx_{L}
+  \langle \store^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
 \end{align*}
-\end{lemma}
+\end{theorem}
 
-According to the lemma, given two $L$-equivalent inputs, each consisting of a
-pair of (secret, public) values, the result of the computation as viewed by the
-observer (with clearance level up to $L$) is indistinguishable. In other words,
-there is not information flow from the high-labeled input to the low-labeled
-output.
-
+\noindent The theorem states that given two $L$-equivalent secret inputs,
+the result of the computations as viewed by the observer (with clearance level
+up to $L$) are indistinguishable. In other words, there is not information flow
+from the secret input to the low-observed output.
 
 \begin{proof}
-We prove the lemma for the case where none of the input and output
-types are \Lvalue{}s (i.e., $\tau_j \neq \Lvalue\ \ell\ \tau_j^\second,
-\tau_j^\prime \neq \Lvalue\ \ell\ \tau_j^\third, j = i, o$).
-Extendiung it to this case is straight forward.
-Thus, from Lemma~\ref{lemma:multi-step},
+We prove the lemma for the case where the input and output 
+types are not labeled values of labeled values, i.e.,
+$\tau_i \neq \Lvalue\ \ell\ \tau_i^\second,
+\tau_o \neq \Lvalue\ \ell\ \tau_o^\prime$.
+Extending it to this case is straight forward.
+From Lemma~\ref{lemma:multi-step}, for $j=1,2$, we have
 \begin{equation*}
 \langle \emptyset, \el{\withLblClr\ (l_\lE, l_\lE^\prime)\
-      (e\ (\Lv\ l_\lH\ e_j, \Lv\ l_\lL e_j^\prime))} \rangle
+      (e\ (\Lv\ l\ e_j))} \rangle
+= \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\
+      (\el{e}\ (\Lv\ l\ \hole))\rangle
 \longrightarrow^*_L
-\langle \store^\prime,
-  \el{\lioValp{(\Lv\ l_\lH\ v_j, \Lv\ l_\lL\ v_j^\prime)}}\rangle
+\langle \store^j, \el{\lioValp{\Lv\ l_j\ v_j}}\rangle
 \end{equation*}
-can be either 
+From the determinacy of $\longrightarrow_L$, given in
+Proposition~\ref{proposition:determinacy-evalL},
+the end environments and terms are equivalent, i.e.,
+$\store^1\cong\store^2$, and
+$\el{\lioValp{\Lv\ l_1\ v_1}}=\el{\lioValp{\Lv\ l_2\ v_2}}$.
+Hence, we have cases:
 \begin{enumerate}
-\item
-\begin{equation*}
-\inferrule
-  {\store^\prime(\lbl) \flows L}
-  % ----------------------------------------------------------------
-  {\langle \emptyset,
-    \withLblClr\ (l_\lE, l_\lE^\prime)\ (\el{e}\ (\Lv\ l_\lH\ \hole
-                                        , \Lv\ l_\lL\ \el{e_j^\prime}))
-   \rangle
-   \longrightarrow^*_L
-   \langle \store^\prime,
-   \lioValp{(\Lv\ l_\lH\ \hole, \Lv\ l_\lL\ \el{v_j^\prime})}\rangle}
-\end{equation*}
-Intuitively, this case occurs when the environment does not change
-or a low-labeled value is opened (and thus the current label is
-raised to a label below $L$).
-By Proposition~\ref{proposition:determinacy-evalL}, it must be
-that $v_1^\prime = v_2^\prime$, and consequently,
-$
-  \langle \store^\prime,
-    \lioValp{(\Lv\ l_\lH\ v_1, \Lv\ l_\lL\ v_1^\prime)}\rangle
+\item For both $l_j\flows L$ and $l_j \not\flows L$, but
+$\store^j(\lbl) \not\flows L$,
+$\langle \store^1, \el{\lioValp{\hole}}\rangle
 \approx_{L}
-  \langle \store^\prime,
-    \lioValp{(\Lv\ l_\lH\ v_2, \Lv\ l_\lL\ v_2^\prime)}\rangle
-$
-\item
-\begin{equation*}
-\inferrule
-  {\store^\prime(\lbl) \not\flows L}
-  % ---------------------------------------------------------------
-  {\langle \emptyset,
-    \withLblClr\ (l_\lE, l_\lE^\prime)\ (\el{e}\ (\Lv\ l_\lH\ \hole
-                                        , \Lv\ l_\lL\ \el{e_j^\prime}))
-\longrightarrow^*_L \langle \store^\prime, \lioValp{\hole}\rangle}.
-\end{equation*}
-Intuitively, this case occurs when a high-labeled value is opened
-and the current label is raised to a value above $L$.
-The $L$-view equivalence holds, by definition.
+\langle \store^2, \el{\lioValp{\hole}}\rangle$
+follows from 
+$\store^1\cong\store^2$ and definition of~$\approx_{L}$.
+%
+\item Similarly, for $l_j\not\flows L$ and $\store^j(\lbl) \flows L$,
+$\langle \store^1, \el{\lioValp{\Lv\ l_1\ \hole}}\rangle
+\approx_{L}
+\langle \store^2, \el{\lioValp{\Lv\ l_2\ \hole}}\rangle$
+follows from
+$\store^1\cong\store^2, l_1=l_2$ and definition of~$\approx_{L}$.
+%
+\item For $l_j\not\flows L$ and $\store^j(\lbl) \flows L$,
+$\langle \store^1, {\lioValp{\Lv\ l_1\ v_1}}\rangle
+\approx_{L}
+\langle \store^2, {\lioValp{\Lv\ l_2\ v_2}}\rangle$
+follows from
+$\store^1\cong\store^2, l_1=l_2, v_1=v_2$
+and definition of~$\approx_{L}$.
 \end{enumerate}
 \end{proof}
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-\appendix
-\section{OLD}
-\subsection{Well-behaved terms}
-We define a function ${\mathcal{W}\llbracket \rrbracket} : \textrm{Environment}\times\textrm{Term} \rightarrow \{\tT, \tF\}$, where $\tT{}$ denotes true, and $\tF{}$ denotes false.
-
+\begin{corollary}[Non-interference for differently labeld inputs]
+Given labels $l_j, j=1,2$,
+a computation $e$ (with no $\hole$, $\Lv\ \cdot\ \cdot$,
+or $\lioValp{\cdot}$) where
+%
+$\Gamma \vdash e : \Lvalue\ {\ell}\ \tau_i
+                      \rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o)$
+%
+, environment with current label $l_\lE$ and current clearance $l_\lE^\prime$,
+such that $l_\lE \flows l_j \flows l_\lE^\prime$ for $j=1,2$, and
+%
+an observer with clearance $L$ such that
+$l_\lE \flows L \flows l_\lE^\prime$ and $l_j \not\flows L$ for $j=1,2$,
+%
 \begin{align*}
-\well{\store}{x} &= \tT\\
-\well{\store}{\lambda x. e} &= \well{\store}{e}\\
-\well{\store}{(e_1, e_2)} &= \well{\store}{e_1} \land \well{\store}{e_2}\\
-%\well{\store}{\Lv\ l\ e} &= \well{\store}{e}\\
-\well{\store}{\Lv\ e_1\ e_2} &= \well{\store}{e_1} \land \well{\store}{e_2}\\
-\well{\store}{\lioValp{e}} &= \well{\store}{e}\\
-\well{\store}{\true} &= \tT\\
-\well{\store}{\false} &= \tT\\
-\well{\store}{l} &= \tT\\
-\well{\store}{\fix\ e} &= \well{\store}{e}\\
-\well{\store}{e_1\ e_2} &= \well{\store}{e_1} \land \well{\store}{e_2}\\
-%\well{\store}{\ifel{\true}{e_1}{e_2}} &= \well{\store}{e_1}\\
-%\well{\store}{\ifel{\false}{e_1}{e_2}} &= \well{\store}{e_2}\\
-\well{\store}{\ifel{e_1}{e_2}{e_3}} &= \well{\store}{e_1} \land \well{\store}{e_2} \land \well{\store}{e_3}\\
-\well{\store}{\letbind{x}{e_1}{e_2}} &= \well{\store}{e_1} \land \well{\store}{e_2}\\
-\well{\store}{\pi_i\ e} &= \well{\store}{e}\\
-\well{\store}{\return\ e} &= \well{\store}{e}\\
-\well{\store}{\returnLIOp\ e} &= \well{\store}{e}\\
-\well{\store}{e_1\ \diamond\ e_2}  &= \well{\store}{e_1} \land \well{\store}{e_2}\textrm{, where }\diamond = \{\bind, \lub, \glb, \bindLIOp\} \\
-\well{\store}{\withLblClr\ e_1\ e_2}  &= \well{\store}{e_1} \land \well{\store}{e_2}\\ %TODO: look over
-\well{\store}{\seal\ e\ l}        &= (\store(\lbl) \flows l \flows \store(\clr)) \land\ \well{\store}{e}\\
-\well{\store}{\open\ (\Lv\ l\ e)} &= (\store^\prime(\lbl) \flows \store(\clr)) \land \well{\store^\prime}{e},\\
-                                      &\textrm{where } \store^\prime=\store[\lbl\mapsto l^\prime], \textrm{and } l^\prime = \store(\lbl)\lub l\\
-\well{\store}{\close\ e} &= \well{\store}{e}
+\forall e_1 e_2.
+& (\Gamma \vdash e_j : \Lvalue\ \ell\ \tau_j)_{j=1,2} \\
+%
+&\land ( e_j = \Lv\ l_j\ e_j^\prime)_{j=1,2}\\
+%
+&\land
+  \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_1)\rangle
+  \longrightarrow^*
+  \langle \store^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle\\
+%
+&\land
+  \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_2)\rangle
+  \longrightarrow^*
+  \langle \store^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
+&\Rightarrow 
+  \langle \store^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle
+  \approx_{L}
+  \langle \store^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
 \end{align*}
-
-We say that a term $e$ is well-behaved (at this point in the execution) in environment $\store$ if $\well{\store}{e}=\tT$.
-
-\begin{proposition}[Properties of $\mathcal{W}$]\label{proposition:well-old}
-\quad
-\begin{enumerate}
-\item IFC is not violated if environment constraints are relaxed:\\ 
-  $\well{\store}{e} \land \store^\prime({\lbl}) \flows \store({\lbl}) \land  \store({\clr}) \flows \store^\prime({\clr}) \implies \well{\store^\prime}{e}$
-\item Inversion of $\mathcal{W}$:
-      \begin{enumerate}
-        \item $\well{\store}{\lambda x. e} \implies \well{\store}{e}$
-        \item $\well{\store}{(e_1, e_2)} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
-        \item $\well{\store}{\Lv\ e_1\ e_2} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
-        \item $\well{\store}{\lioValp{e}} \implies \well{\store}{e}$
-        \item $\well{\store}{\fix\ e} \implies \well{\store}{e}$
-        \item $\well{\store}{e_1\ e_2} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
-        \item $\well{\store}{\ifel{e_1}{e_2}{e_3}} \implies \well{\store}{e_1} \land \well{\store}{e_2} \land \well{\store}{e_3}$
-        \item $\well{\store}{\letbind{x}{e_1}{e_2}} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
-        \item $\well{\store}{\pi_i\ e} \implies \well{\store}{e}$
-        \item $\well{\store}{\return\ e} \implies \well{\store}{e}$
-        \item $\well{\store}{\returnLIOp\ e} \implies \well{\store}{e}$
-        \item $\well{\store}{e_1\ \diamond\ e_2}  \implies \well{\store}{e_1} \land \well{\store}{e_2}$, where $\diamond = \{\bind, \lub, \glb, \bindLIOp\}$
-        \item $\well{\store}{\withLblClr\ e_1\ e_2}  \implies \well{\store}{e_1} \land \well{\store}{e_2}$ % TODO : look over
-        \item $\well{\store}{\seal\ e_1\ e_1}        \implies \well{\store}{e_1} \land \well{\store}{e_2}$
-        \item $\well{\store}{\open\ (\Lv\ l\ e)} \implies  \well{\store}{e}$
-        \item $\well{\store}{\close\ e} \implies \well{\store}{e}$
-      \end{enumerate}
-\item Inversion of $\mathcal{W}$ on evaluation contexts: $\well{\store}{E[e]} \implies \well{\store}{e}$
-\item Inversion of $\mathcal{W}$ under substitution: $\well{\store}{[e_2/x]e_1} \implies \well{\store}{e_1} \land \well{\store}{e_2}$
-\end{enumerate}
-\end{proposition}
+\end{corollary}
 \begin{proof}
-\quad
-\begin{enumerate}
-\item By definition of $\mathcal{W}$ and induction on terms. 
-% Add proof for open and seal
-\item All follow directly from the definition of $\mathcal{W}$, we highlight the interesting case below:
-      \begin{enumerate}
-        \item[{\em (o)}] It follows from the definition of $\mathcal{W}$ that $\well{\store}{\open\ (\Lv\ l\ e)} \implies \well{\store^\prime}{e}$
-              for some $\store^\prime : {\store^\prime({\lbl}) \flows \store({\lbl})}$.
-              As $\store$ is less constrained than $\store^\prime$, it follows from the first
-              proposition that ${\well{\store^\prime}{e} \implies \well{\store}{e}}$.
-      \end{enumerate}
-\item All follow directly from the inversion properties of $\mathcal{W}$, and induction on evaluation contexts and terms.
-      Let $e_i: \well{\store}{e_i}$.
-      \begin{enumerate}
-      \item Let $E := [\cdot]\ e_0$, it follows that\\
-            ${\well{\store}{E[e]}= \well{\store}{e\ e_0} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
-      \item Let $ E := ([\cdot], e_0)$, it follows that \\
-            ${\well{\store}{E[e]}= \well{\store}{(e, e_0)} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
-      \item $ E := (v, [\cdot])$ is as above.
-      \item Let $ E := \Lv\ [\cdot]\ e_0$, it follows that \\
-            ${\well{\store}{E[e]}= \well{\store}{\Lv\ e\ e_0} \implies \well{\store}{e_0} \land \well{\store}{e} \implies \well{\store}{e}}$
-      \item Let $ E := \Lv\ e_0\ [\cdot]$, it follows that \\
-            ${\well{\store}{E[e]}= \well{\store}{\Lv\ e_0\ e} \implies \well{\store}{e_0} \land \well{\store}{e} \implies \well{\store}{e}}$
-      \item Let $ E := \ifel{[\cdot]}{e_0}{e_1}$, it follows that \\
-            ${\well{\store}{E[e]}= \well{\store}{\ifel{e}{e_0}{e_1}} \implies \well{\store}{e} \land \well{\store}{e_0} \land \well{\store}{e_1} \implies \well{\store}{e}}$
-      \item Let $ E := \letbind{x}{[\cdot]}{e_0}$, it follows that \\
-            ${\well{\store}{E[e]}= \well{\store}{\letbind{x}{e}{e_0}} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
-      \item Let $ E := \pi_i\ [\cdot]$, it follows that \\
-            ${\well{\store}{E[e]}= \well{\store}{\pi_i\ e} \implies \well{\store}{e}}$
-      \item Let $ E := \return\ [\cdot]$, it follows that \\
-            ${\well{\store}{E[e]}= \well{\store}{\return\ e} \implies \well{\store}{e}}$
-      \item $ E := \returnLIOp\ [\cdot]$ is as above.
-      \item Let $ E := [\cdot]\ \diamond\ e_0$, for $\diamond = \{\bind, \lub, \glb, \bindLIOp\}$, it follows that \\
-            ${\well{\store}{E[e]}= \well{\store}{e\ \diamond\ e_0} \implies \well{\store}{e} \land \well{\store}{e_0} \implies \well{\store}{e}}$
-      \item $ E := v\ \diamond\ [\cdot]$, for $\diamond = \{\bind, \lub, \glb, \bindLIOp\}$ is as above.
-      \item Let $E := \seal\ [\cdot]\ e_0$, it follows that\\
-            ${\well{\store}{E[e]}= \well{\store}{\seal\ e\ e_0} \implies \well{\store}{e} \land \well{\store}{e_0}}$
-      \item Let $E := \open\ [\cdot]$, it follows that\\
-            ${\well{\store}{E[e]}= \well{\store}{\open\ e} \implies  \well{\store}{e}}$
-      \item Let $E := \close\ [\cdot]$, it follows that\\
-            ${\well{\store}{E[e]}= \well{\store}{\close\ e} \implies \well{\store}{e}}$
-      \end{enumerate}
-\item Since information flow control is preserved under substitution, it directly follows from $\well{\store}{(\lambda x .e_1)\ e_2} \implies \well{\store}{e_1} \land \well{\store}{e_2}$ and evaluation rule \tref{E-App}.
-\end{enumerate}
+Directly from Theorem~\ref{theorem:non-interference} with $l=l_1\lub l_2$.
 \end{proof}
-
-
-\begin{lemma}[Preservation of pure terms]
-If $\vdash e : \tau$ and $e \longrightarrow e^\prime$ then $\vdash e^\prime : \tau$.
-\end{lemma}
-\begin{proofidea}
-Follows directly from the typing deriviatins.
-\end{proofidea}
-
-This lemma states that a well-typed term taking an evaluation step results in a term that is also well-typed.
-
-
-
-\begin{lemma}[Type and information flow preservation]
-\label{lemma:type-flow-preservation-old}
-If $\vdash e : \tau$, $\well{\store}{e}$, and $\langle \store, e\rangle \longrightarrow \langle \store^\prime, e^\prime \rangle$ then $\vdash e^\prime : \tau$.
-\end{lemma}
-\begin{proofidea}
-Follows directly from the typing deriviatins, definition of $\mathcal{W}$ and Proposition~\ref{proposition:well}.
-\end{proofidea}
-A well-typed and well-behaved term taking an evaluation step results in a term that is also well-typed.
-
-
-
-\begin{lemma}[Progress of pure terms]
-If $\vdash e : \tau$ and $e$ does not depend on an environment (i.e., $e$ does not contain \seal{} or \open{}), then $e \longrightarrow v$, or there exists $e^\prime$ such that $e \longrightarrow e^\prime$.
-\end{lemma}
-\begin{proofidea}
-Follows directly from the typing deriviatins.
-\end{proofidea}
-This lemma states that a closed and well-typed pure term is not stuck.
-
-\begin{lemma}[Progress of well-typed and well-behaved terms]
-Given environment $\store$, if $\vdash e : \tau$ and $\well{\store}{e}$ then $\langle \store, e \rangle \longrightarrow \langle \store^\prime, v\rangle$, or there exists $e^\prime$ such that $\langle \store, e \rangle \longrightarrow \langle \store^\second, e^\prime\rangle$.
-\end{lemma}
-\begin{proofidea}
-Follows directly from the typing deriviatins, definition of $\mathcal{W}$ and Proposition~\ref{proposition:well}.
-\end{proofidea}
-This lemma states that a well-typed and well-behaved term is either a value or is not stuck. A well-typed term, however, may get``stuck'' if it not well-behaved, i.e., violates information flow.
-
-
-
-
-
-
 
 
 
