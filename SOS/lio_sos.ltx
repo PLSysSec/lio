@@ -31,6 +31,7 @@
 \newcommand{\lL}{\texttt{L}}
 \newcommand{\lM}{\texttt{M}}
 \newcommand{\lH}{\texttt{H}}
+\newcommand{\lE}{\texttt{E}}
 \newcommand{\Adv}{\mathcal{A}}
 \newcommand{\seal}{\texttt{seal}}
 \newcommand{\open}{\texttt{open}}
@@ -1391,65 +1392,110 @@ but
 
 
 \begin{lemma}[Standard non-interference]
-Given labels ${l}, {l}'$ such that $ {l}' \not\flows{l}$,
+Given labels $l_\lH, l_\lL$ such that $ l_\lH \not\flows l_\lL$,
 a computation $e$ (with no $\hole$, $\Lv\ \cdot\ \cdot$,
 or $\lioValp{\cdot}$) where
 %
-$\Gamma \vdash e : (\Lvalue\ {\ell}\ \tau_i^\prime, \Lvalue\ {\ell}\ \tau_i)
-\rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o^\prime, \Lvalue\ {\ell}\ \tau_o)$
+$\Gamma \vdash e : (\Lvalue\ {\ell}\ \tau_i, \Lvalue\ {\ell}\ \tau_i^\prime)
+\rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o, \Lvalue\ {\ell}\ \tau_o^\prime)$
 %
-in environment $\store$, such that $\store(\lbl)\flows l_k \flows \store(\clr)$
-for $l_k = l,l'$,
+in environment with label $l_\lE$ and clearance $l_\lE^\prime$, such
+that $l_\lE \flows l_k \flows l_\lE^\prime$ for $l_k = l_\lH, l_\lL$,
 %
 and an observer with clearance $L$ such that
-${l} \flows L$ and ${l}' \not\flows L$,
+$l_\lL \flows L$ and $l_\lH \not\flows L$,
+%
+then
 %
 \begin{align*}
-\forall e_1 e_2.
-& (\Gamma \vdash e_j : (\Lvalue\ \ell\ \tau_i^\prime
-                       ,\Lvalue\ \ell\ \tau_i))_{j=1,2}\\
+\forall e^1 e^2.
+& (\Gamma \vdash e^j : (\Lvalue\ \ell\ \tau_j
+                       ,\Lvalue\ \ell\ \tau_j^\prime))_{j=1,2}\\
 %
-&\land ( e_j = (\Lv\ l^\prime\ e_j^1, \Lv\ l\ e_j^2) )_{j=1,2}\\
+&\land ( e^j = (\Lv\ l_\lH\ e_j, \Lv\ l_\lL\ e_j^\prime) )_{j=1,2}\\
 %
-&\land \withLblClr\ (\store(\lbl), \store(\clr))\ (e\ e_1) \longrightarrow^* \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_1^1, \Lv\ l\ v_1^2)}\rangle\\
-&\land \withLblClr\ (\store(\lbl), \store(\clr))\ (e\ e_2) \longrightarrow^* \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_2^1, \Lv\ l\ v_2^2)}\rangle\\
+&\land
+  \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e^1)\rangle
+  \longrightarrow^*
+  \langle \store^\prime,
+    \lioValp{(\Lv\ l_\lH\ v_1, \Lv\ l_\lL\ v_1^\prime)}\rangle\\
+%
+&\land
+  \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e^2)\rangle
+  \longrightarrow^*
+  \langle \store^\prime,
+    \lioValp{(\Lv\ l_\lH\ v_2, \Lv\ l_\lL\ v_2^\prime)}\rangle\\
 &\Rightarrow 
-\langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_1^1, \Lv\ l\ v_1^2)}\rangle \approx_{L}
-\langle \store^\prime, \lioValp{(\Lv\ l^\prime\ v_2^1, \Lv\ l\ v_2^2)}\rangle\\
+  \langle \store^\prime,
+    \lioValp{(\Lv\ l_\lH\ v_1, \Lv\ l_\lL\ v_1^\prime)}\rangle
+\approx_{L}
+  \langle \store^\prime,
+    \lioValp{(\Lv\ l_\lH\ v_2, \Lv\ l_\lL\ v_2^\prime)}\rangle\\
 \end{align*}
 \end{lemma}
 
-Simply, the lemma states that given two $L$-equivalent inputs, each consisting of a pair of values with a public and secret labels, the result of the well-behaved computation as read by the observer (at label level up to $L$) is indistinguishable. In other words, there is not information flow from the high-labeled input to the low-labeled output.
+According to the lemma, given two $L$-equivalent inputs, each consisting of a
+pair of (secret, public) values, the result of the computation as viewed by the
+observer (with clearance level up to $L$) is indistinguishable. In other words,
+there is not information flow from the high-labeled input to the low-labeled
+output.
 
 
-\Red{
 \begin{proof}
-
-Using Lemma~\ref{lemma:multi-step},
+We prove the lemma for the case where none of the input and output
+types are \Lvalue{}s (i.e., $\tau_j \neq \Lvalue\ \ell\ \tau_j^\second,
+\tau_j^\prime \neq \Lvalue\ \ell\ \tau_j^\third, j = i, o$).
+Extendiung it to this case is straight forward.
+Thus, from Lemma~\ref{lemma:multi-step},
 \begin{equation*}
-\el{\withLblClr\ (\store(\lbl), \store(\clr))\ (e\ (\Lv\ l^\prime\ e_j^1, \Lv\ l\ e_j^2))}
-\longrightarrow^*_L \langle \store^\prime, \el{\lioValp{(\Lv\ l^\prime\ v_j^1, \Lv\ l\ v_j^2)}}\rangle
+\langle \emptyset, \el{\withLblClr\ (l_\lE, l_\lE^\prime)\
+      (e\ (\Lv\ l_\lH\ e_j, \Lv\ l_\lL e_j^\prime))} \rangle
+\longrightarrow^*_L
+\langle \store^\prime,
+  \el{\lioValp{(\Lv\ l_\lH\ v_j, \Lv\ l_\lL\ v_j^\prime)}}\rangle
 \end{equation*}
 can be either 
 \begin{enumerate}
 \item
 \begin{equation*}
-\inferrule{\store^\prime{\lbl}=l \lor \store^\prime(\lbl) = \store(\lbl)}{\withLblClr\ (\store(\lbl), \store(\clr))\ (\el{e}\ (\Lv\ l^\prime\ \hole, \Lv\ l\ \el{e_j^2}))
-\longrightarrow^*_L \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ \el{v_j^2})}\rangle}
+\inferrule
+  {\store^\prime(\lbl) \flows L}
+  % ----------------------------------------------------------------
+  {\langle \emptyset,
+    \withLblClr\ (l_\lE, l_\lE^\prime)\ (\el{e}\ (\Lv\ l_\lH\ \hole
+                                        , \Lv\ l_\lL\ \el{e_j^\prime}))
+   \rangle
+   \longrightarrow^*_L
+   \langle \store^\prime,
+   \lioValp{(\Lv\ l_\lH\ \hole, \Lv\ l_\lL\ \el{v_j^\prime})}\rangle}
 \end{equation*}
+Intuitively, this case occurs when the environment does not change
+or a low-labeled value is opened (and thus the current label is
+raised to a label below $L$).
+By Proposition~\ref{proposition:determinacy-evalL}, it must be
+that $v_1^\prime = v_2^\prime$, and consequently,
+$
+  \langle \store^\prime,
+    \lioValp{(\Lv\ l_\lH\ v_1, \Lv\ l_\lL\ v_1^\prime)}\rangle
+\approx_{L}
+  \langle \store^\prime,
+    \lioValp{(\Lv\ l_\lH\ v_2, \Lv\ l_\lL\ v_2^\prime)}\rangle
+$
 \item
 \begin{equation*}
-\inferrule{\store^\second(\lbl) = l^\prime}{
-\withLblClr\ (\store(\lbl), \store(\clr))\ (\el{e}\ (\Lv\ l^\prime\ \hole, \Lv\ l\ \el{e_j^2}))
-\longrightarrow^*_L \langle \store^\second, \lioValp{\hole}\rangle}.
+\inferrule
+  {\store^\prime(\lbl) \not\flows L}
+  % ---------------------------------------------------------------
+  {\langle \emptyset,
+    \withLblClr\ (l_\lE, l_\lE^\prime)\ (\el{e}\ (\Lv\ l_\lH\ \hole
+                                        , \Lv\ l_\lL\ \el{e_j^\prime}))
+\longrightarrow^*_L \langle \store^\prime, \lioValp{\hole}\rangle}.
 \end{equation*}
+Intuitively, this case occurs when a high-labeled value is opened
+and the current label is raised to a value above $L$.
+The $L$-view equivalence holds, by definition.
 \end{enumerate}
-
-If $\store^\second(\lbl) = l^\prime \not\flows L$, the $L$-view equivalence holds, by definition.
-Otherwise, by Proposition~\ref{proposition:determinacy-evalL}, it must be that $v_1^2 = v_2^2$,
-and consequently, $\langle \store, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_1^2)}\rangle \approx_{L} \langle \store^\prime, \lioValp{(\Lv\ l^\prime\ \hole, \Lv\ l\ v_2^2)}\rangle$.
 \end{proof}
-}
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
