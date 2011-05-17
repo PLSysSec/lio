@@ -1536,12 +1536,12 @@ By induction on Lemma~\ref{lemma:single-step}.
 \end{proof}
 
 \begin{definition}[$L$-equivalence]
-Two labeled values, are equivalent according to the equivalence
+Two labeled values, are equivalent according to the 
 relation $=_L$  if they agree on (labels and) values or if their
 labeles are above $L$. Specifically, 
 \begin{equation*}
 \inferrule
-  {(\Gamma \vdash e_j : \Lvalue\ {\ell}\ \tau)_{j=1,2}
+  {(\Gamma;\Phi \vdash e_j : \Lvalue\ {\ell}\ \tau)_{j=1,2}
   \\ (e_j\longrightarrow^* \Lv\ l_j\ v_j)_{j=1,2}
   \\ (l_j \not\flows L)_{j=1,2} \lor (l_1 = l_2 \land v_1=v_2)
   }
@@ -1560,17 +1560,17 @@ $\Lv\ \lH\ 8 =_\lL \Lv\ \lM\ 9$.
 
 
 \begin{definition}[$L$-view]
-Two values in environents $\env^1$ and $\env^2$, are equivalent according
+Two values in environents $\ST^1$ and $\ST^2$, are equivalent according
 to the equivalence relation $\approx_L$ if they are not observable,
 or the pairs are $L$-equivalent.
 Specifically, 
 \begin{equation*}
 \inferrule
-  {(\Gamma \vdash e_j : \Lvalue\ {\ell}\ \tau)_{j=1,2} \\
-  (\env^j(\lbl)\not\flows L)_{j=1,2}\lor (e_1=_L e_2)}
+  {(\Gamma;\Phi \vdash e_j : \Lvalue\ {\ell}\ \tau)_{j=1,2} \\
+  (\ST^j.\env(\lbl)\not\flows L)_{j=1,2}\lor (e_1=_L e_2)}
   % --------------------------------------------------------------------------
-     {\langle \env^1, \lioValp{e_1} \rangle
-                             \approx_L \langle \env^2, \lioValp{e_2}\rangle}
+     {\langle \ST^1, \lioValp{e_1} \rangle
+                             \approx_L \langle \ST^2, \lioValp{e_2}\rangle}
 \end{equation*}
 \end{definition}
 %
@@ -1580,14 +1580,16 @@ It states that an observer, who may read values with label at
 most $L$, cannot distinguish two labeled values if they are either both in
 an environment with a label above $L$, or the values are $L$-equivalent.
 %
+\\\\\Red{Do we want to say anything about low-equivalence of stores?}
+%
 
-\begin{theorem}[Non-interference]
-\label{theorem:non-interference}
+\begin{theorem}[Non-interference with empty initial store]
+\label{theorem:non-interference-empty-store}
 Given label $l$,
 a computation $e$ (with no $\hole$, $\Lv\ \cdot\ \cdot$,
 or $\lioValp{\cdot}$) where
 %
-$\Gamma \vdash e : \Lvalue\ {\ell}\ \tau_i
+$\Gamma;\Phi \vdash e : \Lvalue\ {\ell}\ \tau_i
                       \rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o)$
 %
 , environment with current label $l_\lE$ and current clearance $l_\lE^\prime$,
@@ -1598,23 +1600,23 @@ $l_\lE \flows L \flows l_\lE^\prime$ and $l \not\flows L$,
 %
 \begin{align*}
 \forall e_1 e_2.
-& (\Gamma \vdash e_j : \Lvalue\ \ell\ \tau_j)_{j=1,2} \\
+& (\Gamma;\Phi \vdash e_j : \Lvalue\ \ell\ \tau_j)_{j=1,2} \\
 %
 &\land ( e_j = \Lv\ l\ e_j^\prime)_{j=1,2}\\
 %
 &\land
   \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_1)\rangle
   \longrightarrow^*
-  \langle \env^1, \lioValp{\Lv\ l_1\ v_1}\rangle\\
+  \langle \ST^1, \lioValp{\Lv\ l_1\ v_1}\rangle\\
 %
 &\land
   \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_2)\rangle
   \longrightarrow^*
-  \langle \env^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
+  \langle \ST^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
 &\Rightarrow 
-  \langle \env^1, \lioValp{\Lv\ l_1\ v_1}\rangle
+  \langle \ST^1, \lioValp{\Lv\ l_1\ v_1}\rangle
   \approx_{L}
-  \langle \env^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
+  \langle \ST^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
 \end{align*}
 \end{theorem}
 
@@ -1624,7 +1626,7 @@ up to $L$) are indistinguishable. In other words, there is not information flow
 from the secret input to the low-observed output.
 
 \begin{proof}
-We prove the lemma for the case where the input and output 
+We prove the theorem for the case where the input and output 
 types are not labeled values of labeled values, i.e.,
 $\tau_i \neq \Lvalue\ \ell\ \tau_i^\second,
 \tau_o \neq \Lvalue\ \ell\ \tau_o^\prime$.
@@ -1636,46 +1638,45 @@ From Lemma~\ref{lemma:multi-step}, for $j=1,2$, we have
 = \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\
       (\el{e}\ (\Lv\ l\ \hole))\rangle
 \longrightarrow^*_L
-\langle \env^j, \el{\lioValp{\Lv\ l_j\ v_j}}\rangle
+\langle \el{\ST^j}, \el{\lioValp{\Lv\ l_j\ v_j}}\rangle
 \end{equation*}
 From the determinacy of $\longrightarrow_L$, given in
 Proposition~\ref{proposition:determinacy-evalL},
 the end environments and terms are equivalent, i.e.,
-$\env^1\cong\env^2$, and
+$\el{\ST^1.\env}\cong\el{\ST^2.\env}$, 
+$\el{\ST^1.\str}\cong\el{\ST^2.\str}$, and
 $\el{\lioValp{\Lv\ l_1\ v_1}}=\el{\lioValp{\Lv\ l_2\ v_2}}$.
 Hence, we have cases:
 \begin{enumerate}
 \item For both $l_j\flows L$ and $l_j \not\flows L$, but
-$\env^j(\lbl) \not\flows L$,
-$\langle \env^1, \el{\lioValp{\hole}}\rangle
+$\el{\ST^j.\env}(\lbl) \not\flows L$,
+$\langle \el{\ST^1}, \el{\lioValp{\hole}}\rangle
 \approx_{L}
-\langle \env^2, \el{\lioValp{\hole}}\rangle$
-follows from 
-$\env^1\cong\env^2$ and definition of~$\approx_{L}$.
+\langle \el{\ST^2}, \el{\lioValp{\hole}}\rangle$
+follows directly.
 %
-\item Similarly, for $l_j\not\flows L$ and $\env^j(\lbl) \flows L$,
-$\langle \env^1, \el{\lioValp{\Lv\ l_1\ \hole}}\rangle
+\item Similarly, for $l_j\not\flows L$ and $\el{ST^j.\env}(\lbl) \flows L$,
+$\langle \el{\ST^1}, \el{\lioValp{\Lv\ l_1\ \hole}}\rangle
 \approx_{L}
-\langle \env^2, \el{\lioValp{\Lv\ l_2\ \hole}}\rangle$
-follows from
-$\env^1\cong\env^2, l_1=l_2$ and definition of~$\approx_{L}$.
+\langle \el{\ST^2}, \el{\lioValp{\Lv\ l_2\ \hole}}\rangle$
+follows directly.
 %
-\item For $l_j\not\flows L$ and $\env^j(\lbl) \flows L$,
-$\langle \env^1, {\lioValp{\Lv\ l_1\ v_1}}\rangle
+\item For $l_j\not\flows L$ and $\el{\ST^j.\env}(\lbl) \flows L$,
+$\langle \el{\ST^1}, {\lioValp{\Lv\ l_1\ v_1}}\rangle
 \approx_{L}
-\langle \env^2, {\lioValp{\Lv\ l_2\ v_2}}\rangle$
-follows from
-$\env^1\cong\env^2, l_1=l_2, v_1=v_2$
-and definition of~$\approx_{L}$.
+\langle \el{\ST^2}, {\lioValp{\Lv\ l_2\ v_2}}\rangle$
+follows directly.
 \end{enumerate}
 \end{proof}
 
-\begin{corollary}[Non-interference for differently labeld inputs]
+\begin{corollary}[Non-interference with empty initial store,
+for differently labeld inputs]
+\label{corollary:non-interference-empty-store-diff-labels}
 Given labels $l_j, j=1,2$,
 a computation $e$ (with no $\hole$, $\Lv\ \cdot\ \cdot$,
 or $\lioValp{\cdot}$) where
 %
-$\Gamma \vdash e : \Lvalue\ {\ell}\ \tau_i
+$\Gamma;\Phi \vdash e : \Lvalue\ {\ell}\ \tau_i
                       \rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o)$
 %
 , environment with current label $l_\lE$ and current clearance $l_\lE^\prime$,
@@ -1686,27 +1687,28 @@ $l_\lE \flows L \flows l_\lE^\prime$ and $l_j \not\flows L$ for $j=1,2$,
 %
 \begin{align*}
 \forall e_1 e_2.
-& (\Gamma \vdash e_j : \Lvalue\ \ell\ \tau_j)_{j=1,2} \\
+& (\Gamma;\Phi \vdash e_j : \Lvalue\ \ell\ \tau_j)_{j=1,2} \\
 %
 &\land ( e_j = \Lv\ l_j\ e_j^\prime)_{j=1,2}\\
 %
 &\land
   \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_1)\rangle
   \longrightarrow^*
-  \langle \env^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle\\
+  \langle \ST^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle\\
 %
 &\land
   \langle \emptyset, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ e_2)\rangle
   \longrightarrow^*
-  \langle \env^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
+  \langle \ST^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
 &\Rightarrow 
-  \langle \env^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle
+  \langle \ST^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle
   \approx_{L}
-  \langle \env^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
+  \langle \ST^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
 \end{align*}
 \end{corollary}
 \begin{proof}
-Directly from Theorem~\ref{theorem:non-interference} with $l=l_1\lub l_2$.
+Directly from Theorem~\ref{theorem:non-interference-empty-store} with
+$l=l_1\lub l_2$.
 \end{proof}
 
 
