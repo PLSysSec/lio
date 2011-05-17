@@ -129,7 +129,7 @@ It is important to note that, for a unique $E$,
 \end{equation*}
 
 \item
-We use the notion of an environment
+We use the notion of a label environment
 $\env : \{\lbl, \clr\} \rightarrow l$ that maps
 the {\em current label}, \lbl{}, and {\em current clearance}, \clr{}, to a
 label value.
@@ -139,6 +139,7 @@ bound on permissible values of the current label.
 This suggests that all data within the computation is uniformly
 labeled by the current label. We provide labeled values ($\Lv{}\ l\ v$) to allow
 for values ($v$) to be protected by labels ($l$) other than the current label.
+\Red{Maybe break down $\env$ into 2, as in $\Phi$ and $\str$?}
 
 
 The function \withLblClr{} is used to initialize $\env{}$, which may be
@@ -1284,6 +1285,7 @@ In most cases we do not show the environment in the simulation, for clarity.
  where $\el{\el{\ST^\prime}} = \el{\ST.\env[\lbl\mapsto l_1, \clr\mapsto l_2]}$.
  $\el{\ST^\prime}=\el{\ST}$ follows trivially, and as such we omit this step
  in the remaining cases.
+ \Red{Maybe make more clear as in Case 20?}
 %
 \item Case: $\inferrule
                       {\ST.\env(\lbl) \flows l_1 \flows \ST.\env(\clr)}
@@ -1600,7 +1602,7 @@ $l_\lE \flows L \flows l_\lE^\prime$ and $l \not\flows L$,
 %
 \begin{align*}
 \forall e_1 e_2.
-& (\Gamma;\Phi \vdash e_j : \Lvalue\ \ell\ \tau_j)_{j=1,2} \\
+& (\Gamma;\Phi \vdash e_j : \Lvalue\ \ell\ \tau_i)_{j=1,2} \\
 %
 &\land ( e_j = \Lv\ l\ e_j^\prime)_{j=1,2}\\
 %
@@ -1616,11 +1618,11 @@ $l_\lE \flows L \flows l_\lE^\prime$ and $l \not\flows L$,
 &\Rightarrow 
   \langle \ST^1, \lioValp{\Lv\ l_1\ v_1}\rangle
   \approx_{L}
-  \langle \ST^2, \lioValp{\Lv\ l_2\ v_2}\rangle\\
+  \langle \ST^2, \lioValp{\Lv\ l_2\ v_2}\rangle
 \end{align*}
 \end{theorem}
 
-\noindent The theorem states that given two $L$-equivalent secret inputs,
+\noindent The theorem states that given two secret inputs,
 the result of the computations as viewed by the observer (with clearance level
 up to $L$) are indistinguishable. In other words, there is not information flow
 from the secret input to the low-observed output.
@@ -1687,7 +1689,7 @@ $l_\lE \flows L \flows l_\lE^\prime$ and $l_j \not\flows L$ for $j=1,2$,
 %
 \begin{align*}
 \forall e_1 e_2.
-& (\Gamma;\Phi \vdash e_j : \Lvalue\ \ell\ \tau_j)_{j=1,2} \\
+& (\Gamma;\Phi \vdash e_j : \Lvalue\ \ell\ \tau_i)_{j=1,2} \\
 %
 &\land ( e_j = \Lv\ l_j\ e_j^\prime)_{j=1,2}\\
 %
@@ -1703,7 +1705,7 @@ $l_\lE \flows L \flows l_\lE^\prime$ and $l_j \not\flows L$ for $j=1,2$,
 &\Rightarrow 
   \langle \ST^1, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle
   \approx_{L}
-  \langle \ST^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
+  \langle \ST^2, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle
 \end{align*}
 \end{corollary}
 \begin{proof}
@@ -1712,7 +1714,121 @@ $l=l_1\lub l_2$.
 \end{proof}
 
 
+\begin{theorem}[Non-interference with initial store]
+\label{theorem:non-interference-initial-store}
+Given label $l$,
+a computation $e$ (with no $\hole$, $\Lv\ \cdot\ \cdot$,
+or $\lioValp{\cdot}$) where
+%
+$\Gamma;\Phi \vdash e : \Ref{\ell}{\tau_i}
+                      \rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o)$
+%
+, environment with current label $l_\lE$ and current clearance $l_\lE^\prime$,
+such that $l_\lE \flows l \flows l_\lE^\prime$, and
+%
+an observer with clearance $L$ such that
+$l_\lE \flows L \flows l_\lE^\prime$ and $l \not\flows L$,
+%
+\begin{align*}
+\forall e_1 e_2.
+& (\Gamma;\Phi \vdash e_j : \tau_i)_{j=1,2} \\
+%
+&\land ( \ST^j.\str = \{(a_j, (l, e_j))\})_{j=1,2}\\
+%
+&\land
+  \langle \ST^1, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ a_1)\rangle
+  \longrightarrow^*
+  \langle {\ST^1}^\prime, \lioValp{\Lv\ l_1\ v_1}\rangle\\
+%
+&\land
+  \langle \ST^2, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ a_2)\rangle
+  \longrightarrow^*
+  \langle {\ST^2}^\prime, \lioValp{\Lv\ l_2\ v_2}\rangle\\
+&\Rightarrow 
+  \langle {\ST^1}^\prime, \lioValp{\Lv\ l_1\ v_1}\rangle
+  \approx_{L}
+  \langle {\ST^2}^\prime, \lioValp{\Lv\ l_2\ v_2}\rangle
+\end{align*}
+\end{theorem}
 
+\noindent The theorem states that given two secret references,
+the result of the computations as viewed by the observer (with clearance level
+up to $L$) are indistinguishable. In other words, there is not information flow
+from the secret reference to the low-observed output.
 
+\begin{proof}
+As in Theorem~\ref{theorem:non-interference-empty-store}, 
+we prove the theorem for the case where the input and output 
+types are not labeled values of labeled values.
+From Lemma~\ref{lemma:multi-step}, for $j=1,2$, we have
+\begin{equation*}
+\langle \el{\ST^j}, \el{\withLblClr\ (l_\lE, l_\lE^\prime)\
+      (e\ a_j)} \rangle
+= \langle \el{\ST^j},
+             \withLblClr\ (l_\lE, l_\lE^\prime)\
+      (\el{e}\ a_j))\rangle
+\longrightarrow^*_L
+\langle \el{{\ST^j}^\prime}, \el{\lioValp{\Lv\ l_j\ v_j}}\rangle,
+\end{equation*}
+and $\el{\ST^j.\str}(a_j)=\el{{\ST^j}^\prime.\str}(a_j)=(l, \hole)$.
+From the determinacy of $\longrightarrow_L$, given in
+Proposition~\ref{proposition:determinacy-evalL},
+the end environments and terms are equivalent, i.e.,
+$\el{{\ST^1}^\prime.\env}\cong\el{{\ST^2}^\prime.\env}$, 
+$\el{{\ST^1}^\prime.\str}\cong\el{{\ST^2}^\prime.\str}$, and
+$\el{\lioValp{\Lv\ l_1\ v_1}}=\el{\lioValp{\Lv\ l_2\ v_2}}$.
+The cases follow as in the proof of
+Theorem~\ref{theorem:non-interference-empty-store}. 
+\end{proof}
+
+\begin{corollary}[Non-interference with initial store,
+for differently labeled inputs]
+\label{corollary:non-interference-initial-store-diff-labels}
+Given labels $l_j, j=1,2$,
+a computation $e$ (with no $\hole$, $\Lv\ \cdot\ \cdot$,
+or $\lioValp{\cdot}$) where
+%
+$\Gamma;\Phi \vdash e : \Ref{\ell}{\tau_i}
+                      \rightarrow \LIOp\ (\Lvalue\ {\ell}\ \tau_o)$
+%
+, environment with current label $l_\lE$ and current clearance $l_\lE^\prime$,
+such that $l_\lE \flows l_j \flows l_\lE^\prime$ for $j=1,2$, and
+%
+an observer with clearance $L$ such that
+$l_\lE \flows L \flows l_\lE^\prime$ and $l_j \not\flows L$ for $j=1,2$,
+%
+\begin{align*}
+\forall e_1 e_2.
+& (\Gamma;\Phi \vdash e_j : \tau_i)_{j=1,2} \\
+%
+&\land ( \ST^j.\str = \{(a_j, (l_j, e_j))\})_{j=1,2}\\
+%
+&\land
+  \langle \ST^1, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ a_1)\rangle
+  \longrightarrow^*
+  \langle {\ST^1}^\prime, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle\\
+%
+&\land
+  \langle \ST^2, \withLblClr\ (l_\lE, l_\lE^\prime)\ (e\ a_2)\rangle
+  \longrightarrow^*
+  \langle {\ST^2}^\prime, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle\\
+&\Rightarrow 
+  \langle {\ST^1}^\prime, \lioValp{\Lv\ l_1^\prime\ v_1}\rangle
+  \approx_{L}
+  \langle {\ST^2}^\prime, \lioValp{\Lv\ l_2^\prime\ v_2}\rangle
+\end{align*}
+\end{corollary}
+
+\noindent The theorem states that given two secret references,
+the result of the computations as viewed by the observer (with clearance level
+up to $L$) are indistinguishable. In other words, there is not information flow
+from the secret reference to the low-observed output.
+
+\begin{proof}
+Directly from Theorem~\ref{theorem:non-interference-initial-store} with
+$l=l_1\lub l_2$.
+\end{proof}
+
+\Red{Generalize the two theorems?}
 
 \end{document} 
