@@ -69,6 +69,7 @@ module LIO.TCB (
                , LrefD
                , lrefD, lrefPD, unlrefPD, labelOfRD
                , taintRD, openRD, openRPD
+               , closeRD
                -- * Exceptions
                -- ** Exception type thrown by LIO library
                , LabelFault(..)
@@ -474,10 +475,8 @@ lrefTLabelTCB l = LrefT $ return $ LrefTCB l ()
 --   Additionally, to avoid information leakage the equivalent of
 --   'closeR' is necessarily limited to trusted code by disallowing the
 --   export of 'closeRDTCB'. Although arbitrary 'LIO' computations cannot
---   be sealed in an @LrefD@, since @LrefD@ is a 'Monad', computations on
---   different level labeled values can be performed using functions such
---   as 'liftM2'. Consider the following example of adding a value labeled
---    \"low\" and another labeled \"high\" in a context labeled \"medium\":
+--   be sealed in an @LrefD@, we provide 'closeRD' which takes an label
+--   as an upperbound on the current label of the computation to be executed.
 --
 -- @
 --   -- lLabel ``leq`` mLabel, lLabel ``leq`` hLabel, and mLabel ``leq`` hLabel
@@ -498,7 +497,6 @@ lrefTLabelTCB l = LrefT $ return $ LrefTCB l ()
 --   The functions names are the same as those of 'Lref' with an additional
 --   \"D\" (for data) suffix.
 newtype LrefD l t = LrefDTCB {unLrefD :: Lref l t}
-  deriving(Monad,Functor,Applicative,MonadFix)
 
 instance (Label l, Show a) => ShowTCB (LrefD l a) where
     showTCB = showTCB . unLrefD
@@ -523,7 +521,8 @@ unlrefPD p = unlrefP p . unLrefD
 unlrefDTCB :: Label l => LrefD l a -> a
 unlrefDTCB (LrefDTCB (LrefTCB _ a)) = a
 
--- | Returns the label of the 'LrefD' regardless of the level of the current label.
+-- | Returns the label of the 'LrefD' regardless of the level
+--   of the current label.
 labelOfRD :: Label l => LrefD l a -> l
 labelOfRD (LrefDTCB (LrefTCB l _)) = l
 
@@ -545,6 +544,17 @@ openRPD p = openRP p . unLrefD
 closeRDTCB :: (Label l) => LIO l s a -> LIO l s (LrefD l a)
 closeRDTCB m = closeR m >>= return . LrefDTCB
 
+-- | @closeRD@ is the function corresponding to 'Lref's 'closeR',
+--   howerver it requres a label for the resulting 'LrefD' that
+--   must not be exceeded by the current label of the execute
+--   computation. If the given label is not high enough the
+--   function throws 'LerrLow'.
+closeRD :: (Label l) => l -> LIO l s a -> LIO l s (LrefD l a)
+closeRD l m = do 
+  (LrefTCB l' x) <- closeR m
+  if not (l' `leq` l)
+    then throwIO LerrLow
+    else return $ lrefDTCB l x
 
 
 --
