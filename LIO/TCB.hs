@@ -43,6 +43,10 @@
 -- untrusted code should access the core label functionality.
 -- ("LIO.Base" is also re-exported by "LIO.LIO", the main gateway to
 -- this library.)
+--
+-- TODO: For now, 'Lref' is an instance of Monad. Howerver this should
+-- not be the case and will be removed on the next update.
+--
 module LIO.TCB (
                -- * Basic label functions
                -- $labels
@@ -477,6 +481,8 @@ lrefTLabelTCB l = LrefT $ return $ LrefTCB l ()
 --   export of 'closeRDTCB'. Although arbitrary 'LIO' computations cannot
 --   be sealed in an @LrefD@, we provide 'closeRD' which takes an label
 --   as an upperbound on the current label of the computation to be executed.
+--   This function may be exported to untrusted code as to provide the
+--   equivalent of 'Lref'\'s 'closeR'
 --
 -- @
 --   -- lLabel ``leq`` mLabel, lLabel ``leq`` hLabel, and mLabel ``leq`` hLabel
