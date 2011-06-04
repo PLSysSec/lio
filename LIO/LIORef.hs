@@ -9,13 +9,19 @@ module LIO.LIORef (LIORef
 
 import LIO.TCB
 import Data.IORef
+import Control.Monad (unless)
 
 
 data LIORef l a = LIORefTCB l (IORef a)
 
+wguardNoTaint l = do
+  l' <- currentLabel 
+  unless (l' `leq` l) $ throwIO LerrHigh
+
+
 newLIORef :: (Label l) => l -> a -> LIO l s (LIORef l a)
 newLIORef l a = do
-  wguard l
+  wguardNoTaint l
   ior <- ioTCB $ newIORef a
   return $ LIORefTCB l ior
 
@@ -30,12 +36,12 @@ readLIORef (LIORefTCB l r) = do
 
 writeLIORef :: (Label l) => LIORef l a -> a -> LIO l s ()
 writeLIORef (LIORefTCB l r) a = do
-  wguard l
+  wguardNoTaint l
   ioTCB $ writeIORef r a
 
 atomicModifyLIORef :: (Label l) =>
                       LIORef l a -> (a -> (a, b)) -> LIO l s b
 atomicModifyLIORef (LIORefTCB l r) f = do
-  wguard l
+  wguardNoTaint l
   ioTCB $ atomicModifyIORef r f
 
