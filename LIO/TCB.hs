@@ -73,7 +73,7 @@ module LIO.TCB (
                , LrefD
                , lrefD, lrefPD, unlrefPD, labelOfRD
                , taintRD, openRD, openRPD
-               , closeRD
+               , closeRD, closeRPD 
                -- * Exceptions
                -- ** Exception type thrown by LIO library
                , LabelFault(..)
@@ -103,11 +103,8 @@ module LIO.TCB (
                -- ** Misc symbols useful for privileged code
                , newstate, LIOstate, runLIO
                -- End TCB exports
-{-               , lvalue, Lvalue
-               , openRv
--}
                ) where
-
+import Debug.Trace
 import Prelude hiding (catch)
 import Control.Applicative
 import Control.Monad.Error
@@ -556,11 +553,16 @@ closeRDTCB m = closeR m >>= return . LrefDTCB
 --   computation. If the given label is not high enough the
 --   function throws 'LerrLow'.
 closeRD :: (Label l) => l -> LIO l s a -> LIO l s (LrefD l a)
-closeRD l m = do 
+closeRD = closeRPD NoPrivs
+
+closeRPD :: (Priv l p) => p -> l -> LIO l s a -> LIO l s (LrefD l a)
+closeRPD p l m = do 
+  cc <- currentClearance
+  unless (l `leq` cc) $ throwIO LerrHigh -- ^ l is too high
   (LrefTCB l' x) <- closeR m
-  if not (l' `leq` l)
-    then throwIO LerrLow
-    else return $ lrefDTCB l x
+  trace ((show l') ++ " ?<=? " ++ (show l)) $ throwIO LerrLow
+  unless (leqp p l' l) $ throwIO LerrLow  -- ^ l is too low
+  return $ lrefDTCB l x
 
 
 --
@@ -1166,47 +1168,3 @@ instance (Label l) => MonadError IOException (LIO l s) where
 -- | Evaluate in LIO.
 evaluate :: (Label l) => a -> LIO l s a
 evaluate = rtioTCB . E.evaluate
-
-
-{-
---
--- Lvalue
---
-data (Label l) => Lv l t = LvTCB l t -- same as Lref
-newtype (Label l) => Lvalue l s t = LvalueTCB (LIO l s (Lv l t)) -- the exported Lvalue
-
-instance (Label l) => Monad (Lvalue l s) where
-  return x = LvalueTCB $ get >>= \s -> return $ LvTCB (lioL s) x
-  (LvalueTCB lx) >>= f = LvalueTCB $ do
-    (LvTCB l x) <- lx
-    s <- get
-
-    let (LvalueTCB lx') = f x
-    (LvTCB l' x') <- lx'
-    s' <- get
-
-    let lc = (lioL s) `lub` (lioL s') -- upperbound of two contexts
-        cc = lioC s' -- clearance of the second action
-        lnew = l `lub` l' `lub` lc -- do not throw exception if label < context labe, raise it instead
-    clearGuard lc cc     -- check that context label < context clearance
-    clearGuard lnew cc   -- check that Lv label is < context clearance
-
-    put s' { lioL = lc }
-    return $ LvTCB lnew x'
-
-      where clearGuard l c | not $ l `leq` c = throwIO LerrClearance
-                           | otherwise       = return ()
-
-lvalue :: (Label l) => l -> t -> LIO l s (Lvalue l s t)
-lvalue l a = return . LvalueTCB $ get >>= doit
-    where doit s | not $ l `leq` lioC s = throwIO LerrClearance
-                 | otherwise            = return $ LvTCB (l `lub` lioL s) a
-
-openRv :: (Label l) => Lvalue l s t -> LIO l s t
-openRv (LvalueTCB lx) = do
-  (LvTCB l x) <- lx
-  taintL l
-  return x
--}
-
-
