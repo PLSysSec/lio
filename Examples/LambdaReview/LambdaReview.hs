@@ -4,14 +4,23 @@ import Control.Monad
 import Control.Monad.State
 import Data.Maybe
 import Data.List
+import Data.Monoid
 
 import LIO.TCB
 import LIO.LIORef
+import LIO.MonadLIO
 import LIO.DCLabel
 import LIO.DCLabel.NanoEDSL
 
 type DCLabeled = LrefD DCLabel
 type DCRef     = LIORef DCLabel
+
+-- ^ Clss to with sideffectful show
+class DCShowTCB s where
+  dcShowTCB :: s -> DC String
+
+dcPutStrLnTCB :: String -> DC ()
+dcPutStrLnTCB = ioTCB . putStrLn
 
 type Name = String
 type Password = String
@@ -28,10 +37,25 @@ data User = User { name :: Name
                  , password :: Password
                  }
 
+instance DCShowTCB User where
+  dcShowTCB u = do
+    return $  "Name: " ++ (name u) ++ "\n"
+           ++ "Password: " ++ (password u)
+
 data ReviewEnt =  ReviewEnt { paperId :: Id
                             , paper   :: DCRef Paper
                             , review  :: DCRef Review
                             }
+
+instance DCShowTCB ReviewEnt where
+  dcShowTCB r = do
+    (Paper pap) <- readLIORefTCB (paper r)
+    rev <- readLIORefTCB (review r)
+    return $  "ID:" ++ (show . paperId $ r)
+           ++ "\nPaper:" ++ (showTCB pap)
+           ++ "\nReviews:" ++ (showTCB . content $ rev)
+           ++ "\nConflicts: [" ++ (show ((map name) . conflicts $ rev)) ++ "]"
+
 
 -- State related
 type ReviewState = ([User], [ReviewEnt])
@@ -76,7 +100,7 @@ findUser n = do
   users <- getUsers
   return $ find (\u -> name u == n) users 
 
--- ^ Add user
+-- ^ Add new (fresh) user
 addUser :: Name -> Password -> ReviewDC ()
 addUser n p = do
   u <- findUser n
@@ -86,15 +110,58 @@ addUser n p = do
     us <- getUsers
     putUsers (newUser:us)
 
+-- ^ Print users
+printUsersTCB :: ReviewDC ()
+printUsersTCB = do
+ users <- getUsers
+ mapM (liftLIO . dcShowTCB) users >>=
+   liftLIO . dcPutStrLnTCB . (intercalate "\n--\n")
+
+-- ^ Print papers and reviews
+printReviewsTCB :: ReviewDC ()
+printReviewsTCB = do
+ reviews <- getReviews
+ mapM (liftLIO . dcShowTCB) reviews >>=
+   liftLIO . dcPutStrLnTCB . (intercalate "\n--\n")
+
+-- | Generate privilege from a string
+genPrivTCB :: String -> DCPrivs
+genPrivTCB = mintTCB . Principal
+
+-- ^ Make \"unforgeable\" secrecy principal
+mkUSecPrincipal i = "__P" ++ (show i) ++ "__"
+
+-- ^ Create new paper given id and content
+newReviewEnt :: Id -> Content -> ReviewDC ReviewEnt
+newReviewEnt pId content = do
+  let emptyLabel = exprToDCLabel NoPrincipal NoPrincipal 
+      p1  = "P" ++ show pId
+      p1u = mkUSecPrincipal pId
+      reviewLabel = exprToDCLabel p1u NoPrincipal
+      rLabel = exprToDCLabel NoPrincipal p1
+      privs = mconcat $ map genPrivTCB [p1, p1u]
+  liftLIO $ do
+    lPaperCont <- lrefPD privs emptyLabel content
+    lEmptyRev  <- lrefPD privs reviewLabel ""
+    rPaper  <- newLIORefP privs rLabel (Paper lPaperCont)
+    rReview <- newLIORefP privs rLabel (Review lEmptyRev [])
+    return $ ReviewEnt pId rPaper rReview
+
+-- ^ Adda new paper to be reviewed
+addPaper content = do
+  reviews <- getReviews
+  let pId = 1 + (length reviews)
+  ent <- newReviewEnt pId content
+  putReviews (ent:reviews)
 
 
-
-
-
-main = do
-  (a,_) <- evalReviewDC $
-    return ()
-  return a
+main = evalReviewDC $ do
+ addUser "deian" "password"
+ addUser "alejandro" "pass"
+ addPaper "Paper content"
+ addPaper "Another paper content"
+ printUsersTCB
+ printReviewsTCB
 
 
 

@@ -5,6 +5,12 @@
 module LIO.LIORef (LIORef
                   , newLIORef, labelOfLIORef
                   , readLIORef, writeLIORef, atomicModifyLIORef
+                  -- * With privileges
+                  , newLIORefP
+                  , readLIORefP, writeLIORefP, atomicModifyLIORefP
+                  -- * TCB
+                  , newLIORefTCB
+                  , readLIORefTCB, writeLIORefTCB, atomicModifyLIORefTCB
                   ) where
 
 import LIO.TCB
@@ -14,34 +20,70 @@ import Control.Monad (unless)
 
 data LIORef l a = LIORefTCB l (IORef a)
 
-wguardNoTaint l = do
+wguardNoTaintP p l = do
   l' <- currentLabel 
-  unless (l' `leq` l) $ throwIO LerrHigh
+  unless (leqp p l' l) $ throwIO LerrHigh
 
 
-newLIORef :: (Label l) => l -> a -> LIO l s (LIORef l a)
-newLIORef l a = do
-  wguardNoTaint l
+newLIORefP :: (Priv l p) => p -> l -> a -> LIO l s (LIORef l a)
+newLIORefP p l a = do
+  wguardNoTaintP p l
   ior <- ioTCB $ newIORef a
   return $ LIORefTCB l ior
+
+newLIORef :: (Label l) => l -> a -> LIO l s (LIORef l a)
+newLIORef = newLIORefP NoPrivs
+
+newLIORefTCB :: (Label l) => l -> a -> LIO l s (LIORef l a)
+newLIORefTCB l a = do
+  ior <- ioTCB $ newIORef a
+  return $ LIORefTCB l ior
+
+--
 
 labelOfLIORef :: (Label l) => LIORef l a -> l
 labelOfLIORef (LIORefTCB l _) = l
 
-readLIORef :: (Label l) => LIORef l a -> LIO l s a
-readLIORef (LIORefTCB l r) = do
-  taint l
+--
+
+readLIORefP :: (Priv l p) => p -> LIORef l a -> LIO l s a
+readLIORefP p (LIORefTCB l r) = do
+  taintP p l
   val <- ioTCB $ readIORef r
   return val
 
-writeLIORef :: (Label l) => LIORef l a -> a -> LIO l s ()
-writeLIORef (LIORefTCB l r) a = do
-  wguardNoTaint l
+readLIORef :: (Label l) => LIORef l a -> LIO l s a
+readLIORef = readLIORefP NoPrivs
+
+readLIORefTCB :: (Label l) => LIORef l a -> LIO l s a
+readLIORefTCB (LIORefTCB l r) = ioTCB $ readIORef r
+
+--
+
+writeLIORefP :: (Priv l p) => p -> LIORef l a -> a -> LIO l s ()
+writeLIORefP p (LIORefTCB l r) a = do
+  wguardNoTaintP p l
   ioTCB $ writeIORef r a
+
+writeLIORef :: (Label l) => LIORef l a -> a -> LIO l s ()
+writeLIORef = writeLIORefP NoPrivs 
+
+writeLIORefTCB :: (Label l) => LIORef l a -> a -> LIO l s ()
+writeLIORefTCB (LIORefTCB l r) a = ioTCB $ writeIORef r a
+
+--
+
+atomicModifyLIORefP :: (Priv l p) =>
+                       p -> LIORef l a -> (a -> (a, b)) -> LIO l s b
+atomicModifyLIORefP p (LIORefTCB l r) f = do
+  wguardNoTaintP p l
+  ioTCB $ atomicModifyIORef r f
 
 atomicModifyLIORef :: (Label l) =>
                       LIORef l a -> (a -> (a, b)) -> LIO l s b
-atomicModifyLIORef (LIORefTCB l r) f = do
-  wguardNoTaint l
-  ioTCB $ atomicModifyIORef r f
+atomicModifyLIORef = atomicModifyLIORefP NoPrivs
+
+atomicModifyLIORefTCB :: (Label l) =>
+                      LIORef l a -> (a -> (a, b)) -> LIO l s b
+atomicModifyLIORefTCB (LIORefTCB l r) f = ioTCB $ atomicModifyIORef r f
 
