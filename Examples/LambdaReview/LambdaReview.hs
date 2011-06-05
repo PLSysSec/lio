@@ -29,11 +29,12 @@ type Reviews = String
 
 type Id     = Int
 data Paper  = Paper  Content
-data Review = Review (DCLabeled Content)
+data Review = Review Content
 
 data User = User { name :: Name
                  , password :: Password
-                 , conflicts :: [Id] }
+                 , conflicts :: [Id]
+                 , assignments :: [Id] }
 
 instance Eq User where
   u1 == u2 = name u1 == name u2
@@ -43,6 +44,7 @@ instance DCShowTCB User where
     return $  "Name: " ++ (name u) ++ "\n"
            ++ "Password: " ++ (password u) ++ "\n"
            ++ "Conflicts: " ++ (show . conflicts $ u)
+           ++ "Assignments: " ++ (show . assignments $ u)
 
 data ReviewEnt =  ReviewEnt { paperId :: Id
                             , paper   :: DCRef Paper
@@ -57,7 +59,7 @@ instance DCShowTCB ReviewEnt where
     (Review rev) <- readLIORefTCB (review r)
     return $  "ID:" ++ (show . paperId $ r)
            ++ "\nPaper:" ++ pap
-           ++ "\nReviews:" ++ (showTCB $ rev)
+           ++ "\nReviews:" ++ rev
 
 
 -- State related
@@ -91,6 +93,7 @@ getReviews = get >>= return . reviewEntries
 getCurUserName :: ReviewDC (Maybe Name)
 getCurUserName = get >>= return . curUser
 
+-- ^ Get curren tuser name
 getCurUser :: ReviewDC (Maybe User)
 getCurUser = do
   n <- getCurUserName
@@ -123,6 +126,13 @@ putCurUserName u = do
   rs <- getReviews
   put $ ReviewState us rs (Just u)
 
+-- ^ Clear user naem
+clearCurUserName :: ReviewDC ()
+clearCurUserName = do
+  us <- getUsers
+  rs <- getReviews
+  put $ ReviewState us rs Nothing
+
 -- ^ Find review entry by id
 findReview :: Id -> ReviewDC (Maybe ReviewEnt)
 findReview pId = do
@@ -142,7 +152,8 @@ addUser n p = do
   unless (isJust u) $ do
     let newUser = User { name = n
                        , password = p
-                       , conflicts = [] }
+                       , conflicts = []
+                       , assignments = [] }
     us <- getUsers
     putUsers (newUser:us)
 
@@ -152,12 +163,26 @@ addConflict n i = do
   usr <- findUser n
   pap <- findReview i
   case (usr, pap) of
-    (Just u, Just _) -> do
-      let u' = u { conflicts = i : (conflicts u)}
-      usrs <- getUsers
-      putUsers $ u' : (filter (/= u) usrs)
-      return ()
-      
+    (Just u, Just _) -> 
+      if i `elem` (assignments u)
+        then return ()
+        else do let u' = u { conflicts = i : (conflicts u)}
+                usrs <- getUsers
+                putUsers $ u' : (filter (/= u) usrs)
+    _ -> return ()
+
+-- ^ Assign a paper for the user to review
+addAssignment :: Name -> Id -> ReviewDC ()
+addAssignment n i = do
+  usr <- findUser n
+  pap <- findReview i
+  case (usr, pap) of
+    (Just u, Just _) -> 
+      if i `elem` (conflicts u)
+        then return ()
+        else do let u' = u { assignments = i : (assignments u)}
+                usrs <- getUsers
+                putUsers $ u' : (filter (/= u) usrs)
     _ -> return ()
 
 -- ^ Print users
@@ -178,20 +203,17 @@ printReviewsTCB = do
 genPrivTCB :: String -> DCPrivs
 genPrivTCB = mintTCB . Principal
 
-
 -- ^ Create new paper given id and content
 newReviewEnt :: Id -> Content -> ReviewDC ReviewEnt
 newReviewEnt pId content = do
   let p1 = "Paper" ++ (show pId)
       r1 = "Review" ++ (show pId)
-      emptyLabel = exprToDCLabel r1 (("Alice" .\/. "Bob") ./\. r1)
       pLabel = exprToDCLabel NoPrincipal p1
       rLabel = exprToDCLabel r1 r1
-      privs = mconcat $ map genPrivTCB [p1, r1, "Alice", "Bob"]
+      privs = mconcat $ map genPrivTCB [p1, r1]--, "Alice", "Bob"]
   liftLIO $ do
-    lEmptyRev  <- lrefPD privs emptyLabel "EMPTY REVIEW" -- TODO: CHANGE!!
     rPaper  <- newLIORefP privs pLabel (Paper content)
-    rReview <- newLIORefP privs rLabel (Review lEmptyRev)
+    rReview <- newLIORefP privs rLabel (Review "...")
     return $ ReviewEnt pId rPaper rReview
 
 -- ^ Adda new paper to be reviewed
@@ -214,7 +236,7 @@ readPaper pId = do
              (Paper lPaper) <- readLIORef (paper rev)
              return lPaper
 
--- ^ Given a paper number return the review
+-- ^ Given a paper number print the review
 readReview :: Id -> ReviewDC (Either String ())
 readReview pId = do
   mRev <- findReview pId 
@@ -228,10 +250,10 @@ readReview pId = do
                      r <- doReadReview l rev
                      return $ Right r
    where doReadReview l rev = liftLIO $ do
-             (Review lReview) <- readLIORef (review rev)
-             rev <- openRD lReview
-             dcPutStrLn l rev
+             (Review r) <- readLIORef (review rev)
+             dcPutStrLn l r
 
+-- ^ Computer the label of the output channel
 getOutputChLbl :: ReviewDC (DCLabel) 
 getOutputChLbl = do
   mu <- getCurUser
@@ -244,18 +266,16 @@ getOutputChLbl = do
           conf = map id2c' cs
           s = dcsFromList $ ok ++ conf
       return $ DCLabel s dcsEmpty
-
         where id2c  i = dcSingleton Secrecy . Principal $ "Review"++(show i)
               id2c' i = exprToDCat Secrecy (("Review"++(show i)) .\/. "CONFLICT")
           
-
 -- ^ Print if there is no conflict of interest
 dcPutStrLn :: DCLabel -> Content -> DC ()
 dcPutStrLn l cont = do
   lc <- currentLabel
   unless (not (lc `leq` l)) $ dcPutStrLnTCB cont
 
-
+-- ^ Given a paper number and review content append to the current review
 appendToReview :: Id -> Content -> ReviewDC (Either String ())
 appendToReview pId content = do
   mRev <- findReview pId 
@@ -267,10 +287,30 @@ appendToReview pId content = do
    where doWriteReview privs rev content = liftLIO $ do
            cc <- currentClearance
            closeRPD privs (labelOfLIORef (review rev)) $ do
-             (Review lReview) <- readLIORef (review rev)
-             rs <- openRD lReview
-             lReview' <- lrefPD privs (labelOfRD lReview) (rs++content)
-             writeLIORef (review rev) (Review lReview')
+             (Review rs) <- readLIORef (review rev)
+             writeLIORef (review rev) (Review (rs++content))
+
+assign2curLabel :: [Id] -> ReviewDC() 
+assign2curLabel as = liftLIO $ do
+  let l = DCLabel dcsEmpty (dcsFromList $ map id2c as)
+  setLabelTCB l
+        where id2c i = dcSingleton Integrity . Principal $ "Review"++(show i)
+  
+
+
+
+asUser :: Name -> ReviewDC () -> ReviewDC ()
+asUser n m = do
+  putCurUserName n
+  mu <- getCurUser
+  case mu of
+    Nothing -> return ()
+    Just u -> do
+      putCurUserName (name u)
+      assign2curLabel (assignments u)
+      m
+      clearCurUserName
+
 
 main = evalReviewDC $ do
   addUser "Alice" "password"
@@ -282,12 +322,14 @@ main = evalReviewDC $ do
   addConflict "Alice" 3
 --  liftLIO $ setLabelTCB aliceLabel
   --liftLIO . setClearanceTCB $ exprToDCLabel AllPrincipals ("Review1" .\/. "Review2")
-  liftLIO . setLabelTCB $ exprToDCLabel NoPrincipal ("Review1" ./\. "Review2")
-  putCurUserName "Alice"
-  --lc <- liftLIO $ currentLabel
-  --liftLIO . dcPutStrLnTCB $ "CurLabel = " ++ (show lc)
-  appendToReview 1 "bad"
-  appendToReview 2 "good"
+  --liftLIO . setLabelTCB $ exprToDCLabel NoPrincipal ("Review1" ./\. "Review2")
+  addAssignment "Alice" 1
+  addAssignment "Alice" 2
+  asUser "Alice" $ do
+    appendToReview 1 "bad"
+--  readReview 1
+    appendToReview 2 "good"
+    return ()
   {-
   appendToReview 2 "why"
   appendToReview 2 "nono"
@@ -297,7 +339,6 @@ main = evalReviewDC $ do
   --readPaper 1
 --  cc <- currentClearance
 --  readReview 2
---  readReview 1
   printUsersTCB
   printReviewsTCB
 
