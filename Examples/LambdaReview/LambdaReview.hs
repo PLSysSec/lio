@@ -1,6 +1,9 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module LambdaReview where
 
+import Prelude hiding (catch)
 import Control.Monad
+import Control.Exception (SomeException)
 import Control.Monad.State
 import Data.Maybe
 import Data.List
@@ -213,7 +216,7 @@ newReviewEnt pId content = do
       privs = mconcat $ map genPrivTCB [p1, r1]--, "Alice", "Bob"]
   liftLIO $ do
     rPaper  <- newLIORefP privs pLabel (Paper content)
-    rReview <- newLIORefP privs rLabel (Review "...")
+    rReview <- newLIORefP privs rLabel (Review "")
     return $ ReviewEnt pId rPaper rReview
 
 -- ^ Adda new paper to be reviewed
@@ -290,15 +293,29 @@ appendToReview pId content = do
              (Review rs) <- readLIORef (review rev)
              writeLIORef (review rev) (Review (rs++content))
 
+-- ^ Setthe current label to the assignments
 assign2curLabel :: [Id] -> ReviewDC() 
 assign2curLabel as = liftLIO $ do
   let l = DCLabel dcsEmpty (dcsFromList $ map id2c as)
   setLabelTCB l
         where id2c i = dcSingleton Integrity . Principal $ "Review"++(show i)
   
+-- ^ Safely execute untrusted code
+safeExecTCB :: ReviewDC () -> ReviewDC ()
+safeExecTCB m = do
+  s <- get
+  s' <- liftLIO $ do
+    cc <- currentClearance
+    cl <- currentLabel
+    (_, s') <- (runReviewDC m s) `catch`  (\(e::SomeException) -> do
+                                            dcPutStrLnTCB "\n>!IFC violated!<\n"
+                                            return ((), s))
+    setClearanceTCB cc
+    setLabelTCB cl
+    return s'
+  put s'
 
-
-
+-- ^ Execute on behalf of user
 asUser :: Name -> ReviewDC () -> ReviewDC ()
 asUser n m = do
   putCurUserName n
@@ -306,9 +323,8 @@ asUser n m = do
   case mu of
     Nothing -> return ()
     Just u -> do
-      putCurUserName (name u)
-      assign2curLabel (assignments u)
-      m
+      liftLIO . dcPutStrLnTCB $ "Executing on behalf of "++(name u)++"...\n"
+      safeExecTCB $ assign2curLabel (assignments u) >> m
       clearCurUserName
 
 
@@ -319,34 +335,29 @@ main = evalReviewDC $ do
 
   addPaper "Paper content"
   addPaper "Another paper content"
-  addConflict "Alice" 3
---  liftLIO $ setLabelTCB aliceLabel
-  --liftLIO . setClearanceTCB $ exprToDCLabel AllPrincipals ("Review1" .\/. "Review2")
-  --liftLIO . setLabelTCB $ exprToDCLabel NoPrincipal ("Review1" ./\. "Review2")
+  addPaper "Third paper"
+
+  addConflict "Clarice" 3
+                                    
   addAssignment "Alice" 1
   addAssignment "Alice" 2
+
   asUser "Alice" $ do
-    appendToReview 1 "bad"
---  readReview 1
-    appendToReview 2 "good"
+    appendToReview 1 "great paper!"
+    readReview 1
+    appendToReview 2 "terrible paper!"
     return ()
-  {-
-  appendToReview 2 "why"
-  appendToReview 2 "nono"
-  readPaper 1 >>= liftLIO . dcPutStrLnTCB . show
-  readPaper 2 >>= liftLIO . dcPutStrLnTCB . show
-  -}
-  --readPaper 1
---  cc <- currentClearance
---  readReview 2
-  printUsersTCB
-  printReviewsTCB
 
+  addAssignment "Bob" 1
+  addAssignment "Bob" 3
 
+  asUser "Bob" $ do
+    appendToReview 1 "no comment."
+    appendToReview 3 "good paper!"
+    return ()
 
--- Add paper
--- Add reviewer: can read any paper or non-conflicting review 
--- Add conflict: should prevent a reviewer from reading the reviews
--- Remove conflict: should now allow the reviewer to read reviews
--- Assign reviewer: assing a reviewer to a paper
--- Login
+  asUser "Clarice" $ do
+    readReview 1
+    readReview 3
+    readReview 2
+    return ()
