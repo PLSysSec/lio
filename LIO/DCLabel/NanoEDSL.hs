@@ -2,12 +2,12 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 
 {- |
-  This module implements a ``nano``, very simple, embedded domain specific language to create labels from
-  conjunctions of principal disjunctions.
+  This module implements a ``nano``, very simple, embedded domain specific
+  language to create labels from conjunctions of principal disjunctions.
   
   An expression is created using the ('.\/.') and ('./\.') operators.
-  The disjunction operator ('.\/.') is used to create a category from 'Principal's, 'String's,
-  or a disjunctive sub-expression. For example:
+  The disjunction operator ('.\/.') is used to create a category from
+  'Principal's, 'String's, or a disjunctive sub-expression. For example:
 
   @
      p1 = 'Principal' \"p1\"
@@ -17,20 +17,22 @@
      e2 = e1 '.\/.' \"p4\"
   @
 
-  Similarly, the conjunction operator ('./\.') is used to create category-sets from 
-  'Principals', 'Strings', and conjunctive or disjunctive sub-expressions. For example:
+  Similarly, the conjunction operator ('./\.') is used to create category-sets
+  from 'Principals', 'Strings', and conjunctive or disjunctive sub-expressions.
+  For example:
 
   @
      e3 = p1 '.\/.' p2
      e4 = e1 './\.' \"p4\" './\.' p3
   @
 
-  /Note/ that because a category consists of a disjunction of principals, and a category set
-  is composed of the conjunction of categories, ('.\/.') binds more tightly than ('./\.').
+  /Note/ that because a category consists of a disjunction of principals, and a
+  category set is composed of the conjunction of categories, ('.\/.') binds
+  more tightly than ('./\.').
 
   Given an expression, one may convert it to a 'DCSet'  with 'exprTODCSet'.
-  Similarly given two expressions, one for secrecy and one for integrity, one may convert it 
-  to a 'DCLabel' with 'exprToDCLabel. For example:
+  Similarly given two expressions, one for secrecy and one for integrity, one
+  may convert it to a 'DCLabel' with 'exprToDCLabel. For example:
 
   @
      Prelude\> 'exprToDCLabel' (\"a\" '.\/.' \"b\" './\.' \"c\") e4
