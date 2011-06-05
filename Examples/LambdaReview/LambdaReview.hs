@@ -249,15 +249,11 @@ getOutputChLbl = do
               id2c' i = exprToDCat Secrecy (("Review"++(show i)) .\/. "CONFLICT")
           
 
-
-
+-- ^ Print if there is no conflict of interest
 dcPutStrLn :: DCLabel -> Content -> DC ()
 dcPutStrLn l cont = do
   lc <- currentLabel
-  --dcPutStrLnTCB (show $ dclS lc)
-  if lc `leq` l
-    then dcPutStrLnTCB cont
-    else dcPutStrLnTCB "Conflict of interest!"
+  unless (not (lc `leq` l)) $ dcPutStrLnTCB cont
 
 
 appendToReview :: Id -> Content -> ReviewDC (Either String ())
@@ -269,9 +265,10 @@ appendToReview pId content = do
                    doWriteReview privs rev content
                    return $ Right ()
    where doWriteReview privs rev content = liftLIO $ do
+           cc <- currentClearance
+           closeRPD privs (labelOfLIORef (review rev)) $ do
              (Review lReview) <- readLIORef (review rev)
              rs <- openRD lReview
-             dcPutStrLnTCB (showTCB lReview)
              lReview' <- lrefPD privs (labelOfRD lReview) (rs++content)
              writeLIORef (review rev) (Review lReview')
 
@@ -279,23 +276,28 @@ main = evalReviewDC $ do
   addUser "Alice" "password"
   addUser "Bob" "pass"
   addUser "Clarice" "bss"
+
   addPaper "Paper content"
   addPaper "Another paper content"
-  addConflict "Alice" 1
+  addConflict "Alice" 3
 --  liftLIO $ setLabelTCB aliceLabel
+  --liftLIO . setClearanceTCB $ exprToDCLabel AllPrincipals ("Review1" .\/. "Review2")
   liftLIO . setLabelTCB $ exprToDCLabel NoPrincipal ("Review1" ./\. "Review2")
-  putCurUserName "Bob"
---  liftLIO . setClearanceTCB $ exprToDCLabel (u {- ./\. "Review1" -}) NoPrincipal
+  putCurUserName "Alice"
   --lc <- liftLIO $ currentLabel
   --liftLIO . dcPutStrLnTCB $ "CurLabel = " ++ (show lc)
+  appendToReview 1 "bad"
+  appendToReview 2 "good"
   {-
-  appendToReview 2 "bad"
   appendToReview 2 "why"
   appendToReview 2 "nono"
   readPaper 1 >>= liftLIO . dcPutStrLnTCB . show
   readPaper 2 >>= liftLIO . dcPutStrLnTCB . show
   -}
-  readReview 1
+  --readPaper 1
+--  cc <- currentClearance
+--  readReview 2
+--  readReview 1
   printUsersTCB
   printReviewsTCB
 
