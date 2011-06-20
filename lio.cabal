@@ -1,5 +1,5 @@
 Name:           lio
-Version:        0.0
+Version:        0.0.1
 Cabal-Version:  >= 1.2.3
 build-type:     Simple
 License:        GPL
@@ -25,9 +25,10 @@ Description:
 
         The extended version of our paper, that includes the proofs
         is available here:
-        @http:\/\/www.scs.stanford.edu\/~deian\/lio\/extended.pdf@
+        <http://www.scs.stanford.edu/~deian/lio/extended.pdf>
 
         To obtain the latest experimental source code, run:
+
 
         @git clone http:\/\/www.scs.stanford.edu\/~deian\/lio\/lio.git@
 
