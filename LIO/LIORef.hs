@@ -20,14 +20,10 @@ import Control.Monad (unless)
 
 data LIORef l a = LIORefTCB l (IORef a)
 
-wguardNoTaintP p l = do
-  l' <- currentLabel 
-  unless (leqp p l' l) $ throwIO LerrHigh
-
 
 newLIORefP :: (Priv l p) => p -> l -> a -> LIO l s (LIORef l a)
 newLIORefP p l a = do
-  wguardNoTaintP p l
+  aguardP p l
   ior <- ioTCB $ newIORef a
   return $ LIORefTCB l ior
 
@@ -62,7 +58,7 @@ readLIORefTCB (LIORefTCB l r) = ioTCB $ readIORef r
 
 writeLIORefP :: (Priv l p) => p -> LIORef l a -> a -> LIO l s ()
 writeLIORefP p (LIORefTCB l r) a = do
-  wguardNoTaintP p l
+  aguardP p l
   ioTCB $ writeIORef r a
 
 writeLIORef :: (Label l) => LIORef l a -> a -> LIO l s ()
@@ -76,7 +72,7 @@ writeLIORefTCB (LIORefTCB l r) a = ioTCB $ writeIORef r a
 atomicModifyLIORefP :: (Priv l p) =>
                        p -> LIORef l a -> (a -> (a, b)) -> LIO l s b
 atomicModifyLIORefP p (LIORefTCB l r) f = do
-  wguardNoTaintP p l
+  aguardP p l
   ioTCB $ atomicModifyIORef r f
 
 atomicModifyLIORef :: (Label l) =>

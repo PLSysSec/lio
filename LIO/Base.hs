@@ -7,19 +7,16 @@ module LIO.Base (
                POrdering(..), POrd(..), o2po, Label(..)
                , Priv(..), NoPrivs(..)
                , LIO
-               , currentLabel, setLabelP
-               , currentClearance, setClearance, setClearanceP, withClearance
-               , taint, taintP, taintL, taintLP
-               , wguard, wguardP, aguard
-               , Lref
-               , lref, lrefP, unlrefP, labelOfR, labelOfRP
-               , taintR, guardR, guardRP
-               , openR, openRP, closeR, discardR
-               , LrefT(..)
-               , LrefD
-               , lrefD, lrefPD, unlrefPD, labelOfRD
-               , taintRD, openRD, openRPD
-               , openRD, closeRPD 
+               , getLabel, setLabelP
+               , getClearance, lowerClr, lowerClrP, withClearance
+               , taint, taintP
+               , wguard, wguardP, aguard, aguardP
+               , Labeled
+               , label, labelP
+               , unlabel, unlabelP
+               , toLabeled, toLabeledP, discard
+               , labelOf
+               , taintLabeled
                , LabelFault(..)
                , catchP, onExceptionP, bracketP, handleP
                , evaluate
@@ -32,14 +29,10 @@ import LIO.TCB hiding (
                --
                , ShowTCB(..)
                , ReadTCB(..)
-               , lrefTCB
-               , lrefDTCB
+               , labelTCB
                , PrivTCB, MintTCB(..)
                , showTCB
-               , unlrefTCB, labelOfRTCB, setLabelTCB, setClearanceTCB
-               , unlrefDTCB
-               , closeRDTCB
-               , unliftLrefTTCB, lrefTLabelTCB  
+               , unlabelTCB, setLabelTCB, lowerClrTCB
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)

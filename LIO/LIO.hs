@@ -51,7 +51,8 @@
 
         In general, pragmas and imports should be highly scrutinized.  For
         example, most of the "Foreign" class of modules are probably
-        dangerous.
+        dangerous. With GHC 7.2, we will use the SafeHaskell extension 
+        to enforce these.
 -}
 module LIO.LIO (module LIO.Base
                , module LIO.Handle

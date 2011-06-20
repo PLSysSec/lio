@@ -25,6 +25,12 @@ by removing /any/ 'DCatS' containing that Principal and adding /any/
 /disjunction categories/:  The category [P1, P2] can be downgraded by
 /either/ Principal P1 or P2.
 
+NOTE: This is a slightly old implementation of DCLabels, for which
+the join does not return the least upper bound. We have an internal
+version that fixes this and further simplifies DCLabels -- we 
+will update this when that implementation is clean. Upon request,
+we can also provide the code individually.
+
 -}
 
 module LIO.DCLabel.Label
@@ -46,13 +52,9 @@ module LIO.DCLabel.Label
     , DCPrivs, dcprivs, owns
     -- * Useful aliases for the LIO Monad
     , DC, evalDC
-    -- * Useful aliases for the IterIO Monad
-    , evalIterDC 
     ) where
 
 import LIO.TCB
-import LIO.IterLIO 
-import Data.IterIO 
 
 import Control.DeepSeq
 import Control.Applicative
@@ -313,8 +315,8 @@ dclReduce                 :: DCLabel -> DCLabel
 dclReduce (DCLabel s1 i1) = DCLabel (dcsReduce s1) (dcsReduce i1)
 
 instance Label DCLabel where
-    lpure = DCLabel dcsEmpty dcsEmpty
-    lclear = DCLabel dcsAll dcsEmpty
+    lbot = DCLabel dcsEmpty dcsEmpty
+    ltop = DCLabel dcsAll dcsEmpty
     lub (DCLabel s1 i1) (DCLabel s2 i2) =
         DCLabel (dcsUnion' s1 s2) (dcsIntersection' i1 i2)
     glb (DCLabel s1 i1) (DCLabel s2 i2) =
@@ -383,8 +385,3 @@ type DC = LIO DCLabel ()
 -- computation's result and the label of the result.
 evalDC :: DC a -> IO (a, DCLabel)
 evalDC m = evalLIO m ()
-
--- | Runs a 'LIO' 'Iter', returning the computation's result and
--- label in an 'IO' 'Iter'.
-evalIterDC :: (ChunkData t) => Iter t DC a -> Iter t IO (a, DCLabel)
-evalIterDC iter = evalIterLIO () iter
