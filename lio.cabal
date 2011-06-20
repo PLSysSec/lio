@@ -4,14 +4,12 @@ Cabal-Version:  >= 1.2.3
 build-type:     Simple
 License:        GPL
 License-File:   LICENSE
-Author:         David Mazieres
+Author:         HAILS team
 Stability:      experimental
 Maintainer:     http://www.scs.stanford.edu/~dm/addr/
 Category:       Security
 Synopsis:       Labeled IO library
 Extra-source-files:
-        Examples/test.hs
-        Examples/test2.hs
 
 Description:
         The /Labeled IO/ (LIO) library provides information flow
@@ -20,10 +18,19 @@ Description:
         whichever label type the application is using (e.g.,
         "LIO.DCLabel").  The core functionality of the library is
         documented in "LIO.TCB".  LIO was implemented by David
-        Mazieres (<http://www.scs.stanford.edu/~dm/>).  To obtain the
-        latest source code, run:
+        Mazieres (<http://www.scs.stanford.edu/~dm/>), Deian Stefan
+        (<http://www.scs.stanford.edu/~deian/>), Alejandro Russo
+        (<http://www.cse.chalmers.se/~russo/>) and John C. Mitchell
+        (<http://www.stanford.edu/~jcm/>).
+        To obtain the latest experimental source code, run:
+
+        @git clone http:\/\/www.scs.stanford.edu\/~deian\/lio\/lio.git@
+
+        the slightly older, but original is still available at:
 
         @git clone http:\/\/www.scs.stanford.edu\/~dm\/repos\/lio.git@
+
+        Note that these two will be merged by the end of June, 2011.
 
 Library
   Build-Depends: base >= 4 && < 5,
@@ -36,9 +43,8 @@ Library
                  old-time >= 1 && < 2,
                  unix >= 2.3 && < 3,
                  SHA >= 1.4.1.1 && < 2,
-                 deepseq >= 1.1.0.2 && < 2,
-                 iterIO >= 0.0,
                  ListLike >= 1.0 && < 4,
+                 deepseq >= 1.1.0.2 && < 2,
                  time >= 1.1.4 && < 2
 
   ghc-options: -O2 -funbox-strict-fields
@@ -58,7 +64,6 @@ Library
     LIO.LIORef,
     LIO.MonadCatch,
     LIO.MonadLIO,
-    LIO.IterLIO,
     LIO.TCB,
     LIO.TmpFile
 
