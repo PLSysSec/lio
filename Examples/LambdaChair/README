@@ -1,0 +1,5 @@
+This example shows a simple implementation of \Chair.
+The untrusted code should import Safe and LIO.LIO,
+it should not be allowed to import LambdaChair or LIO.TCB.
+Disclaimer: This code should not be used in real systems.
+A real \Chair will be built soon!

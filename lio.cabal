@@ -10,6 +10,7 @@ Maintainer:     http://www.scs.stanford.edu/~dm/addr/
 Category:       Security
 Synopsis:       Labeled IO library
 Extra-source-files:
+  Examples/LambdaChair/Main.hs
 
 Description:
         The /Labeled IO/ (LIO) library provides information flow
@@ -30,7 +31,7 @@ Description:
         To obtain the latest experimental source code, run:
 
 
-        @git clone http:\/\/www.scs.stanford.edu\/~deian\/lio\/lio.git@
+        @git clone http:\/\/www.scs.stanford.edu\/~dm\/repos\/lio.git@
 
 Library
   Build-Depends: base >= 4 && < 5,
