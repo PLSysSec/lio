@@ -27,7 +27,7 @@ import LIO.LIORef
 import LIO.MonadLIO
 import LIO.MonadCatch (throwIO)
 import LIO.DCLabel
-import LIO.DCLabel.NanoEDSL
+import DCLabel.TCB (Disj(..), Conj(..), Label(..))
 
 type ErrorStr  = String
 type DCLabeled = Labeled DCLabel
@@ -128,7 +128,7 @@ getCurUser = do
   maybe (return Nothing) findUser n
 
 -- ^ Get priviliges
-getPrivs :: ReviewDC DCPrivs
+getPrivs :: ReviewDC DCPrivTCB
 getPrivs = do 
   u <- getCurUser
   return $ maybe mempty (genPrivTCB . name) u
@@ -228,16 +228,16 @@ printReviewsTCB = do
    liftReviewDC . dcPutStrLnTCB . (intercalate "\n--\n")
 
 -- | Generate privilege from a string
-genPrivTCB :: String -> DCPrivs
-genPrivTCB = mintTCB . Principal
+genPrivTCB :: String -> DCPrivTCB
+genPrivTCB = mintTCB . newPriv 
 
 -- ^ Create new paper given id and content
 newReviewEnt :: Id -> Content -> ReviewDC ReviewEnt
 newReviewEnt pId content = do
   let p1 = "Paper" ++ (show pId)
       r1 = "Review" ++ (show pId)
-      pLabel = exprToDCLabel NoPrincipal p1
-      rLabel = exprToDCLabel r1 r1
+      pLabel = newDC (<>) p1 --exprToDCLabel NoPrincipal p1
+      rLabel = newDC r1 r1 --exprToDCLabel r1 r1
       privs = mconcat $ map genPrivTCB [p1, r1]--, "Alice", "Bob"]
   liftReviewDC $ do
     rPaper  <- newLIORefP privs pLabel (Paper content)
@@ -288,16 +288,16 @@ getOutputChLbl :: ReviewDC (DCLabel)
 getOutputChLbl = do
   mu <- getCurUser
   case mu of
-    Nothing -> return $ DCLabel dcsEmpty dcsEmpty
+    Nothing -> return $ newDC (<>) (<>) --DCLabel dcsEmpty dcsEmpty
     Just u -> do
       let cs = conflicts u
       rs <- getReviews >>= return . map paperId
       let ok = map id2c (rs \\ cs)
           conf = map id2c' cs
-          s = dcsFromList $ ok ++ conf
-      return $ DCLabel s dcsEmpty
-        where id2c  i = dcSingleton Secrecy . Principal $ "Review"++(show i)
-              id2c' i = exprToDCat Secrecy (("Review"++(show i)) .\/. "CONFLICT")
+          s = MkLabel . MkConj $ ok ++ conf --dcsFromList $ ok ++ conf
+      return $ newDC s (<>) --DCLabel s dcsEmpty
+        where id2c  i = MkDisj [ principal $ "Review"++(show i)] --dcSingleton Secrecy . Principal $ "Review"++(show i)
+              id2c' i = MkDisj [principal $ "Review"++(show i), principal "CONFLICT"]
           
 -- ^ Print if there is no conflict of interest
 dcPutStrLn :: DCLabel -> Content -> DC ()
@@ -322,7 +322,7 @@ appendToReview pId content = do
                    return $ Right ()
    where doWriteReview privs rev content = liftReviewDC $ do
            cc <- getClearance
-           --
+           -
            toLabeledP privs (labelOfLIORef (review rev)) $ do
              -- read freely, output channel is restricted:
              (Review rs) <- readLIORefTCB (review rev)
@@ -332,9 +332,9 @@ appendToReview pId content = do
 -- ^ Setthe current label to the assignments
 assign2curLabel :: [Id] -> ReviewDC() 
 assign2curLabel as = liftReviewDC $ do
-  let l = DCLabel dcsEmpty (dcsFromList $ map id2c as)
+  let l = newDC (<>) (MkLabel $ MkConj [listToDisj $ map id2c as]) --DCLabel dcsEmpty (dcsFromList $ map id2c as)
   setLabelTCB l
-        where id2c i = dcSingleton Integrity . Principal $ "Review"++(show i)
+        where id2c i = principal $ "Review"++(show i)
   
 -- ^ Safely execute untrusted code
 safeExecTCB :: ReviewDC () -> ReviewDC ()

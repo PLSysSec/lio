@@ -53,7 +53,11 @@ instance MintTCB DCL.TCBPriv DCL.Principal where
 
 instance Priv DCLabel DCL.TCBPriv where
   	leqp = DCL.canflowto_p
-  	lostar = undefined
+  	lostar p li lg = 
+          let lip = newDC (DCL.secrecy li) ((DCL.integrity li) ./\. lp)
+              lgp = newDC ((DCL.secrecy lg) ./\. lp) (DCL.integrity lg)
+	      lp  = DCL.priv p
+	  in DCL.join lip lgp
 
 --
 -- Renaming
