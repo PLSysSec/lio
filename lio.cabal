@@ -46,7 +46,8 @@ Library
                  SHA >= 1.4.1.1 && < 2,
                  ListLike >= 1.0 && < 4,
                  deepseq >= 1.1.0.2 && < 2,
-                 time >= 1.1.4 && < 2
+                 time >= 1.1.4 && < 2,
+                 dclabel >= 0.0.1 && < 2
 
   ghc-options: -O2 -funbox-strict-fields
                -threaded -fno-warn-unused-imports -rtsopts
@@ -55,9 +56,6 @@ Library
     LIO.Armor,
     LIO.Base,
     LIO.DCLabel,
-    LIO.DCLabel.Label,
-    LIO.DCLabel.PrivStore,
-    LIO.DCLabel.NanoEDSL,
     LIO.FS,
     LIO.Handle,
     LIO.HiStar,
