@@ -5,6 +5,7 @@
 	cabal update
 	cabal install hscolour
 	cabal install SHA
+	cabal install dclabel
 
 * Documentation.  The documentation must be extracted from the source
   code using 'haddock'.  Run the following commands to build and view

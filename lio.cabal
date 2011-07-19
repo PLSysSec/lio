@@ -44,8 +44,6 @@ Library
                  old-time >= 1 && < 2,
                  unix >= 2.3 && < 3,
                  SHA >= 1.4.1.1 && < 2,
-                 ListLike >= 1.0 && < 4,
-                 deepseq >= 1.1.0.2 && < 2,
                  time >= 1.1.4 && < 2,
                  dclabel >= 0.0.1 && < 2
 
