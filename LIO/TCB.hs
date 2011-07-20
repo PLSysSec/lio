@@ -619,10 +619,10 @@ toLabeled = toLabeledP NoPrivs
 toLabeledP :: (Priv l p) => p -> l -> LIO l s a -> LIO l s (Labeled l a)
 toLabeledP p l m = do
   aguard l
-  LIOstate { lioL = l, lioC = c } <- get
+  save_s <- get
   a <- m
   s <- get
-  put s { lioL = l, lioC = c }
+  put s { lioL = lioL save_s, lioC = lioC save_s}
   unless (leqp p (lioL s) l) $ throwIO LerrLow -- l is too low
   return $ LabeledTCB l a
 
