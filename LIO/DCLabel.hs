@@ -53,11 +53,41 @@ instance MintTCB DCL.TCBPriv DCL.Principal where
 
 instance Priv DCLabel DCL.TCBPriv where
   	leqp = DCL.canflowto_p
+        {-
+        The implementation of lostar deserves an explanation. Firstly note
+        that the properties, for @r = lostar p l g@ that must be satisfied
+        are [the suffix \'s\' (\'i\')is used for seecrecy (resp. integrity):
+        1.) @leq g r    : (rs => gs)      and  (gi => ri)@
+        2.) @leqp p l r : (rs /\ p => ls) and  (li /\ p => ri)@
+        Finding the integrity component of @r@ is trivial: it's
+        simply the least upper bound of @gi@ and @li /\ p@.
+        Finding the secrecy component is a bit trickier. To do so, we first
+        find all the categories of @ls@ that are not implied by @p@ (this
+        gives us @rs'@), such that @rs' /\ p => ls@. Then, we need to find
+        the remaining categories in @gs@ that are not implied by @rs'@ (this
+        gives us @rs''@). Directly, @rs = rs' /\ rs''@.
+        -}
+        lostar p l g = 
+          let (ls, li) = (secrecy l, integrity l)
+              (gs, gi) = (secrecy g, integrity g)
+              lp       = DCL.priv p
+              rs'      = c2l [c | c <- getCats ls
+                                , not (lp `DCL.implies` (c2l [c]))]
+              rs''     = c2l [c | c <- getCats gs
+                                , not (rs' `DCL.implies` (c2l [c]))]
+              rs       = rs' `DCL.and_label` rs''
+              ri       = (li `DCL.and_label` lp) `DCL.or_label` gi
+         in DCL.toLNF $ newDC rs ri
+              where getCats = DCL.conj . DCL.label
+                    c2l = DCL.MkLabel . DCL.MkConj
+        {- OLD, BROKEN (was more elegant than above, so maybe use some ideas
+           when rewriting  the above):
   	lostar p li lg = 
           let lip = newDC (DCL.secrecy li) ((DCL.integrity li) ./\. lp)
               lgp = newDC ((DCL.secrecy lg) ./\. lp) (DCL.integrity lg)
 	      lp  = DCL.priv p
 	  in DCL.join lip lgp
+        -}
 
 --
 -- Renaming

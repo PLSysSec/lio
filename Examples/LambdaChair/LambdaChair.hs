@@ -16,6 +16,7 @@ module LambdaChair ( evalReviewDC
                    , printUsersTCB
                    , printReviewsTCB
                    , reviewDCPutStrLnTCB 
+                   , dcPutStrLnTCB 
                    ) where
 
 import Prelude hiding (catch)
@@ -267,14 +268,20 @@ addPaper content = do
 -- ^ Given a paper number return the paper
 readPaper :: Id -> ReviewDC (Either ErrorStr Content)
 readPaper pId = do
-  mRev <- findReview pId 
-  case mRev of 
-    Nothing -> return $ Left "Invalid Id"
-    Just rev -> let priv = mintTCB (singleton $ "Paper" ++ (show pId)) :: DCPrivTCB
-                in  doReadPaper priv rev
-   where doReadPaper priv rev = liftReviewDC $ do
-             (Paper lPaper) <- readLIORefTCB (paper rev)
-             return (Right lPaper)
+  mu <- getCurUser
+  case mu of
+    Nothing -> return $ Left "Need to be logged in"
+    Just u -> do
+      mRev <- findReview pId 
+      case mRev of 
+        Nothing -> return $ Left "Invalid Id"
+        Just rev -> let as = assignments u
+                        priv = genPrivTCB (listToLabel $ map id2cat as)
+                    in  doReadPaper priv rev
+       where doReadPaper priv rev = liftReviewDC $ do
+                 (Paper lPaper) <- readLIORefP priv (paper rev)
+                 return (Right lPaper)
+             id2cat i = MkDisj [principal $ "Review"++(show i)]
 
 -- ^ Given a paper/review number return the review, if the entry exists
 -- NOTE: In the old version, this also printed the review to the screen.
@@ -347,6 +354,7 @@ appendToReview pId content = do
 assign2curLabel :: [Id] -> ReviewDC() 
 assign2curLabel as = liftReviewDC $ do
   let l = newDC (<>) (listToLabel $ map id2cat as)
+  dcPutStrLnTCB . prettyShow $ l
   setLabelTCB l
         where id2cat i = MkDisj [principal $ "Review"++(show i)]
   
@@ -380,7 +388,8 @@ asUser n m = do
         then reviewDCPutStrLnTCB "| Failed, try again" >> asUser n m
         else do
           reviewDCPutStrLnTCB $ "| Executing on behalf of "++(name u)++"...\n"
-          safeExecTCB $ assign2curLabel (assignments u) >> m >> return ()
+          --safeExecTCB $ TODO:
+          assign2curLabel (assignments u) >> m >> return ()
           clearCurUserName
 
 -- | Given a paper prefix return either an error string, if the paper cannot be
