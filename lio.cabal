@@ -30,8 +30,13 @@ Description:
 
         To obtain the latest experimental source code, run:
 
+        @git clone http:\/\/www.scs.stanford.edu\/~deian\/lio.git@.
 
-        @git clone http:\/\/www.scs.stanford.edu\/~dm\/repos\/lio.git@
+        The library depends on the @DCLabel@ module. You can read more on
+        DC Labels here:
+        <http://www.scs.stanford.edu/~deian/dclabels/>.
+        Or just grab the souce by running:
+        @git clone http:\/\/www.scs.stanford.edu\/~deian\/dclabels/dclabel.git@
 
 Library
   Build-Depends: base >= 4 && < 5,
