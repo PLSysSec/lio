@@ -12,6 +12,10 @@ module LambdaChair ( evalReviewDC
                    , readReview
                    , appendToReview
                    , reviewDCPutStrLn 
+                   -- TCB
+                   , printUsersTCB
+                   , printReviewsTCB
+                   , reviewDCPutStrLnTCB 
                    ) where
 
 import Prelude hiding (catch)
@@ -27,7 +31,10 @@ import LIO.LIORef
 import LIO.MonadLIO
 import LIO.MonadCatch (throwIO)
 import LIO.DCLabel
+import DCLabel.Safe
 import DCLabel.TCB (Disj(..), Conj(..), Label(..))
+import DCLabel.PrettyShow
+
 
 type ErrorStr  = String
 type DCLabeled = Labeled DCLabel
@@ -39,6 +46,9 @@ class DCShowTCB s where
 
 dcPutStrLnTCB :: String -> DC ()
 dcPutStrLnTCB = ioTCB . putStrLn
+
+dcGetLineTCB :: DC String
+dcGetLineTCB = ioTCB getLine
 
 type Name = String
 type Password = String
@@ -61,7 +71,7 @@ instance DCShowTCB User where
   dcShowTCB u = do
     return $  "Name: " ++ (name u) ++ "\n"
            ++ "Password: " ++ (password u) ++ "\n"
-           ++ "Conflicts: " ++ (show . conflicts $ u)
+           ++ "Conflicts: " ++ (show . conflicts $ u) ++ "\n"
            ++ "Assignments: " ++ (show . assignments $ u)
 
 data ReviewEnt =  ReviewEnt { paperId :: Id
@@ -218,17 +228,17 @@ printUsersTCB :: ReviewDC ()
 printUsersTCB = do
  users <- getUsers
  mapM (liftReviewDC . dcShowTCB) users >>=
-   liftReviewDC . dcPutStrLnTCB . (intercalate "\n--\n")
+   reviewDCPutStrLnTCB . (intercalate "\n--\n")
 
 -- ^ Print papers and reviews
 printReviewsTCB :: ReviewDC ()
 printReviewsTCB = do
  reviews <- getReviews
  mapM (liftReviewDC . dcShowTCB) reviews >>=
-   liftReviewDC . dcPutStrLnTCB . (intercalate "\n--\n")
+   reviewDCPutStrLnTCB . (intercalate "\n--\n")
 
 -- | Generate privilege from a string
-genPrivTCB :: String -> DCPrivTCB
+genPrivTCB :: NewPriv a => a -> DCPrivTCB
 genPrivTCB = mintTCB . newPriv 
 
 -- ^ Create new paper given id and content
@@ -236,9 +246,9 @@ newReviewEnt :: Id -> Content -> ReviewDC ReviewEnt
 newReviewEnt pId content = do
   let p1 = "Paper" ++ (show pId)
       r1 = "Review" ++ (show pId)
-      pLabel = newDC (<>) p1 --exprToDCLabel NoPrincipal p1
-      rLabel = newDC r1 r1 --exprToDCLabel r1 r1
-      privs = mconcat $ map genPrivTCB [p1, r1]--, "Alice", "Bob"]
+      pLabel = newDC (<>) p1 
+      rLabel = newDC r1 r1 
+      privs = genPrivTCB (p1 ./\. r1)
   liftReviewDC $ do
     rPaper  <- newLIORefP privs pLabel (Paper content)
     rReview <- newLIORefP privs rLabel (Review "")
@@ -253,21 +263,24 @@ addPaper content = do
   putReviews (ent:reviews)
   return pId
 
+
 -- ^ Given a paper number return the paper
 readPaper :: Id -> ReviewDC (Either ErrorStr Content)
 readPaper pId = do
   mRev <- findReview pId 
   case mRev of 
     Nothing -> return $ Left "Invalid Id"
-    Just rev -> do p <- doReadPaper rev
-                   return $ Right p
-   where doReadPaper rev = liftReviewDC $ do
-             -- let everybody read freely:
+    Just rev -> let priv = mintTCB (singleton $ "Paper" ++ (show pId)) :: DCPrivTCB
+                in  doReadPaper priv rev
+   where doReadPaper priv rev = liftReviewDC $ do
              (Paper lPaper) <- readLIORefTCB (paper rev)
-             return lPaper
+             return (Right lPaper)
 
--- ^ Given a paper number print the review
-readReview :: Id -> ReviewDC (Either ErrorStr ())
+-- ^ Given a paper/review number return the review, if the entry exists
+-- NOTE: In the old version, this also printed the review to the screen.
+-- This is no longer the case, you may print ht ereview to the screen
+-- with 'reviewDCPutStrLn'.
+readReview :: Id -> ReviewDC (Either ErrorStr Content)
 readReview pId = do
   mRev <- findReview pId 
   case mRev of 
@@ -275,43 +288,47 @@ readReview pId = do
     Just rev -> do mu <- getCurUser
                    case mu of
                     Nothing -> return $ Left "Must login first"
-                    Just u -> do
-                     l <- getOutputChLbl
-                     r <- doReadReview l rev
-                     return $ Right r
-   where doReadReview l rev = liftReviewDC $ do
+                    Just u -> doReadReview rev
+   where doReadReview rev = liftReviewDC $ do
              (Review r) <- readLIORef (review rev)
-             dcPutStrLn l r
+             return (Right r)
 
 -- ^ Computer the label of the output' channel
 getOutputChLbl :: ReviewDC (DCLabel) 
 getOutputChLbl = do
   mu <- getCurUser
   case mu of
-    Nothing -> return $ newDC (<>) (<>) --DCLabel dcsEmpty dcsEmpty
+    Nothing -> liftReviewDC $ throwIO (ErrorCall "No user is logged in.")
     Just u -> do
-      let cs = conflicts u
-      rs <- getReviews >>= return . map paperId
-      let ok = map id2c (rs \\ cs)
-          conf = map id2c' cs
-          s = MkLabel . MkConj $ ok ++ conf --dcsFromList $ ok ++ conf
-      return $ newDC s (<>) --DCLabel s dcsEmpty
-        where id2c  i = MkDisj [ principal $ "Review"++(show i)] --dcSingleton Secrecy . Principal $ "Review"++(show i)
-              id2c' i = MkDisj [principal $ "Review"++(show i), principal "CONFLICT"]
+      as <- getReviews >>= return . map paperId -- all reviews
+      let cs = conflicts u -- conflicting reviews
+          c_cat = map id2conf_cat (cs) -- conflicting categories
+          nc_cat = map id2cat (as \\ cs) -- noconflicting categories
+      return $ newDC (listToLabel $ c_cat ++ nc_cat) (<>)
+        where id2cat i = MkDisj [ principal $ "Review"++(show i)]
+              id2conf_cat i = MkDisj [ principal $ "Review" ++ (show i)
+                                     , principal $ "CONFLICT" ]
           
--- ^ Print if there is no conflict of interest
+-- ^ Print if the current label flows to the output channel label, i.e.,
+-- there is no conflict of interest.
 dcPutStrLn :: DCLabel -> Content -> DC ()
 dcPutStrLn lo cont = do
   l <- getLabel
   if l `leq` lo
     then dcPutStrLnTCB cont
-    else throwIO $ ErrorCall "Trying to print conflicting review."
+    else throwIO . ErrorCall $ "Trying to print conflicting review:\n" ++
+                               (prettyShow l) ++ " [/= " ++ (prettyShow lo)
 
--- ^ Print without any label checks
+-- ^ Main printing function. Print to a labeled output channel.
 reviewDCPutStrLn :: String -> ReviewDC ()
-reviewDCPutStrLn = liftReviewDC . dcPutStrLnTCB
+reviewDCPutStrLn s = do 
+  l <- getOutputChLbl
+  liftReviewDC $ dcPutStrLn l $ "-> "++ s
 
--- ^ Given a paper number and review content append to the current review
+reviewDCPutStrLnTCB :: String -> ReviewDC ()
+reviewDCPutStrLnTCB = liftReviewDC . dcPutStrLnTCB
+
+-- ^ Given a paper number and review content append to the current review.
 appendToReview :: Id -> Content -> ReviewDC (Either ErrorStr ())
 appendToReview pId content = do
   mRev <- findReview pId 
@@ -321,20 +338,17 @@ appendToReview pId content = do
                    doWriteReview privs rev content
                    return $ Right ()
    where doWriteReview privs rev content = liftReviewDC $ do
-           cc <- getClearance
-           -
-           toLabeledP privs (labelOfLIORef (review rev)) $ do
-             -- read freely, output channel is restricted:
-             (Review rs) <- readLIORefTCB (review rev)
-             -- restrict writes:
+           toLabeledP privs ltop $ do
+             (Review rs) <- readLIORef (review rev)
+             -- restrict writes: 
              writeLIORef (review rev) (Review (rs++content))
 
--- ^ Setthe current label to the assignments
+-- ^ Set the current label to the assignments
 assign2curLabel :: [Id] -> ReviewDC() 
 assign2curLabel as = liftReviewDC $ do
-  let l = newDC (<>) (MkLabel $ MkConj [listToDisj $ map id2c as]) --DCLabel dcsEmpty (dcsFromList $ map id2c as)
+  let l = newDC (<>) (listToLabel $ map id2cat as)
   setLabelTCB l
-        where id2c i = principal $ "Review"++(show i)
+        where id2cat i = MkDisj [principal $ "Review"++(show i)]
   
 -- ^ Safely execute untrusted code
 safeExecTCB :: ReviewDC () -> ReviewDC ()
@@ -345,7 +359,7 @@ safeExecTCB m = do
     cl <- getLabel
     (_, s') <- (runReviewDC m s) `catch` 
                   (\(e::SomeException) -> do
-                        dcPutStrLnTCB "\n>!IFC violated!<\n"
+                        dcPutStrLnTCB "-> ERROR: IFC violated\n"
                         return ((), s))
     lowerClrTCB cc
     setLabelTCB cl
@@ -353,17 +367,24 @@ safeExecTCB m = do
   put' s'
 
 -- ^ Execute on behalf of user
-asUser :: Name -> ReviewDC () -> ReviewDC ()
+asUser :: Name -> ReviewDC a -> ReviewDC ()
 asUser n m = do
   putCurUserName n
   mu <- getCurUser
   case mu of
     Nothing -> return ()
     Just u -> do
-      liftReviewDC . dcPutStrLnTCB $ "Executing on behalf of "++(name u)++"...\n"
-      safeExecTCB $ assign2curLabel (assignments u) >> m
-      clearCurUserName
+      reviewDCPutStrLnTCB $ "| Hi, "++ (name u)++".\n| Password>"
+      p <- liftReviewDC dcGetLineTCB
+      if p /= (password u)
+        then reviewDCPutStrLnTCB "| Failed, try again" >> asUser n m
+        else do
+          reviewDCPutStrLnTCB $ "| Executing on behalf of "++(name u)++"...\n"
+          safeExecTCB $ assign2curLabel (assignments u) >> m >> return ()
+          clearCurUserName
 
+-- | Given a paper prefix return either an error string, if the paper cannot be
+-- found or the paper id.
 findPaper :: String -> ReviewDC (Either ErrorStr Id)
 findPaper s = do
   revs <- getReviews

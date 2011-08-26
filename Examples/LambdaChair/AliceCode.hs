@@ -12,13 +12,10 @@ mainReview = do
   p1 <- findPaper' "Flexible Dynamic"
   p2 <- findPaper' "A Static"
 
-  paper1 <- readPaper p1
-  reviewDCPutStrLn $ show paper1
+  readPaper p1 >>= \p -> reviewDCPutStrLn $ show p
 
   appendToReview p1 "Interesting work!"
 
-  paper2 <- readPaper p2
-  reviewDCPutStrLn $ show paper2
-  readReview p2
+  readPaper p2 >>= \p -> reviewDCPutStrLn $ show p
+  readReview p2 >>= \r -> reviewDCPutStrLn $ show r
   appendToReview p2 "What about adding new users?"
-  return ()
