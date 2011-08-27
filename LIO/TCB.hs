@@ -84,7 +84,7 @@ module LIO.TCB (
                , newstate, LIOstate, runLIO
                -- End TCB exports
                ) where
-import Debug.Trace
+--import Debug.Trace
 import Prelude hiding (catch)
 import Control.Applicative
 import Control.Monad.Error
