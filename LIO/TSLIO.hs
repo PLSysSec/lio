@@ -15,6 +15,10 @@ import qualified Control.Exception as E
 import LIO.DCLabel hiding (DC,evalDC)
 import DCLabel.PrettyShow
 
+--
+import System.CPUTime
+--
+
 
 data TSLIOstate l s =
     TSLIOstate { labelState :: s
@@ -119,12 +123,25 @@ test = niceEvalDC $ do
   f' <- labeledFuture h $ do forever (return ())
                              return 3
   openLFuture f
-    where niceEvalDC :: Show a => DC a -> IO ()
-          niceEvalDC m = do
-            (a, l) <- evalDC m
-            putStrLn (show a)
-            putStrLn (prettyShow l)
+
+niceEvalDC :: Show a => DC a -> IO ()
+niceEvalDC m = do
+  (a, l) <- evalDC m
+  putStrLn (show a)
+  putStrLn (prettyShow l)
 
 
+getSimpleDiff :: DC Integer
+getSimpleDiff = ioTCB $ do
+  t1 <- getCPUTime
+  t2 <- getCPUTime
+  return $ t2 - t1
 
-
+test2 = niceEvalDC $ do
+  f <- labeledFuture h $ do
+          ioTCB $ threadDelay 1
+          --sequence $ replicate 10000 $ labeledFuture  h $ do forever (return ())
+          return 3
+  tdiffs <- sequence $ replicate 10000 getSimpleDiff
+  ioTCB . putStrLn $ show $ filter (/=0) tdiffs
+  openLFuture f
