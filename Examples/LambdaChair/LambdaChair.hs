@@ -8,8 +8,8 @@ module LambdaChair ( evalReviewDC
                    , asUser
                    ---
                    , findPaper
-                   , readPaper
-                   , readReview
+                   , retrievePaper, readPaper
+                   , retrieveReview, readReview
                    , appendToReview
                    , reviewDCPutStrLn 
                    -- TCB
@@ -266,8 +266,8 @@ addPaper content = do
 
 
 -- ^ Given a paper number return the paper
-readPaper :: Id -> ReviewDC (Either ErrorStr Content)
-readPaper pId = do
+retrievePaper :: Id -> ReviewDC (Either ErrorStr Content)
+retrievePaper pId = do
   mu <- getCurUser
   case mu of
     Nothing -> return $ Left "Need to be logged in"
@@ -283,12 +283,16 @@ readPaper pId = do
                  return (Right lPaper)
              id2cat i = MkDisj [principal $ "Review"++(show i)]
 
+-- ^ Given a paper number print the paper
+-- NOTE: in the paper, the functionality of @readPaper@ corresponds to
+-- that of @retrievePaper@; here, we print out the content.
+readPaper :: Id -> PaperDC ()
+readPaper = retrievePaper >>= \r -> reviewDCPutStrLn $ show r
+
+
 -- ^ Given a paper/review number return the review, if the entry exists
--- NOTE: In the old version, this also printed the review to the screen.
--- This is no longer the case, you may print ht ereview to the screen
--- with 'reviewDCPutStrLn'.
-readReview :: Id -> ReviewDC (Either ErrorStr Content)
-readReview pId = do
+retrieveReview :: Id -> ReviewDC (Either ErrorStr Content)
+retrieveReview pId = do
   mRev <- findReview pId 
   case mRev of 
     Nothing -> return $ Left "Invalid Id"
@@ -299,6 +303,10 @@ readReview pId = do
    where doReadReview rev = liftReviewDC $ do
              (Review r) <- readLIORef (review rev)
              return (Right r)
+
+-- ^ Given a paper/review number print the review, if the entry exists
+readReview :: Id -> ReviewDC ()
+readReview = retrieveReview >>= \r -> reviewDCPutStrLn $ show r
 
 -- ^ Computer the label of the output' channel
 getOutputChLbl :: ReviewDC (DCLabel) 

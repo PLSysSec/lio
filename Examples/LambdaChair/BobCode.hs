@@ -12,5 +12,5 @@ mainReview = do
   p1 <- findPaper' "Flexible Dynamic..."
   p2 <- findPaper' "A Static..."
   appendToReview p2 "Hmm, IFC.."
-  readReview p2 >>= \r -> reviewDCPutStrLn $ show r
-  readReview p1 >>= \r -> reviewDCPutStrLn $ show r
+  readReview p2
+  readReview p1

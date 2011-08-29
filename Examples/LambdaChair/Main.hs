@@ -8,15 +8,6 @@ import DCLabel.Safe
 import AliceCode as Alice
 import BobCode as Bob
 
-dome = printL . evalDC $ do
-  let p = mintTCB (singleton "P1") :: DCPrivTCB
-      l = newDC (<>) ("P1")
-      lcur = newDC (<>) ("R1" ./\. "R2")
-  dcPutStrLnTCB . prettyShow $ p
-  dcPutStrLnTCB . prettyShow $ l
-  dcPutStrLnTCB . prettyShow $ lcur
-  dcPutStrLnTCB . prettyShow $ lostar p l lcur
-
 printL m = do
   (_, l) <- m
   putStrLn . prettyShow $ l
