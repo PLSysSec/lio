@@ -29,6 +29,7 @@ import Data.Monoid
 
 import LIO.TCB
 import LIO.LIORef
+import LIO.LIORef.TCB (readLIORefTCB)
 import LIO.MonadLIO
 import LIO.MonadCatch (throwIO)
 import LIO.DCLabel

@@ -64,6 +64,8 @@ Library
     LIO.HiStar,
     LIO.LIO,
     LIO.LIORef,
+    LIO.LIORef.TCB,
+    LIO.LIORef.Safe,
     LIO.MonadCatch,
     LIO.MonadLIO,
     LIO.TCB,
