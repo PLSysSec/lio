@@ -286,8 +286,8 @@ retrievePaper pId = do
 -- ^ Given a paper number print the paper
 -- NOTE: in the paper, the functionality of @readPaper@ corresponds to
 -- that of @retrievePaper@; here, we print out the content.
-readPaper :: Id -> PaperDC ()
-readPaper = retrievePaper >>= \r -> reviewDCPutStrLn $ show r
+readPaper :: Id -> ReviewDC ()
+readPaper i = retrievePaper i >>= \r -> reviewDCPutStrLn $ show r
 
 
 -- ^ Given a paper/review number return the review, if the entry exists
@@ -306,7 +306,7 @@ retrieveReview pId = do
 
 -- ^ Given a paper/review number print the review, if the entry exists
 readReview :: Id -> ReviewDC ()
-readReview = retrieveReview >>= \r -> reviewDCPutStrLn $ show r
+readReview i = retrieveReview i >>= \r -> reviewDCPutStrLn $ show r
 
 -- ^ Computer the label of the output' channel
 getOutputChLbl :: ReviewDC (DCLabel) 
@@ -362,7 +362,6 @@ appendToReview pId content = do
 assign2curLabel :: [Id] -> ReviewDC() 
 assign2curLabel as = liftReviewDC $ do
   let l = newDC (<>) (listToLabel $ map id2cat as)
-  dcPutStrLnTCB . prettyShow $ l
   setLabelTCB l
         where id2cat i = MkDisj [principal $ "Review"++(show i)]
   
@@ -396,8 +395,7 @@ asUser n m = do
         then reviewDCPutStrLnTCB "| Failed, try again" >> asUser n m
         else do
           reviewDCPutStrLnTCB $ "| Executing on behalf of "++(name u)++"...\n"
-          --safeExecTCB $ TODO:
-          assign2curLabel (assignments u) >> m >> return ()
+          safeExecTCB $ assign2curLabel (assignments u) >> m >> return ()
           clearCurUserName
 
 -- | Given a paper prefix return either an error string, if the paper cannot be
