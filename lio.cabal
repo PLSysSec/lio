@@ -1,6 +1,6 @@
 Name:           lio
 Version:        0.0.1
-Cabal-Version:  >= 1.2.3
+Cabal-Version:  >= 1.6
 build-type:     Simple
 License:        GPL
 License-File:   LICENSE
@@ -53,9 +53,6 @@ Library
                  SHA >= 1.4.1.1 && < 2,
                  time >= 1.1.4 && < 2,
                  dclabel >= 0.0.1 && < 2
-
-  ghc-options: -O2 -funbox-strict-fields
-               -threaded -fno-warn-unused-imports -rtsopts
 
   Exposed-modules:
     LIO.Armor,
