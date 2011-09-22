@@ -35,8 +35,10 @@ Description:
         The library depends on the @DCLabel@ module. You can read more on
         DC Labels here:
         <http://www.scs.stanford.edu/~deian/dclabels/>.
-        Or just grab the souce by running:
-        @git clone http:\/\/www.scs.stanford.edu\/~deian\/dclabels/dclabel.git@
+
+Source-repository head
+  Type:     git
+  Location: http://www.scs.stanford.edu/~deian/lio.git
 
 Library
   Build-Depends: base >= 4 && < 5,
