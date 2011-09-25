@@ -1,3 +1,9 @@
+{-# LANGUAGE CPP #-}
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+{-# LANGUAGE Safe #-}
+#else
+#warning "This module is not using SafeHaskell"
+#endif
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -7,9 +13,15 @@
 -- Monads.
 module LIO.MonadCatch (MonadCatch(..), genericBracket) where
 
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+import safe Prelude hiding (catch)
+import safe Control.Exception (Exception, SomeException)
+import safe qualified Control.Exception as E
+#else
 import Prelude hiding (catch)
 import Control.Exception (Exception, SomeException)
 import qualified Control.Exception as E
+#endif
 
 -- | @MonadCatch@ is the class used to generalize the standard IO
 -- @catch@ and @throwIO@ functions to methods that can be defined in

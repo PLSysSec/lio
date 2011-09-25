@@ -1,3 +1,9 @@
+{-# LANGUAGE CPP #-}
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+{-# LANGUAGE Trustworthy #-}
+#else
+#warning "This module is not using SafeHaskell"
+#endif
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -12,7 +18,12 @@ module LIO.MonadLIO where
 
 import LIO.TCB
 
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+#warning "Did not safely import Control.Monad.Trans"
 import Control.Monad.Trans (MonadTrans(..))
+#else
+import Control.Monad.Trans (MonadTrans(..))
+#endif
 
 class (Monad m, Label l) => MonadLIO m l s | m -> l s where
     liftLIO :: LIO l s a -> m a

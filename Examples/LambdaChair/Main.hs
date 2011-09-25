@@ -1,17 +1,22 @@
-import LIO.TCB
-import LIO.DCLabel
-import LIO.LIO
+{-# LANGUAGE CPP #-}
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+{-# LANGUAGE SafeImports #-}
+#else
+#warning "This module is not using SafeHaskell"
+#endif
 import LambdaChair
 import DCLabel.PrettyShow
-import DCLabel.Safe
 
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+import safe AliceCode as Alice
+import safe BobCode as Bob
+#else
 import AliceCode as Alice
 import BobCode as Bob
+#endif
 
-printL m = do
-  (_, l) <- m
-  putStrLn . prettyShow $ l
 
+main :: IO ()
 main = printL . evalReviewDC $ do
   addUser "Alice" "password"
   
@@ -29,3 +34,4 @@ main = printL . evalReviewDC $ do
   addConflict "Bob" p1
 
   asUser "Bob" $ Bob.mainReview
+    where printL m = m >>= (putStrLn . prettyShow . snd)

@@ -1,3 +1,9 @@
+{-# LANGUAGE CPP #-}
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+{-# LANGUAGE SafeImports #-}
+#else
+#warning "This module is not using SafeHaskell"
+#endif
 -- |This module implements labeled IORefs.  The interface is analogous
 -- to "Data.IORef", but the operations take place in the LIO monad.
 -- Moreover, reading the LIORef calls taint, while writing it calls
@@ -14,8 +20,12 @@ module LIO.LIORef.TCB (LIORef
                       ) where
 
 import LIO.TCB
+
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+import safe Data.IORef
+#else
 import Data.IORef
-import Control.Monad (unless)
+#endif
 
 
 data LIORef l a = LIORefTCB l (IORef a)
@@ -52,7 +62,7 @@ readLIORef :: (Label l) => LIORef l a -> LIO l s a
 readLIORef = readLIORefP NoPrivs
 
 readLIORefTCB :: (Label l) => LIORef l a -> LIO l s a
-readLIORefTCB (LIORefTCB l r) = ioTCB $ readIORef r
+readLIORefTCB (LIORefTCB _ r) = ioTCB $ readIORef r
 
 --
 
@@ -65,7 +75,7 @@ writeLIORef :: (Label l) => LIORef l a -> a -> LIO l s ()
 writeLIORef = writeLIORefP NoPrivs 
 
 writeLIORefTCB :: (Label l) => LIORef l a -> a -> LIO l s ()
-writeLIORefTCB (LIORefTCB l r) a = ioTCB $ writeIORef r a
+writeLIORefTCB (LIORefTCB _ r) a = ioTCB $ writeIORef r a
 
 --
 
@@ -81,5 +91,5 @@ atomicModifyLIORef = atomicModifyLIORefP NoPrivs
 
 atomicModifyLIORefTCB :: (Label l) =>
                       LIORef l a -> (a -> (a, b)) -> LIO l s b
-atomicModifyLIORefTCB (LIORefTCB l r) f = ioTCB $ atomicModifyIORef r f
+atomicModifyLIORefTCB (LIORefTCB _ r) f = ioTCB $ atomicModifyIORef r f
 

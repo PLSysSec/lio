@@ -1,3 +1,10 @@
+{-# LANGUAGE CPP #-}
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+{-# LANGUAGE Safe #-}
+#else
+#warning "This module is not using SafeHaskell"
+#endif
+
 {- | This is the main module to be included by code using the Labeled
    IO (LIO) library.  The core of the library is documented in the
    "LIO.TCB" module.  Note, however, that unprivileged code must not
@@ -49,19 +56,19 @@
           * Define new 'Ix' instances (which could produce out of bounds
             array references).
 
-        In general, pragmas and imports should be highly scrutinized.  For
-        example, most of the "Foreign" class of modules are probably
-        dangerous. With GHC 7.2, we will use the SafeHaskell extension 
-        to enforce these.
+        In general, pragmas and imports should be highly scrutinized.
+        For example, most of the "Foreign" class of modules are probably
+        dangerous. With GHC 7.2, we use the SafeHaskell extension to enforce
+        these.
 -}
-module LIO.LIO (module LIO.Base
+module LIO.LIO ( module LIO.Base
                , module LIO.Handle
                , module LIO.LIORef
                , module LIO.MonadLIO
                ) where
 
 -- import Prelude hiding (readFile, writeFile, catch)
-import LIO.Base
-import LIO.Handle
-import LIO.LIORef
-import LIO.MonadLIO
+import safe LIO.Base
+import safe LIO.Handle
+import safe LIO.LIORef
+import safe LIO.MonadLIO

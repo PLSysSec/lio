@@ -1,3 +1,9 @@
+{-# LANGUAGE CPP #-}
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+{-# LANGUAGE Trustworthy #-}
+#else
+#warning "This module is not using SafeHaskell"
+#endif
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -13,7 +19,7 @@
 --
 -- The actual storage of labeled files is handled by the "LIO.FS"
 -- module.
-module LIO.Handle (DirectoryOps(..)
+module LIO.Handle ( DirectoryOps(..)
                   , CloseOps (..)
                   , HandleOps (..)
                   , LHandle
@@ -28,12 +34,27 @@ module LIO.Handle (DirectoryOps(..)
 import LIO.TCB
 import LIO.FS
 
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+
+import safe Prelude hiding (readFile, writeFile)
+import qualified Data.ByteString.Lazy as L
+#warning "Did not safely import Data.ByteString.Lazy"
+import qualified System.Directory as IO
+#warning "Did not safely import System.Directory"
+import safe System.IO (IOMode)
+import safe qualified System.IO as IO
+import safe qualified System.IO.Error as IO
+
+#else
+
 import Prelude hiding (readFile, writeFile)
 import qualified Data.ByteString.Lazy as L
 import qualified System.Directory as IO
 import System.IO (IOMode)
 import qualified System.IO as IO
 import qualified System.IO.Error as IO
+
+#endif
 
 class (Monad m) => DirectoryOps h m | m -> h where
     getDirectoryContents :: FilePath -> m [FilePath]

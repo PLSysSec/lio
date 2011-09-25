@@ -1,3 +1,9 @@
+{-# LANGUAGE CPP #-}
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+{-# LANGUAGE SafeImports #-}
+#else
+#warning "This module is not using SafeHaskell"
+#endif
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ExistentialQuantification #-}
@@ -80,23 +86,28 @@ module LIO.TCB (
                , getTCB, putTCB
                , ioTCB, rtioTCB
                , rethrowTCB, OnExceptionTCB(..)
-               -- ** Misc symbols useful for privileged code
-               , newstate, LIOstate, runLIO
+               , newstate
                -- End TCB exports
                ) where
---import Debug.Trace
-import Prelude hiding (catch)
-import Control.Applicative
-import Control.Monad.Error
-import Control.Monad.State.Lazy hiding (put, get)
-import Control.Exception hiding (catch, handle, throw, throwIO,
-                                 onException, block, unblock, evaluate)
-import qualified Control.Exception as E
-import Data.Monoid
-import Data.Typeable
-import Text.Read (minPrec)
 
-import LIO.MonadCatch
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+import safe Prelude hiding (catch)
+import Control.Monad.Error
+#warning "Did not safely import Control.Monad.Error"
+import Control.Monad.State.Lazy hiding (put, get)
+#warning "Did not safely import Control.Monad.State.Lazy"
+import safe Control.Exception hiding (catch, handle, throw, throwIO,
+                                 onException, block, unblock, evaluate)
+import safe qualified Control.Exception as E
+import safe Data.Monoid
+import safe Data.Typeable
+import safe Text.Read (minPrec)
+
+import safe LIO.MonadCatch
+
+#else
+
+#endif
 
 --
 -- We need a partial order and a Label

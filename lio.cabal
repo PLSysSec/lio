@@ -1,16 +1,21 @@
 Name:           lio
-Version:        0.0.1
-Cabal-Version:  >= 1.6
+Version:        0.0.2
 build-type:     Simple
 License:        GPL
 License-File:   LICENSE
 Author:         HAILS team
+Maintainer:	Deian Stefan  <deian at cs dot stanford dot edu>
 Stability:      experimental
-Maintainer:     http://www.scs.stanford.edu/~dm/addr/
+Synopsis:       Labeled IO Information Flow Control Library
 Category:       Security
-Synopsis:       Labeled IO library
+Cabal-Version:  >= 1.6
+
 Extra-source-files:
-  Examples/LambdaChair/Main.hs
+    Examples/LambdaChair/AliceCode.hs
+    Examples/LambdaChair/BobCode.hs
+    Examples/LambdaChair/LambdaChair.hs
+    Examples/LambdaChair/Main.hs
+    Examples/LambdaChair/Safe.hs
 
 Description:
         The /Labeled IO/ (LIO) library provides information flow
@@ -27,10 +32,6 @@ Description:
         The extended version of our paper, that includes the proofs
         is available here:
         <http://www.scs.stanford.edu/~deian/pubs/stefan:2011:flexible-ext.pdf>.
-
-        To obtain the latest experimental source code, run:
-
-        @git clone http:\/\/www.scs.stanford.edu\/~deian\/lio.git@.
 
         The library depends on the @DCLabel@ module. You can read more on
         DC Labels here:
@@ -54,6 +55,7 @@ Library
                  time >= 1.1.4 && < 2,
                  dclabel >= 0.0.1 && < 2
 
+  ghc-options: -Wall
   Exposed-modules:
     LIO.Armor,
     LIO.Base,
@@ -69,14 +71,3 @@ Library
     LIO.MonadLIO,
     LIO.TCB,
     LIO.TmpFile
-
-  Extensions:
-    DeriveDataTypeable,
-    ExistentialQuantification,
-    FlexibleContexts,
-    FlexibleInstances,
-    ForeignFunctionInterface,
-    FunctionalDependencies,
-    GeneralizedNewtypeDeriving,
-    MultiParamTypeClasses,
-    ScopedTypeVariables

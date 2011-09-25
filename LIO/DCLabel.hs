@@ -1,3 +1,10 @@
+{-# LANGUAGE CPP #-}
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+{-# LANGUAGE Trustworthy #-}
+#else
+#warning "This module is not using SafeHaskell"
+#endif
+
 {-| This module provides bindings for the "DCLabel" module, with some 
 renaming to resolve name clashes. The delegation of privilege and 
 other trusted code is not exported by this module and code wishing to
@@ -18,7 +25,12 @@ module LIO.DCLabel ( -- * DCLabel export
                    )where
 
 import LIO.TCB
+
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+import safe Data.Typeable
+#else
 import Data.Typeable
+#endif
 
 import DCLabel.Safe hiding ( Label
                            , Priv
@@ -68,26 +80,21 @@ instance Priv DCLabel DCL.TCBPriv where
         gives us @rs''@). Directly, @rs = rs' /\ rs''@.
         -}
         lostar p l g = 
-          let (ls, li) = (secrecy l, integrity l)
-              (gs, gi) = (secrecy g, integrity g)
-              lp       = DCL.priv p
+          let (ls, li) = (DCL.toLNF . secrecy $ l, DCL.toLNF . integrity $ l)
+              (gs, gi) = (DCL.toLNF . secrecy $ g, DCL.toLNF . integrity $ g)
+              lp       = DCL.toLNF . DCL.priv $ p
               rs'      = c2l [c | c <- getCats ls
                                 , not (lp `DCL.implies` (c2l [c]))]
               rs''     = c2l [c | c <- getCats gs
                                 , not (rs' `DCL.implies` (c2l [c]))]
               rs       = rs' `DCL.and_label` rs''
               ri       = (li `DCL.and_label` lp) `DCL.or_label` gi
-         in DCL.toLNF $ newDC rs ri
+         in DCL.toLNF $ simpleNewLabel p (newDC rs ri)
               where getCats = DCL.conj . DCL.label
                     c2l = DCL.MkLabel . DCL.MkConj
-        {- OLD, BROKEN (was more elegant than above, so maybe use some ideas
-           when rewriting  the above):
-  	lostar p li lg = 
-          let lip = newDC (DCL.secrecy li) ((DCL.integrity li) ./\. lp)
-              lgp = newDC ((DCL.secrecy lg) ./\. lp) (DCL.integrity lg)
-	      lp  = DCL.priv p
-	  in DCL.join lip lgp
-        -}
+                    simpleNewLabel p lr | p == DCL.rootPrivTCB = g   
+                                        | p == DCL.noPriv      = l `lub` g
+                                        | otherwise            = lr
 
 --
 -- Renaming
