@@ -101,11 +101,24 @@ import safe Control.Exception hiding (catch, handle, throw, throwIO,
 import safe qualified Control.Exception as E
 import safe Data.Monoid
 import safe Data.Typeable
+import safe Data.Functor
 import safe Text.Read (minPrec)
 
 import safe LIO.MonadCatch
 
 #else
+import Prelude hiding (catch)
+import Control.Monad.Error
+import Control.Monad.State.Lazy hiding (put, get)
+import Control.Exception hiding (catch, handle, throw, throwIO,
+                                 onException, block, unblock, evaluate)
+import qualified Control.Exception as E
+import Data.Monoid
+import Data.Typeable
+import Data.Functor
+import Text.Read (minPrec)
+
+import LIO.MonadCatch
 
 #endif
 
@@ -228,6 +241,11 @@ class (POrd a, Show a, Read a, Typeable a) => Label a where
 
 -- | @Labeled@ is a type representing labeled data.  
 data (Label l) => Labeled l t = LabeledTCB l t
+
+-- | To make programming easier with labeled values, we provide a functor
+-- instance definition.
+instance Label l => Functor (Labeled l) where
+  fmap f (LabeledTCB l a) = LabeledTCB l (f a)
 
 -- | It would be a security issue to make certain objects a member of
 -- the 'Show' class, but nonetheless it is useful to be able to

@@ -5,10 +5,10 @@
 #warning "This module is not using SafeHaskell"
 #endif
 
-{-| This module provides bindings for the "DCLabel" module, with some 
+{-| This module provides bindings for the @DCLabel@ module, with some 
 renaming to resolve name clashes. The delegation of privilege and 
 other trusted code is not exported by this module and code wishing to
-use this should import "DCLabel.TCB".
+use this should import @DCLabel.TCB@.
 -}
 
 {-# LANGUAGE StandaloneDeriving #-}
@@ -21,7 +21,7 @@ module LIO.DCLabel ( -- * DCLabel export
                      -- * Renamed privileges
                    , DCPriv, DCPrivTCB
                      -- * Useful aliases for the LIO Monad
-                   , DC, evalDC
+                   , DCLabeled, DC, evalDC
                    )where
 
 import LIO.TCB
@@ -100,17 +100,20 @@ instance Priv DCLabel DCL.TCBPriv where
 -- Renaming
 --
 
--- | A "DCLabel" category set.
+-- | A @DCLabel@ category set.
 type DCCatSet = DCL.Label
--- | A "DCLabel" (untrusted) privilege.
+-- | A @DCLabel@ (untrusted) privilege.
 type DCPriv = DCL.Priv
--- | A "DCLabel" privilege.
+-- | A @DCLabel@ privilege.
 type DCPrivTCB = DCL.TCBPriv
 
 
 --
 -- LIO aliases
 --
+
+-- | The type for 'Labeled' values uinsg 'DCLabel' as the label.
+type DCLabeled a = Labeled DCLabel a
 
 -- | The monad for LIO computations using 'DCLabel' as the label.
 type DC = LIO DCLabel ()
