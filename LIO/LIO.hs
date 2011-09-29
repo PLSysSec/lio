@@ -67,8 +67,15 @@ module LIO.LIO ( module LIO.Base
                , module LIO.MonadLIO
                ) where
 
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
 -- import Prelude hiding (readFile, writeFile, catch)
 import safe LIO.Base
 import safe LIO.Handle
 import safe LIO.LIORef
 import safe LIO.MonadLIO
+#else
+import LIO.Base
+import LIO.Handle
+import LIO.LIORef
+import LIO.MonadLIO
+#endif
