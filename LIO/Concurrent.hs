@@ -9,7 +9,7 @@ module LIO.Concurrent ( lForkP, lFork
                       , lWaitP, lWait
                       ) where
 
-import LIO.TCB hiding (toLabeledP, toLabeled)
+import LIO.TCB
 import LIO.Concurrent.LMVar.TCB
 import Control.Concurrent
 
