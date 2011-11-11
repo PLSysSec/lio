@@ -1,5 +1,5 @@
 Name:           lio
-Version:        0.0.2
+Version:        0.0.3
 build-type:     Simple
 License:        GPL
 License-File:   LICENSE
@@ -59,6 +59,10 @@ Library
   Exposed-modules:
     LIO.Armor,
     LIO.Base,
+    LIO.Concurrent,
+    LIO.Concurrent.LMVar,
+    LIO.Concurrent.LMVar.Safe,
+    LIO.Concurrent.LMVar.TCB,
     LIO.DCLabel,
     LIO.FS,
     LIO.Handle,

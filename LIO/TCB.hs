@@ -240,7 +240,7 @@ class (POrd a, Show a, Read a, Typeable a) => Label a where
 --
 
 -- | @Labeled@ is a type representing labeled data.  
-data (Label l) => Labeled l t = LabeledTCB l t
+data Labeled l t = LabeledTCB l t
 
 -- | To make programming easier with labeled values, we provide a functor
 -- instance definition.
@@ -384,13 +384,12 @@ labelOf (LabeledTCB l _) = l
 -- Trusted label implementation code can use 'getTCB' and 'putTCB' to
 -- get and set the label state.
 
-data (Label l) => LIOstate l s =
-    LIOstate { labelState :: s
-             , lioL :: l -- current label
-             , lioC :: l -- current clearance
-             }
+data LIOstate l s = LIOstate { labelState :: s
+                             , lioL :: l -- current label
+                             , lioC :: l -- current clearance
+                             }
 
-newtype (Label l) => LIO l s a = LIO (StateT (LIOstate l s) IO a)
+newtype LIO l s a = LIO (StateT (LIOstate l s) IO a)
     deriving (Functor, Monad, MonadFix)
 
 get :: (Label l) => LIO l s (LIOstate l s)
