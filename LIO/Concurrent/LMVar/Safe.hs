@@ -13,4 +13,5 @@ import LIO.Concurrent.LMVar.TCB ( LMVar
                                , takeLMVar, takeLMVarP
                                , putLMVar, putLMVarP
                                , readLMVar, readLMVarP
+                               , labelOfLMVar
                                ) 

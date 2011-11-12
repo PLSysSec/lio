@@ -11,6 +11,7 @@ module LIO.Concurrent.LMVar.TCB ( LMVar
                                , takeLMVar, takeLMVarP
                                , putLMVar, putLMVarP
                                , readLMVar, readLMVarP
+                               , labelOfLMVar
                                -- TCB
                                , newEmptyLMVarTCB
                                , newLMVarTCB
@@ -24,6 +25,9 @@ import LIO.TCB
 
 -- | @MVar@ with associated label.
 data LMVar l a = LMVarTCB l (MVar a)
+
+labelOfLMVar :: Label l => LMVar l a -> l
+labelOfLMVar (LMVarTCB l _) = l
 
 newEmptyLMVarP :: (Priv l p) => p -> l -> LIO l s (LMVar l a)
 newEmptyLMVarP p l = do
