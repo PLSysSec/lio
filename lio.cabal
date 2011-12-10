@@ -55,16 +55,17 @@ Library
                  time >= 1.1.4 && < 2,
                  dclabel >= 0.0.1 && < 2
 
-  ghc-options: -Wall
+  ghc-options: -Wall -Werror -fno-warn-orphans
+
   Exposed-modules:
     -- Core:
     LIO,
     LIO.Safe,
     LIO.TCB,
     LIO.MonadCatch,
-    LIO.MonadLIO
+    LIO.MonadLIO,
     -- Label formats:
---    LIO.DCLabel,
+    LIO.DCLabel
 --    LIO.HiStar,
     -- References:
 --    LIO.LIORef,

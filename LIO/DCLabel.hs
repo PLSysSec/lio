@@ -91,9 +91,9 @@ instance Priv DCLabel DCL.TCBPriv where
          in DCL.toLNF $ simpleNewLabel p (newDC rs ri)
               where getCats = DCL.conj . DCL.label
                     c2l = DCL.MkLabel . DCL.MkConj
-                    simpleNewLabel p lr | p == DCL.rootPrivTCB = g   
-                                        | p == DCL.noPriv      = l `lub` g
-                                        | otherwise            = lr
+                    simpleNewLabel pr lr | pr == DCL.rootPrivTCB = g   
+                                         | pr == DCL.noPriv      = l `lub` g
+                                         | otherwise             = lr
 
 --
 -- Renaming
