@@ -10,7 +10,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RankNTypes #-}
---XXX: remove
 
 -- | This module implements the core of the Labeled IO library for
 -- information flow control in Haskell.  It provides a monad, 'LIO',
@@ -363,7 +362,8 @@ mkLIO = LIO . StateT
 unLIO :: (Label l) => LIO l s a -> LIOstate l s -> IO (a, LIOstate l s)
 unLIO (LIO m) = runStateT m
 
--- | Execute an LIO action. See 'evalLIO'.
+-- | Execute an LIO action. The label on exceptions are removed.
+-- See 'evalLIO'.
 runLIO :: forall l s a. (Label l)
        => LIO l s a -> LIOstate l s -> IO (a, LIOstate l s)
 runLIO m s = unLIO m s `E.catch` (E.throwIO . delabel)
