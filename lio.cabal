@@ -20,7 +20,7 @@ Extra-source-files:
 Description:
         The /Labeled IO/ (LIO) library provides information flow
         control for incorporating untrusted code within Haskell
-        applications.  Most code should import module "LIO.LIO" and
+        applications.  Most code should import module "LIO" and
         whichever label type the application is using (e.g.,
         "LIO.DCLabel").  The core functionality of the library is
         documented in "LIO.TCB".  LIO was implemented by David
@@ -57,21 +57,17 @@ Library
 
   ghc-options: -Wall
   Exposed-modules:
-    LIO.Armor,
-    LIO.Base,
-    LIO.Concurrent,
-    LIO.Concurrent.LMVar,
-    LIO.Concurrent.LMVar.Safe,
-    LIO.Concurrent.LMVar.TCB,
-    LIO.DCLabel,
-    LIO.FS,
-    LIO.Handle,
-    LIO.HiStar,
-    LIO.LIO,
-    LIO.LIORef,
-    LIO.LIORef.TCB,
-    LIO.LIORef.Safe,
-    LIO.MonadCatch,
-    LIO.MonadLIO,
+    LIO,
+    LIO.Safe,
     LIO.TCB,
-    LIO.TmpFile
+--    LIO.Concurrent,
+--    LIO.Concurrent.LMVar,
+--    LIO.Concurrent.LMVar.Safe,
+--    LIO.Concurrent.LMVar.TCB,
+--    LIO.DCLabel,
+--    -- LIO.HiStar,
+--    LIO.LIORef,
+--    LIO.LIORef.TCB,
+--    LIO.LIORef.Safe,
+    LIO.MonadCatch,
+    LIO.MonadLIO

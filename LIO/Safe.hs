@@ -1,15 +1,13 @@
 {-# LANGUAGE CPP #-}
 #if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
 {-# LANGUAGE Trustworthy #-}
-#else
-#warning "This module is not using SafeHaskell"
 #endif
 
--- |This file exports the subset of symbols in the "LIO.TCB" module
+-- | This module exports the subset of symbols in the "LIO.TCB" module
 -- that are safe for untrusted code to access.  See the "LIO.TCB"
 -- module for documentation.
 
-module LIO.Base ( POrdering(..), POrd(..), o2po, Label(..)
+module LIO.Safe ( Label(..)
                  , Priv(..), NoPrivs(..)
                  , LIO
                  , getLabel, setLabelP
@@ -28,7 +26,7 @@ module LIO.Base ( POrdering(..), POrd(..), o2po, Label(..)
                  , evalLIO
                  ) where
 
-import LIO.TCB ( POrdering(..), POrd(..), o2po, Label(..)
+import LIO.TCB ( Label(..)
                , Priv(..), NoPrivs(..)
                , LIO
                , getLabel, setLabelP

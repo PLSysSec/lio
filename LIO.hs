@@ -1,16 +1,14 @@
 {-# LANGUAGE CPP #-}
 #if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
 {-# LANGUAGE Safe #-}
-#else
-#warning "This module is not using SafeHaskell"
 #endif
 
 {- | This is the main module to be included by code using the Labeled
    IO (LIO) library.  The core of the library is documented in the
    "LIO.TCB" module.  Note, however, that unprivileged code must not
-   be allowed to import "LIO.TCB"--instead, a module "LIO.Base"
+   be allowed to import "LIO.TCB"--instead, a module "LIO.Safe"
    exports just the safe symbols from "LIO.TCB".  This module,
-   "LIO.LIO", re-exports "LIO.Base" as well as a few other handy
+   "LIO", re-exports "LIO.Safe" as well as a few other handy
    modules.  For many modules it should be the only import necessary.
 
    Certain symbols in the LIO library supersede variants in the
@@ -19,10 +17,10 @@
    commands like these:
 
    @
-    import Prelude hiding ('readFile', 'writeFile', 'catch')
+    import Prelude hiding ('catch')
     import Control.Exception hiding ('throwIO', 'catch', 'handle', 'onException'
                                     , 'bracket', 'block', 'unblock')
-    import LIO.LIO
+    import LIO
    @
 
    The LIO variants of the system functions hidden in the above import
@@ -59,23 +57,13 @@
         In general, pragmas and imports should be highly scrutinized.
         For example, most of the "Foreign" class of modules are probably
         dangerous. With GHC 7.2, we use the SafeHaskell extension to enforce
-        these.
+        these restrictions.
 -}
-module LIO.LIO ( module LIO.Base
-               , module LIO.Handle
-               , module LIO.LIORef
-               , module LIO.MonadLIO
-               ) where
+module LIO ( module LIO.Safe
+           , module LIO.LIORef
+           , module LIO.MonadLIO
+           ) where
 
-#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
--- import Prelude hiding (readFile, writeFile, catch)
-import safe LIO.Base
-import safe LIO.Handle
+import safe LIO.Safe
 import safe LIO.LIORef
 import safe LIO.MonadLIO
-#else
-import LIO.Base
-import LIO.Handle
-import LIO.LIORef
-import LIO.MonadLIO
-#endif

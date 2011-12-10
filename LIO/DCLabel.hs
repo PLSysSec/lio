@@ -46,14 +46,13 @@ deriving instance Typeable DCL.Conj
 deriving instance Typeable DCL.Label
 deriving instance Typeable DCL.DCLabel
 
-instance POrd DCLabel where
-	leq = DCL.canflowto
 
 instance Label DCLabel where
 	lbot = DCL.bottom
 	ltop = DCL.top
 	lub  = DCL.join
 	glb  = DCL.meet
+	leq  = DCL.canflowto
 
 instance PrivTCB DCL.TCBPriv
 
