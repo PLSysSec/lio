@@ -111,6 +111,8 @@ type DCPrivTCB = DCL.TCBPriv
 -- LIO aliases
 --
 
+instance LabelState DCLabel () where
+
 -- | The type for 'Labeled' values uinsg 'DCLabel' as the label.
 type DCLabeled a = Labeled DCLabel a
 

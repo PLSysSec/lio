@@ -65,14 +65,14 @@ Library
     LIO.MonadCatch,
     LIO.MonadLIO,
     -- Label formats:
-    LIO.DCLabel
+    LIO.DCLabel,
 --    LIO.HiStar,
     -- References:
---    LIO.LIORef,
---    LIO.LIORef.TCB,
---    LIO.LIORef.Safe,
+    LIO.LIORef,
+    LIO.LIORef.TCB,
+    LIO.LIORef.Safe,
     -- Concurrency:
---    LIO.Concurrent,
---    LIO.Concurrent.LMVar,
---    LIO.Concurrent.LMVar.Safe,
---    LIO.Concurrent.LMVar.TCB,
+    LIO.Concurrent,
+    LIO.Concurrent.LMVar,
+    LIO.Concurrent.LMVar.Safe,
+    LIO.Concurrent.LMVar.TCB

@@ -1,8 +1,6 @@
 {-# LANGUAGE CPP #-}
 #if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
 {-# LANGUAGE Trustworthy #-}
-#else
-#warning "This module is not using SafeHaskell"
 #endif
 
 -- |This module exports the safe subset of the "LIO.LIORef.TCB" module.
@@ -11,7 +9,11 @@
 module LIO.LIORef.Safe ( module LIO.LIORef.TCB ) where
 import LIO.LIORef.TCB ( LIORef
                       , newLIORef, labelOfLIORef
-                      , readLIORef, writeLIORef, atomicModifyLIORef
+                      , readLIORef, writeLIORef
+                      , modifyLIORef
+                      , atomicModifyLIORef
                       , newLIORefP
-                      , readLIORefP, writeLIORefP, atomicModifyLIORefP
+                      , readLIORefP, writeLIORefP
+                      , modifyLIORefP
+                      , atomicModifyLIORefP
                       )

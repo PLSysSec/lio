@@ -60,10 +60,8 @@
         these restrictions.
 -}
 module LIO ( module LIO.Safe
-           , module LIO.LIORef
            , module LIO.MonadLIO
            ) where
 
 import safe LIO.Safe
-import safe LIO.LIORef
 import safe LIO.MonadLIO

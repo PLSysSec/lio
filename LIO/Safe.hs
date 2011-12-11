@@ -9,7 +9,7 @@
 
 module LIO.Safe ( Label(..)
                  , Priv(..), NoPrivs(..)
-                 , LIO
+                 , LIO, LabelState
                  , evalLIO
                  , getLabel, setLabelP
                  , getClearance, lowerClr, lowerClrP, withClearance
@@ -28,7 +28,7 @@ module LIO.Safe ( Label(..)
 
 import LIO.TCB ( Label(..)
                , Priv(..), NoPrivs(..)
-               , LIO
+               , LIO, LabelState
                , evalLIO
                , getLabel, setLabelP
                , getClearance, lowerClr, lowerClrP, withClearance
