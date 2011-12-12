@@ -12,10 +12,8 @@ module LIO.Concurrent ( lForkP, lFork
 
 import LIO.TCB
 import LIO.Concurrent.LMVar.TCB
-import Control.Monad (unless)
 import Control.Concurrent
-import Control.Exception (SomeException, toException)
-import LIO.MonadCatch
+import Control.Exception (toException)
 import Data.Functor
 
 -- | An LIO fork.
@@ -31,15 +29,14 @@ lForkP :: (Priv l p, LabelState l s, Show a)
        => p -> l -> LIO l s a -> LIO l s (LRes l a)
 lForkP p l m = do
   mv <- newEmptyLMVarP p l
-  _ <- forkLIO $ do curC <- getClearance
-                    res <- (Right <$> m) `catchTCB` (return . Left)
+  _ <- forkLIO $ do res <- (Right <$> m) `catchTCB` (return . Left)
                     lastL <- getLabel
                     putLMVarTCB mv (if leqp p lastL l
                                       then res
                                       else (mkErr lastL LerrLow))
 
   return $ LRes mv
-    where mkErr l e = Left . (LabeledExceptionTCB l) . toException $ e
+    where mkErr cl e = Left . (LabeledExceptionTCB cl) . toException $ e
 
 -- | Labeled fork. @lFork@ allows one to invoke computations taht
 -- would otherwise raise the current label, but without actually

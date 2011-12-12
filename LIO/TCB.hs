@@ -888,7 +888,6 @@ catchTCB :: (LabelState l s)
          -> LIO l s a        -- ^ Result of computation or handler
 catchTCB io handler = do
   s <- get
-  clr <- getClearance
   (a, s') <- ioTCB $ do
     (unLIO io s) `E.catch` (\e -> unLIO (handler e) s)
   put s'
