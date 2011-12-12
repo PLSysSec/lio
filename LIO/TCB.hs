@@ -67,7 +67,7 @@ module LIO.TCB (-- * Basic Label Functions
                , label, labelP
                , unlabel, unlabelP
                , taintLabeled
-               , toLabeled, toLabeledP, discard
+               , toLabeled, toLabeledP, discard, discardP
                -- ** LIO Guards
                -- $guards
                , taint, taintP
@@ -568,12 +568,18 @@ taintLabeled l (LabeledTCB la a) = do
 -- producing the value of the 'Labeled'. 
 -- This higlights one main use of clearance: to ensure that a @Labeled@
 -- computed does not exceed a particular label.
+--
+-- WARNING: toLabeled is susceptible to termination attacks.
+--
 toLabeled :: (LabelState l s) => l -> LIO l s a -> LIO l s (Labeled l a)
 toLabeled = toLabeledP NoPrivs
 {-# WARNING toLabeled "toLabeled is susceptible to termination attacks" #-}
 
 -- | Same as 'toLabeled' but allows one to supply a privilege object
 -- when comparing the initial and final label of the computation.
+--
+-- WARNING: toLabeledP is susceptible to termination attacks.
+--
 toLabeledP :: (Priv l p, LabelState l s)
            => p -> l -> LIO l s a -> LIO l s (Labeled l a)
 toLabeledP p l m = do
@@ -600,9 +606,18 @@ toLabeledP p l m = do
 -- course, if @log_handle@ is closed and this throws an exception, it
 -- may not be possible to catch the exception within the 'LIO' monad
 -- without sufficient privileges--see 'catchP'.)
+--
+-- WARNING: discard is susceptible to termination attacks.
+--
 discard :: (LabelState l s) =>  l -> LIO l s a -> LIO l s ()
-discard l m = toLabeled l m >> return ()
+discard = discardP NoPrivs
 {-# WARNING discard "discard is susceptible to termination attacks" #-}
+
+-- | Same as 'discard', but uses privileges when comparing initial and
+-- final label of the computation.
+discardP :: (Priv l p, LabelState l s) => p -> l -> LIO l s a -> LIO l s ()
+discardP p l m = toLabeledP p l m >> return ()
+{-# WARNING discardP "discardP is susceptible to termination attacks" #-}
 
 
 
