@@ -20,10 +20,9 @@
 -- execute through the 'evalLIO' function.  (Though usually a wrapper
 -- function is employed depending on the type of labels used by an
 -- application.  For example, with "LIO.DCLabel", you would use
--- 'evalDC' to execute an untrusted computation, and with "LIO.HiStar"
--- labels, the function is 'evalHS'.  There are also abbreviations for
--- the 'LIO' monad type of a particular label--for instance 'DC' or
--- 'HS'.)
+-- 'evalDC' to execute an untrusted computation. There are also
+-- abbreviations for the 'LIO' monad type of a particular
+-- label--for instance 'DC'.
 --
 -- A data structure 'Labeled' (labeled value) protects access to pure
 -- values.  Without the appropriate privileges, one cannot produce a

@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module LambdaChair ( evalReviewDC
@@ -32,10 +33,12 @@ import LIO.LIORef
 import LIO.LIORef.TCB (readLIORefTCB)
 import LIO.MonadLIO
 import LIO.MonadCatch (throwIO)
-import LIO.DCLabel
-import DCLabel.Safe
+import LIO.DCLabel hiding (name)
+import DCLabel.Safe hiding (name)
 import DCLabel.TCB (Disj(..), Conj(..), Label(..))
 import DCLabel.PrettyShow
+
+import qualified Data.ByteString.Char8 as C
 
 
 type ErrorStr  = String
@@ -101,7 +104,7 @@ emptyReviewState :: ReviewState
 emptyReviewState = ReviewState [] [] Nothing
 
 newtype ReviewDC a = ReviewDC (StateT ReviewState DC a)
-  deriving (Monad, MonadFix)
+  deriving (Monad)
 
 liftReviewDC :: DC a -> ReviewDC a
 liftReviewDC = ReviewDC . liftLIO
@@ -282,7 +285,7 @@ retrievePaper pId = do
        where doReadPaper priv rev = liftReviewDC $ do
                  (Paper lPaper) <- readLIORefP priv (paper rev)
                  return (Right lPaper)
-             id2cat i = MkDisj [principal $ "Review"++(show i)]
+             id2cat i = MkDisj [principal . C.pack $ "Review"++(show i)]
 
 -- ^ Given a paper number print the paper
 -- NOTE: in the paper, the functionality of @readPaper@ corresponds to
@@ -321,8 +324,8 @@ getOutputChLbl = do
           c_cat = map id2conf_cat (cs) -- conflicting categories
           nc_cat = map id2cat (as \\ cs) -- noconflicting categories
       return $ newDC (listToLabel $ c_cat ++ nc_cat) (<>)
-        where id2cat i = MkDisj [ principal $ "Review"++(show i)]
-              id2conf_cat i = MkDisj [ principal $ "Review" ++ (show i)
+        where id2cat i = MkDisj [ principal . C.pack $ "Review"++(show i)]
+              id2conf_cat i = MkDisj [ principal . C.pack $ "Review" ++ (show i)
                                      , principal $ "CONFLICT" ]
           
 -- ^ Print if the current label flows to the output channel label, i.e.,
@@ -364,7 +367,7 @@ assign2curLabel :: [Id] -> ReviewDC()
 assign2curLabel as = liftReviewDC $ do
   let l = newDC (<>) (listToLabel $ map id2cat as)
   setLabelTCB l
-        where id2cat i = MkDisj [principal $ "Review"++(show i)]
+        where id2cat i = MkDisj [principal . C.pack $ "Review"++(show i)]
   
 -- ^ Safely execute untrusted code
 safeExecTCB :: ReviewDC () -> ReviewDC ()

@@ -66,7 +66,6 @@ Library
     LIO.MonadLIO,
     -- Label formats:
     LIO.DCLabel,
---    LIO.HiStar,
     -- References:
     LIO.LIORef,
     LIO.LIORef.TCB,

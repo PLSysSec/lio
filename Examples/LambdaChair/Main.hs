@@ -1,8 +1,6 @@
 {-# LANGUAGE CPP #-}
 #if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
 {-# LANGUAGE SafeImports #-}
-#else
-#warning "This module is not using SafeHaskell"
 #endif
 import LambdaChair
 import DCLabel.PrettyShow
