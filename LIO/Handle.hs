@@ -1,8 +1,6 @@
 {-# LANGUAGE CPP #-}
 #if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
 {-# LANGUAGE Trustworthy #-}
-#else
-#warning "This module is not using SafeHaskell"
 #endif
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -38,9 +36,9 @@ import LIO.FS
 
 import safe Prelude hiding (readFile, writeFile)
 import qualified Data.ByteString.Lazy as L
-#warning "Did not safely import Data.ByteString.Lazy"
+-- #warning "Did not safely import Data.ByteString.Lazy"
 import qualified System.Directory as IO
-#warning "Did not safely import System.Directory"
+-- #warning "Did not safely import System.Directory"
 import safe System.IO (IOMode)
 import safe qualified System.IO as IO
 import safe qualified System.IO.Error as IO
@@ -93,7 +91,7 @@ data LHandle l h = LHandleTCB l h
 instance (Label l) => MintTCB (LHandle l IO.Handle) (IO.Handle, l) where
     mintTCB (h, l) = LHandleTCB l h
 
-instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
+instance (LabelState l s) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
     getDirectoryContents d  = do
       root <- rootDir
       node <- lookupNode NoPrivs root d False
@@ -107,11 +105,11 @@ instance (Label l) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
       l <- getLabel
       mkLHandle NoPrivs l root path mode
 
-instance (Label l) => CloseOps (LHandle l IO.Handle) (LIO l s) where
+instance (LabelState l s) => CloseOps (LHandle l IO.Handle) (LIO l s) where
     hClose (LHandleTCB l h) = wguard l >> rtioTCB (hClose h)
     hFlush (LHandleTCB l h) = wguard l >> rtioTCB (hFlush h)
 
-instance (Label l, CloseOps (LHandle l h) (LIO l s), HandleOps h b IO)
+instance (LabelState l s, CloseOps (LHandle l h) (LIO l s), HandleOps h b IO)
     => HandleOps (LHandle l h) b (LIO l s) where
     hGet (LHandleTCB l h) n       = wguard l >> rtioTCB (hGet h n)
     hGetNonBlocking (LHandleTCB l h) n =
@@ -126,7 +124,7 @@ hlabelOf (LHandleTCB l _) = l
 
 
 
-mkDir                   :: (Priv l p) =>
+mkDir                   :: (Priv l p, LabelState l s) =>
                            p        -- ^Privileges
                         -> l        -- ^Label for the new directory
                         -> Name l   -- ^Start point
@@ -142,7 +140,7 @@ mkDir priv l start path = do
   _ <- rtioTCB $ linkNode new name
   return ()
 
-mkLHandle                        :: (Priv l p) =>
+mkLHandle                        :: (Priv l p, LabelState l s) =>
                                     p -- ^Privileges to minimize taint
                                  -> l -- ^Label if new file is created
                                  -> Name l -- ^Starting point of pathname
@@ -183,36 +181,36 @@ writeFile               :: (DirectoryOps h m, HandleOps h b m,
 writeFile path contents = bracketTCB (openFile path IO.WriteMode) hClose
                           (flip hPut contents)
 
-createDirectoryPR :: (Priv l p) => p -> Name l -> FilePath -> LIO l s ()
+createDirectoryPR :: (Priv l p, LabelState l s) => p -> Name l -> FilePath -> LIO l s ()
 createDirectoryPR privs start path = do
   l <- getLabel
   mkDir privs l start path
 
-writeFilePR :: (Priv l p, HandleOps IO.Handle b IO) =>
+writeFilePR :: (Priv l p, HandleOps IO.Handle b IO, LabelState l s) =>
                p -> Name l -> FilePath -> b -> LIO l s ()
 writeFilePR privs start path contents =
   bracketTCB (openFilePR privs start path IO.WriteMode) hClose
              (flip hPut contents)
 
-openFilePR :: (Priv l p) =>
+openFilePR :: (Priv l p, LabelState l s) =>
               p -> Name l -> FilePath -> IOMode -> LIO l s (LHandle l IO.Handle)
 openFilePR privs start path mode = do
   l <- getLabel
   mkLHandle privs l start path mode
 
-createDirectoryP :: (Priv l p) => p -> FilePath -> LIO l s ()
+createDirectoryP :: (Priv l p, LabelState l s) => p -> FilePath -> LIO l s ()
 createDirectoryP privs path = do
   root <- rootDir
   l <- getLabel
   mkDir privs l root path
 
-writeFileP  :: (Priv l p, HandleOps IO.Handle b IO) =>
+writeFileP  :: (Priv l p, HandleOps IO.Handle b IO, LabelState l s) =>
                p -> FilePath -> b -> LIO l s ()
 writeFileP privs path contents =
   bracketTCB (openFileP privs path IO.WriteMode) hClose
              (flip hPut contents)
 
-openFileP :: (Priv l p) =>
+openFileP :: (Priv l p, LabelState l s) =>
              p -> FilePath -> IOMode -> LIO l s (LHandle l IO.Handle)
 openFileP privs path mode = do
   root <- rootDir
