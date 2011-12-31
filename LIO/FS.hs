@@ -1,12 +1,23 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module LIO.FS where
+module LIO.FS ( evalWithRoot
+              -- * Creating and find labeled objects
+              , lookupObjPath, lookupObjPathP
+              , getObjLabelTCB
+              , createFileTCB, createDirectoryTCB
+              -- * Labeled FilePath
+              , LFilePath, labelOfFilePath
+              , unlabelFilePath
+              , unlabelFilePathP
+              , unlabelFilePathTCB
+              -- * Misc helper
+              , cleanUpPath, stripSlash
+              ) where
 
 
 import Prelude hiding (catch)
 import Control.Monad (unless)
 import LIO.TCB 
-import LIO.MonadCatch
 import System.FilePath
 import System.Posix.Files
 import System.Directory
@@ -19,7 +30,7 @@ import Data.IORef
 import Data.Functor
 import Data.Foldable (foldlM)
 import Data.Typeable
-import Data.List (isPrefixOf, isSuffixOf, findIndex)
+import Data.List (isPrefixOf, isSuffixOf)
 import System.IO.Unsafe
 import System.IO
 import qualified System.IO.Error as IOError
@@ -122,9 +133,8 @@ initFS l path = do
 checkFS :: FilePath -> IO ()
 checkFS path = do
   -- check that the ROOT link exists
-  hasRootLink <- fileExist $ path </> rootLink
-  putStrLn $ path </> rootLink
-  unless hasRootLink $ throwIO FSRootCorrupt
+  rootStat <- getSymbolicLinkStatus $ path </> rootLink
+  unless (isSymbolicLink rootStat) $ throwIO FSRootCorrupt
   -- find obj dir:
   hasObjDir <- doesDirectoryExist $ path </> objDir
   unless hasObjDir $ throwIO FSRootCorrupt
@@ -161,12 +171,6 @@ newDirObj l = newObj l $ \p -> (New . DirObj) <$> mkTmpObjDir p
 -- | Create a new file object with a given label and 'IOMode'.
 newFileObj :: (Serialize l, Label l) => l -> IOMode -> IO NewObject
 newFileObj l m = newObj l $ \p -> (New . uncurry FileObj) <$> mkTmpObjFile m p
-
--- | Remove the suffix (usually 'tmpExt') from a filename.
-rmSuffix :: String -> String -> String
-rmSuffix p e = if e `isSuffixOf` p
-  then take (length p - length e) p
-  else p
 
 -- | Create a new temporary unique object directory. The function retries if
 -- there exists an object with the same name but no 'tmpExt' suffix.
@@ -271,9 +275,8 @@ linkObj name' newO@(New o) = do
   root <- getRootDir
   let newObjPath = case o of
                      DirObj p    -> p
-                     FileObj h p -> p
+                     FileObj _ p -> p
       objPath = newObjPath `rmSuffix` tmpExt
-  link <- readSymbolicLink (root </> rootLink)
   let name = root </>  rootLink </> name'
       relObjPath = (".." </> ".." </> (objPath `rmPrefix` (root </> objDir)))
   createSymbolicLink relObjPath name `onException` (cleanUpNewObj newO)
@@ -289,11 +292,12 @@ linkObj name' newO@(New o) = do
 -- 'createSymbolicLink' and 'rename' calls.  Either way it should be
 -- fine for us just to 'rename' the 'NewObject', because the link to
 -- the object would not exist if the 'NewObject' were not ready to be
--- renamed.
+-- renamed. This function is primarily used when traversing the
+-- filesystem tree with 'pathTaintTCB'.
 fixObjLink :: FilePath -> IO ()
 fixObjLink f = do
   exists <- catchIO (getFileStatus f >> return True) (return False)
-  unless exists $ ignoreErr $ rename (f </> tmpExt) f
+  unless exists $ ignoreErr $ rename (f ++ tmpExt) f
 
 -- | Clean up a newly created object. If the object is a temporary
 -- directory, remove it. If it's a file, close the handle, and remove
@@ -358,8 +362,6 @@ lookupObjPathP p f' = do
                 (safeinit dirs)
   let objPath = (dir </> safelast dirs)
   l <- getObjLabelTCB objPath
-  -- TODO: 
-  --ioTCB $ fixObjLink objPath
   return . LFilePathTCB $ labelTCB l objPath
   where safeinit [] = []
         safeinit x  = init x
@@ -392,6 +394,7 @@ pathTaintTCB p root f' = do
   let f = stripSlash f'
   rootL <- rtioTCB $ readSymbolicLink (root </> f)
   let objPath = root </> rootL
+  ioTCB $ fixObjLink objPath
   lS <- rtioTCB $ C.readFile (objPath </> ".." </> labelFile)
   case decode lS of
     Left _ -> throwIO . userError $ "Invalid label file."
@@ -443,6 +446,11 @@ createFileTCB l p m = do
 -- Helper functions
 --
 
+-- | Remove the suffix (usually 'tmpExt') from a list (usually filename).
+rmSuffix :: Eq a => [a] -> [a] -> [a]
+rmSuffix p e = if e `isSuffixOf` p
+  then take (length p - length e) p
+  else p
 
 -- | @rmPrefix path prefix@ removes @prefix@ from @path@.
 rmPrefix :: FilePath -> FilePath -> FilePath

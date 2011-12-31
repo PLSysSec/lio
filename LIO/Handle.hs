@@ -7,10 +7,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
---TODO: remove
-{-# LANGUAGE ScopedTypeVariables #-}
--- {-# LANGUAGE OverloadedStrings #-}
-
 -- |This module abstracts the basic 'FileHandle' methods provided by
 -- the system library, and provides an 'LHandle' (Labeled Handle) type
 -- that can be manipulated from within the 'LIO' Monad.
@@ -51,89 +47,8 @@ import System.IO (IOMode(..))
 import qualified System.IO as IO
 import qualified System.Directory as IO
 import System.FilePath
-import System.Posix.Files
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
-import qualified Data.ByteString as B
-import qualified Data.ByteString.Char8 as C
-
--- %--
--- %--
--- %-- TODO: REMOVE
--- %import qualified Control.Exception as E
--- %import System.Posix.Unistd
--- %import System.Posix.Unistd
--- %import System.Process
--- %import Data.Functor
--- %import LIO.DCLabel hiding(Label)
--- %import DCLabel.PrettyShow
--- %import DCLabel.Core (createPrivTCB)
--- %import Control.Monad
--- %
--- %instance Serialize DCLabel where
--- %  put = put . show
--- %  get = read <$> get
--- %
--- %dcEvalWithRoot :: FilePath -> DC a ->  IO (a, DCLabel)
--- %dcEvalWithRoot path act = evalWithRoot path act ()
--- %
--- %main = do
--- %--  system "rm -rf /tmp/rootFS"
--- %  (_,l) <-  dcEvalWithRoot "/tmp/rootFS" $ do
--- %{-
--- %    ioTCB $ do
--- %      createDirectoryTCB (newDC "alice" "alice") "alice"
--- %      createDirectoryTCB (newDC "bob"   (<>)) "bob"
--- %      createDirectoryTCB (newDC "wtf"   (<>)) ("bob" </> "wtf")
--- %      createDirectoryTCB (newDC "crap"  (<>)) ("bob" </> "wtf" </> "crap")
--- %      createDirectoryTCB (newDC "hiho"  (<>)) ("bob" </> "wtf" </> "crap" </> "wee")
--- %      do h <- createFileTCB (newDC "leet"  (<>)) ("bob" </> "wtf" </> "leet") WriteMode
--- %         hPutStrLn h (LC.pack "w00t")
--- %         hClose h
--- %      do h <- createFileTCB (newDC "neat"  (<>)) ("neat") WriteMode
--- %         hPutStrLn h (LC.pack "n347")
--- %         hClose h
--- %-}
--- %    --(lookupObjPathP NoPrivs "/bob/nothere" >> return () )`catch` (\(_::E.SomeException) -> return ())
--- %    --getDirectoryContents "bob/" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
--- %
--- %    printCurLabel "A"
--- %    l <- getLabel
--- %    h <- openFileP (createPrivTCB $ newPriv ("bob" ./\. "wtf"))
--- %                   (Just $ newDC "leet2"  (<>))
--- %                   ("bob" </> "wtf" </> "leet4") AppendMode
--- %    printCurLabel "B"
--- %    hPutStrLn h (LC.pack "w88t")
--- %    hClose h
--- %{-
--- %    h <- openFileP (createPrivTCB $ newPriv ("bob" ./\. "wtf"))
--- %                   Nothing --(newDC "leet2" (<>))
--- %                   "bob/wtf/leet"
--- %                   ReadMode
--- %    printCurLabel "B"
--- %    hGetContents h >>= \c -> ioTCB $ LC.hPutStrLn IO.stdout (c :: L.ByteString)
--- %-}
--- %    printCurLabel "C"
--- %    {-
--- %    getDirectoryContents "alice" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
--- %    ioTCB $ putStrLn "----"
--- %    createDirectory  "alice/wink"
--- %    ioTCB $ putStrLn "----"
--- %    getDirectoryContents "bob" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
--- %    ioTCB $ putStrLn "----"
--- %    createDirectoryP (createPrivTCB $ newPriv ("bob" ./\. "alice"))
--- %                     (newDC ("alice" ./\. "bob") ("alice"))
--- %                     "alice/crazyie"
--- %    getDirectoryContents "alice/" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
--- %    -}
--- %    return ()
--- %  putStrLn . prettyShow $ l
--- %
--- %printCurLabel s = do l <- getLabel 
--- %                     ioTCB . putStrLn $ s ++ ": " ++ (prettyShow l)
--- %
--- %--
--- %--
 
 
 -- | Class used to abstract reading and creating directories, and
