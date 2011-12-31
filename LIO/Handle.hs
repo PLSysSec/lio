@@ -7,17 +7,19 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
+--TODO: remove
+{-# LANGUAGE ScopedTypeVariables #-}
+-- {-# LANGUAGE OverloadedStrings #-}
+
 -- |This module abstracts the basic 'FileHandle' methods provided by
 -- the system library, and provides an 'LHandle' (Labeled Handle) type
--- that can be manipulated from within the 'LIO' Monad.  Two lower
--- level functions, 'mkDir' and 'mkLHandle' may be useful for
--- functions that wish to open file names that are not relative to
--- 'rootDir'.  (There is no notion of changeable current working
--- directory in the 'LIO' Monad.)
+-- that can be manipulated from within the 'LIO' Monad.
+-- (There is no notion of changeable current working directory in
+-- the 'LIO' Monad.)
 --
 -- The actual storage of labeled files is handled by the "LIO.FS"
 -- module.
-module LIO.Handle ( DirectoryOps(..)
+module LIO.Handle {-( DirectoryOps(..)
                   , CloseOps (..)
                   , HandleOps (..)
                   , LHandle
@@ -27,193 +29,302 @@ module LIO.Handle ( DirectoryOps(..)
                   , createDirectoryPR, openFilePR, writeFilePR
                   , createDirectoryP, openFileP, writeFileP
                   , IOMode(..)
-                  ) where
+                  )  -} where
 
+import Prelude hiding (catch)
 import LIO.TCB
 import LIO.FS
-
-#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
-
-import safe Prelude hiding (readFile, writeFile)
-import qualified Data.ByteString.Lazy as L
--- #warning "Did not safely import Data.ByteString.Lazy"
-import qualified System.Directory as IO
--- #warning "Did not safely import System.Directory"
-import safe System.IO (IOMode)
-import safe qualified System.IO as IO
-import safe qualified System.IO.Error as IO
-
-#else
-
-import Prelude hiding (readFile, writeFile)
-import qualified Data.ByteString.Lazy as L
-import qualified System.Directory as IO
-import System.IO (IOMode)
+import Data.Serialize
+-- TODO: safe imports
+import System.IO (IOMode(..))
 import qualified System.IO as IO
-import qualified System.IO.Error as IO
+import qualified System.Directory as IO
+import qualified Data.ByteString.Lazy as L
+import qualified Data.ByteString.Lazy.Char8 as LC
+import qualified Data.ByteString as B
+import qualified Data.ByteString.Char8 as C
 
-#endif
+--
+--
+-- TODO: REMOVE
+import qualified Control.Exception as E
+import System.Posix.Unistd
+import System.FilePath
+import System.Posix.Files
+import System.Process
+import Data.Functor
+import LIO.DCLabel hiding(Label)
+import DCLabel.PrettyShow
+import DCLabel.Core (createPrivTCB)
+import Control.Monad
 
+instance Serialize DCLabel where
+  put = put . show
+  get = read <$> get
+
+dcEvalWithRoot :: FilePath -> DC a ->  IO (a, DCLabel)
+dcEvalWithRoot path act = evalWithRoot path act ()
+
+main = do
+  system "rm -rf /tmp/rootFS"
+  (_,l) <-  dcEvalWithRoot "/tmp/rootFS" $ do
+    ioTCB $ do
+      createDirectoryTCB (newDC "alice" "alice") "alice"
+      createDirectoryTCB (newDC "bob"   (<>)) "bob"
+      createDirectoryTCB (newDC "wtf"   (<>)) ("bob" </> "wtf")
+      createDirectoryTCB (newDC "crap"  (<>)) ("bob" </> "wtf" </> "crap")
+      createDirectoryTCB (newDC "hiho"  (<>)) ("bob" </> "wtf" </> "crap" </> "wee")
+      do h <- createFileTCB (newDC "leet"  (<>)) ("bob" </> "wtf" </> "leet") WriteMode
+         hPutStrLn h (LC.pack "w00t")
+         hClose h
+      do h <- createFileTCB (newDC "neat"  (<>)) ("neat") WriteMode
+         hPutStrLn h (LC.pack "n347")
+         hClose h
+    --(lookupObjPathP NoPrivs "/bob/nothere" >> return () )`catch` (\(_::E.SomeException) -> return ())
+    --getDirectoryContents "bob/" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
+    printCurLabel "A"
+    l <- getLabel
+    h <- openFileP (createPrivTCB $ newPriv ("bob" ./\. "wtf"))
+                   (Just $ newDC "leet2"  (<>))
+                   ("bob" </> "wtf" </> "leet2") AppendMode
+    printCurLabel "B"
+    hPutStrLn h (LC.pack "w88t")
+    hClose h
+{-
+    h <- openFileP (createPrivTCB $ newPriv ("bob" ./\. "wtf"))
+                   Nothing --(newDC "leet2" (<>))
+                   "bob/wtf/leet"
+                   ReadMode
+    printCurLabel "B"
+    hGetContents h >>= \c -> ioTCB $ LC.hPutStrLn IO.stdout (c :: L.ByteString)
+-}
+    printCurLabel "C"
+    {-
+    getDirectoryContents "alice" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
+    ioTCB $ putStrLn "----"
+    createDirectory  "alice/wink"
+    ioTCB $ putStrLn "----"
+    getDirectoryContents "bob" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
+    ioTCB $ putStrLn "----"
+    createDirectoryP (createPrivTCB $ newPriv ("bob" ./\. "alice"))
+                     (newDC ("alice" ./\. "bob") ("alice"))
+                     "alice/crazyie"
+    getDirectoryContents "alice/" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
+    -}
+    return ()
+  putStrLn . prettyShow $ l
+
+printCurLabel s = do l <- getLabel 
+                     ioTCB . putStrLn $ s ++ ": " ++ (prettyShow l)
+
+--
+--
+
+
+-- | Class used to abstract reading and creating directories, and
+-- opening (possibly creating) files.
 class (Monad m) => DirectoryOps h m | m -> h where
-    getDirectoryContents :: FilePath -> m [FilePath]
-    createDirectory      :: FilePath -> m ()
-    openFile             :: FilePath -> IO.IOMode -> m h
+  getDirectoryContents :: FilePath -> m [FilePath]
+  createDirectory      :: FilePath -> m ()
+  openFile             :: FilePath -> IO.IOMode -> m h
 
+-- | Class used to abstract close and flush operations on handles.
 class (Monad m) => CloseOps h m where
-    hClose               :: h -> m ()
-    hFlush               :: h -> m ()
+  hClose :: h -> m ()
+  hFlush :: h -> m ()
 
+-- | Class used to abstract reading and writing from and to handles,
+-- respectively.
 class (CloseOps h m) => HandleOps h b m where
-    hGet            :: h -> Int -> m b
-    hGetNonBlocking :: h -> Int -> m b
-    hGetContents    :: h -> m b
-    hPut            :: h -> b -> m ()
-    hPutStrLn       :: h -> b -> m ()
+  hGet            :: h -> Int -> m b
+  hGetNonBlocking :: h -> Int -> m b
+  hGetContents    :: h -> m b
+  hPut            :: h -> b -> m ()
+  hPutStr         :: h -> b -> m ()
+  hPutStr         = hPut
+  hPutStrLn       :: h -> b -> m ()
+
+--
+-- Standard IO Handle Operations
+--
 
 instance DirectoryOps IO.Handle IO where
-    getDirectoryContents = IO.getDirectoryContents
-    createDirectory      = IO.createDirectory
-    openFile             = IO.openBinaryFile
+  getDirectoryContents = IO.getDirectoryContents
+  createDirectory      = IO.createDirectory
+  openFile             = IO.openBinaryFile
 
 instance CloseOps IO.Handle IO where
-    hClose               = IO.hClose
-    hFlush               = IO.hFlush
+  hClose = IO.hClose
+  hFlush = IO.hFlush
 
 instance HandleOps IO.Handle L.ByteString IO where
-    hGet            = L.hGet
-    hGetNonBlocking = L.hGetNonBlocking
-    hGetContents    = L.hGetContents
-    hPut            = L.hPut
-    hPutStrLn h s   = L.hPut h $ L.append s $ L.singleton 0xa
+  hGet            = L.hGet
+  hGetNonBlocking = L.hGetNonBlocking
+  hGetContents    = L.hGetContents
+  hPut            = L.hPut
+  hPutStrLn       = LC.hPutStrLn
 
-data LHandle l h = LHandleTCB l h
+--
+-- LIO Handle Operations
+--
 
-instance (Label l) => MintTCB (LHandle l IO.Handle) (IO.Handle, l) where
-    mintTCB (h, l) = LHandleTCB l h
+-- | A labeled handle.
+data LHandle l = LHandleTCB l IO.Handle
 
-instance (LabelState l s) => DirectoryOps (LHandle l IO.Handle) (LIO l s) where
-    getDirectoryContents d  = do
-      root <- rootDir
-      node <- lookupNode NoPrivs root d False
-      rtioTCB $ getDirectoryContentsNode node
-    createDirectory path    = do
-      root <- rootDir
-      l <- getLabel
-      mkDir NoPrivs l root path
-    openFile path mode      = do
-      root <- rootDir
-      l <- getLabel
-      mkLHandle NoPrivs l root path mode
+-- | Get the label of a labeled handle.
+labelOfHandle :: Label l => LHandle l -> l
+labelOfHandle (LHandleTCB l _) = l
 
-instance (LabelState l s) => CloseOps (LHandle l IO.Handle) (LIO l s) where
-    hClose (LHandleTCB l h) = wguard l >> rtioTCB (hClose h)
-    hFlush (LHandleTCB l h) = wguard l >> rtioTCB (hFlush h)
+instance (Serialize l, LabelState l s)
+          => DirectoryOps (LHandle l) (LIO l s) where
+  getDirectoryContents = getDirectoryContentsP NoPrivs
+  createDirectory  f   = getLabel >>= \l -> createDirectoryP NoPrivs l f
+  openFile             = undefined
 
-instance (LabelState l s, CloseOps (LHandle l h) (LIO l s), HandleOps h b IO)
-    => HandleOps (LHandle l h) b (LIO l s) where
-    hGet (LHandleTCB l h) n       = wguard l >> rtioTCB (hGet h n)
-    hGetNonBlocking (LHandleTCB l h) n =
-                                  wguard l >> rtioTCB (hGetNonBlocking h n)
-    hGetContents (LHandleTCB l h) = wguard l >> rtioTCB (hGetContents h)
-    hPut (LHandleTCB l h) s       = wguard l >> rtioTCB (hPut h s)
-    hPutStrLn (LHandleTCB l h) s  = wguard l >> rtioTCB (hPutStrLn h s)
+-- | Get the contents of a directory. The current label is raised to
+-- the join of the current label and that of all the directories
+-- traversed to the leaf directory (of course, using privileges to
+-- keep the current label unchanged when possible). Note that, unlike
+-- the standard Haskell 'getDirectoryContents', we first normalise the
+-- path by collapsing all the @..@'s. (The LIO filesystem does not
+-- support links.)
+getDirectoryContentsP :: (Priv l p, LabelState l s, Serialize l)
+                      => p              -- ^ Privilege
+                      -> FilePath       -- ^ Directory
+                      -> LIO l s [FilePath]
+getDirectoryContentsP priv dir = do
+  path <- lookupObjPathP priv dir >>= unlabelFilePathP priv
+  rtioTCB $ IO.getDirectoryContents path
+
+-- | Create a directory at the supplied path with the given label.
+-- The current label (after traversing the filesystem to the
+-- directory path) must flow to the supplied label which in turn must
+-- flow to the current label (of course, using privileges to bypass
+-- certain restrictions). If this information flow restriction is
+-- satisfied, the directory is created.
+createDirectoryP :: (Priv l p, LabelState l s, Serialize l)
+                 => p           -- ^ Privilege
+                 -> l           -- ^ Label of new directory
+                 -> FilePath    -- ^ Path of directory
+                 -> LIO l s ()
+createDirectoryP priv ldir path' = do
+  path <- cleanUpPath path'
+  aguardP priv ldir
+  lcDir <- lookupObjPathP priv (containingDir path)
+  wguardP priv $ labelOfFilePath lcDir
+  rtioTCB $ createDirectoryTCB ldir path
+    where stripLastSlash = (reverse . stripSlash . reverse)
+          containingDir = takeDirectory . ([pathSeparator] </>)
+                                        .  stripLastSlash
 
 
-hlabelOf                  :: (Label l) => LHandle l h -> l
-hlabelOf (LHandleTCB l _) = l
+-- | Given a set of privileges, a new (maybe) label of a file, a filepath
+-- and the handle mode, open (and possibly create) the file. If the file 
+-- exists the supplied label is not necessary; otherwise it must be supplied.
+-- The current label is raised to reflect all the traversed directories 
+-- (of course, using privileges to minimize the taint). Additionally the
+-- label of the file (new or existing) must be between the current label
+-- and clearance. If the file is created, it is further required that the 
+-- current process be able to write to the containing directory.
+openFileP :: (Priv l p, LabelState l s, Serialize l)
+          => p          -- ^ Privileges
+          -> Maybe l    -- ^ Label of file if created
+          -> FilePath   -- ^ File to open
+          -> IOMode     -- ^ Mode of handle
+          -> LIO l s (LHandle l)
+openFileP priv mlfile path' mode = do
+  path <- cleanUpPath path'
+  let containingDir = takeDirectory path
+      fileName      = takeFileName  path
+  -- check that the supplied label is bounded by current label and clearance:
+  maybe (return ()) (aguardP priv) mlfile
+  -- lookup object corresponding to containing dir:
+  lcDir <- lookupObjPathP priv containingDir 
+  -- unlabel the containing dir object:
+  actualCDir <- unlabelFilePathP priv lcDir  
+  let objPath = actualCDir </> fileName -- actual object path
+  exists <- rtioTCB $ IO.doesFileExist objPath
+  if exists
+     then do l <- getObjLabelTCB objPath -- label of object
+             aguardP priv l -- make sure we can actually read the file
+             -- NOTE: if mode == ReadMode, we might want to instead do
+             -- aguardP priv (l `lub` currentLabel) to allow opening     
+             -- a handle for an object whose label is below the current
+             -- label. Some Unix systems still update a file's atime
+             -- when performing a read and so, for now, a read always
+             -- implies a write.
+             h <- rtioTCB $ IO.openFile objPath mode
+             return $ LHandleTCB l h
+     else case mlfile of
+           Nothing -> throwIO $ userError "openFileP: File label missing."
+           Just l -> do
+             wguardP priv (labelOfFilePath lcDir) -- can write to containing dir
+             aguardP priv l -- make sure we can actually read the file
+             -- NOTE: the latter is necessary as looking up the containing
+             -- directory object might have raised the current label.
+             h <- ioTCB $ createFileTCB l objPath mode
+             return $ LHandleTCB l h
+            
 
+instance (LabelState l s) => CloseOps (LHandle l) (LIO l s) where
+  hClose = hCloseP NoPrivs
+  hFlush = hFlushP NoPrivs
 
+instance (LabelState l s, CloseOps (LHandle l) (LIO l s)
+         , HandleOps IO.Handle b IO) => HandleOps (LHandle l) b (LIO l s) where
+  hGet            = hGetP NoPrivs
+  hGetNonBlocking = hGetNonBlockingP NoPrivs
+  hGetContents    = hGetContentsP NoPrivs
+  hPut            = hPutP NoPrivs
+  hPutStrLn       = hPutStrLnP NoPrivs
 
-mkDir                   :: (Priv l p, LabelState l s) =>
-                           p        -- ^Privileges
-                        -> l        -- ^Label for the new directory
-                        -> Name l   -- ^Start point
-                        -> FilePath -- ^Name to create
-                        -> LIO l s () 
-mkDir priv l start path = do
-  -- No privs when checking clearance, as we assume it was lowered for a reason
-  aguard l                     
-  name <- lookupName priv start path
-  dirlabel <- ioTCB $ labelOfName name
-  wguardP priv dirlabel
-  new <- ioTCB $ mkNodeDir l
-  _ <- rtioTCB $ linkNode new name
-  return ()
+-- | Close a labeled file handle.
+hCloseP :: (LabelState l s, Priv l p) => p -> LHandle l -> LIO l s ()
+hCloseP p (LHandleTCB l h) = wguardP p l >> rtioTCB (hClose h)
 
-mkLHandle                        :: (Priv l p, LabelState l s) =>
-                                    p -- ^Privileges to minimize taint
-                                 -> l -- ^Label if new file is created
-                                 -> Name l -- ^Starting point of pathname
-                                 -> FilePath -- ^Path of file relative to prev
-                                 -> IO.IOMode -- ^Mode of handle
-                                 -> LIO l s (LHandle l IO.Handle)
-mkLHandle priv l start path mode = do
-  aguard l
-  name <- lookupName priv start path
-  dirlabel <- ioTCB $ labelOfName name
-  taintP priv dirlabel
-  newl <- getLabel
-  mnode <- ioTCB $ tryPred IO.isDoesNotExistError (nodeOfName name)
-  case (mnode, mode) of
-    (Right node, _) ->
-        do nodel <- ioTCB $ labelOfNode node
-           let hl = if mode == IO.ReadMode
-                    then l `lub` newl `lub` nodel
-                    else nodel
-           aguard hl
-           h <- rtioTCB $ openNode node mode
-           return $ LHandleTCB hl h
-    (Left e, IO.ReadMode) -> throwIO e
-    _ -> do wguardP priv dirlabel
-            aguard l           -- lookupName may have changed label
-            (h, new) <- rtioTCB $ mkNodeReg mode l
-            mn <- rtioTCB $ tryPred IO.isAlreadyExistsError
-                  (linkNode new name `onException` hClose h)
-            case mn of
-              Right _ -> return $ LHandleTCB l h
-              Left _  -> mkLHandle priv l name "" mode
+-- | Flush a labeled file handle.
+hFlushP :: (LabelState l s, Priv l p) => p -> LHandle l -> LIO l s ()
+hFlushP p (LHandleTCB l h) = wguardP p l >> rtioTCB (hFlush h)
 
-readFile      :: (DirectoryOps h m, HandleOps h b m) => FilePath -> m b
-readFile path = openFile path IO.ReadMode >>= hGetContents
+-- | Read @n@ bytes from the labeled handle, using privileges when
+-- performing label comparisons and tainting.
+hGetP :: (LabelState l s, Priv l p, HandleOps IO.Handle b IO)
+      => p              -- ^ Privileges
+      -> LHandle l      -- ^ Labeled handle
+      -> Int            -- ^ Number of bytes to read
+      -> LIO l s b
+hGetP p (LHandleTCB l h) n  = wguardP p l >> rtioTCB (hGet h n)
 
-writeFile               :: (DirectoryOps h m, HandleOps h b m,
-                            OnExceptionTCB m) => FilePath -> b -> m ()
-writeFile path contents = bracketTCB (openFile path IO.WriteMode) hClose
-                          (flip hPut contents)
+-- | Same as 'hGetP', but will not block waiting for data to become
+-- available. Instead, it returns whatever data is available.
+-- Privileges are used in the label comparisons and when raising
+-- the current label.
+hGetNonBlockingP :: (LabelState l s, Priv l p, HandleOps IO.Handle b IO)
+                 => p -> LHandle l -> Int -> LIO l s b
+hGetNonBlockingP p (LHandleTCB l h) n = wguardP p l >> rtioTCB (hGetNonBlocking h n)
 
-createDirectoryPR :: (Priv l p, LabelState l s) => p -> Name l -> FilePath -> LIO l s ()
-createDirectoryPR privs start path = do
-  l <- getLabel
-  mkDir privs l start path
+-- | Read the entire labeled handle contents and close handle upon
+-- reading @EOF@.  Privileges are used in the label comparisons
+-- and when raising the current label.
+hGetContentsP :: (LabelState l s, Priv l p, HandleOps IO.Handle b IO)
+              => p -> LHandle l -> LIO l s b
+hGetContentsP p (LHandleTCB l h) = wguardP p l >> rtioTCB (hGetContents h)
 
-writeFilePR :: (Priv l p, HandleOps IO.Handle b IO, LabelState l s) =>
-               p -> Name l -> FilePath -> b -> LIO l s ()
-writeFilePR privs start path contents =
-  bracketTCB (openFilePR privs start path IO.WriteMode) hClose
-             (flip hPut contents)
+-- | Output the given (Byte)String to the specified labeled handle.
+-- Privileges are used in the label comparisons and when raising
+-- the current label.
+hPutP :: (LabelState l s, Priv l p, HandleOps IO.Handle b IO)
+      => p -> LHandle l -> b -> LIO l s ()
+hPutP p (LHandleTCB l h) s  = wguardP p l >> rtioTCB (hPut h s)
 
-openFilePR :: (Priv l p, LabelState l s) =>
-              p -> Name l -> FilePath -> IOMode -> LIO l s (LHandle l IO.Handle)
-openFilePR privs start path mode = do
-  l <- getLabel
-  mkLHandle privs l start path mode
+-- | Synonym for 'hPutP'.
+hPutStrP :: (LabelState l s, Priv l p, HandleOps IO.Handle b IO)
+          => p -> LHandle l -> b -> LIO l s ()
+hPutStrP = hPutP
 
-createDirectoryP :: (Priv l p, LabelState l s) => p -> FilePath -> LIO l s ()
-createDirectoryP privs path = do
-  root <- rootDir
-  l <- getLabel
-  mkDir privs l root path
-
-writeFileP  :: (Priv l p, HandleOps IO.Handle b IO, LabelState l s) =>
-               p -> FilePath -> b -> LIO l s ()
-writeFileP privs path contents =
-  bracketTCB (openFileP privs path IO.WriteMode) hClose
-             (flip hPut contents)
-
-openFileP :: (Priv l p, LabelState l s) =>
-             p -> FilePath -> IOMode -> LIO l s (LHandle l IO.Handle)
-openFileP privs path mode = do
-  root <- rootDir
-  l <- getLabel
-  mkLHandle privs l root path mode
-
+-- | Output the given (Byte)String with an appended newline to the
+-- specified labeled handle. Privileges are used in the label
+-- comparisons and when raising the current label.
+hPutStrLnP :: (LabelState l s, Priv l p, HandleOps IO.Handle b IO)
+            => p -> LHandle l -> b -> LIO l s ()
+hPutStrLnP p (LHandleTCB l h) s  = wguardP p l >> rtioTCB (hPutStrLn h s)

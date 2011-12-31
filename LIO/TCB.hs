@@ -731,10 +731,7 @@ taintP p = gtaint (lostar p)
 -- @l' ``leq`` l@ before doing the same thing as @'taint' l@.  Throws
 -- @'LerrHigh'@ if the current label @l'@ is too high.
 wguard :: (LabelState l s) => l -> LIO l s ()
-wguard l = do l' <- getLabel
-              if l' `leq` l
-               then taint l
-               else throwIO LerrHigh
+wguard = wguardP NoPrivs
 
 -- |Like 'wguard', but takes privilege argument to be more permissive.
 wguardP :: (Priv l p, LabelState l s) => p -> l -> LIO l s ()
@@ -748,11 +745,7 @@ wguardP p l = do l' <- getLabel
 -- objects--untrusted code shouldn't be able to create an object
 -- labeled @l@ unless @aguard l@ does not throw an exception.
 aguard :: (LabelState l s) => l -> LIO l s ()
-aguard newl = do c <- getClearance
-                 l <- getLabel
-                 unless (leq newl c) $ throwIO LerrClearance
-                 unless (leq l newl) $ throwIO LerrLow
-                 return ()
+aguard = aguardP NoPrivs
 
 -- | Like 'aguardP', but takes privilege argument to be more permissive.
 aguardP :: (Priv l p, LabelState l s) => p -> l -> LIO l s ()
@@ -760,7 +753,6 @@ aguardP p newl = do c <- getClearance
                     l <- getLabel
                     unless (leqp p newl c) $ throwIO LerrClearance
                     unless (leqp p l newl) $ throwIO LerrLow
-                    return ()
 
 
 ---------------------------------------------------------------------
