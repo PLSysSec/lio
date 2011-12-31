@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module LIO.FS where
 
@@ -9,6 +10,7 @@ import LIO.MonadCatch
 import System.FilePath
 import System.Posix.Files
 import System.Directory
+import Control.Exception (Exception)
 import qualified Control.Exception as E
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C
@@ -16,6 +18,7 @@ import Data.Serialize
 import Data.IORef
 import Data.Functor
 import Data.Foldable (foldlM)
+import Data.Typeable
 import Data.List (isPrefixOf, isSuffixOf, findIndex)
 import System.IO.Unsafe
 import System.IO
@@ -43,7 +46,6 @@ getRootDir = readIORef rootDir
 tmpExt :: FilePath
 tmpExt = "~"
 
-
 -- | Shadow directory containing the actual FS objects.
 objDir :: FilePath
 objDir = ".obj"
@@ -52,39 +54,50 @@ objDir = ".obj"
 labelFile :: FilePath
 labelFile = ".label"
 
-
 -- | Root of the file system.
-rootFile :: FilePath
-rootFile = "ROOT"
+rootLink :: FilePath
+rootLink = "ROOT"
+
+-- | Magic file. Last file created when the the filesystem is
+-- initially created. If the magic file is invalid, then it is likely
+-- that a failure occured in the set up process.
+magicFile :: FilePath
+magicFile = ".magic"
+
+-- | Content written to magic file. 
+magicContent :: B.ByteString
+magicContent = B.pack  [ 0x7f, 0x45, 0x4c, 0x46, 0x01
+                       , 0x01, 0x01, 0x00, 0x00, 0x00
+                       , 0x00, 0x00, 0x00, 0x00, 0x00
+                       , 0x00, 0xde, 0xad, 0xbe, 0xef]
+
+-- | Filesystem errors
+data FSErr = FSRootCorrupt -- ^ Root structure is corrupt
+           | FSRootInvalid -- ^ Root is invalid (must be absolute).
+      deriving Typeable
+instance Exception FSErr
+
+instance Show FSErr where
+  show FSRootCorrupt = "Root structure is corrupt"
+  show FSRootInvalid = "Root is invalid (must be absolute)"
+  
 
 -- | Same as 'evalLIO', but takes an additional parameter
 -- corresponding to the path of the labeled filesystem. If the
 -- labeled filesystem does not exist, it is created at the specified
--- path with the root having the label bottom ('lbot').
+-- path with the root having the starting label of an "LIO" computation.
 evalWithRoot :: (Serialize l, LabelState l s)
             => FilePath -> LIO l s a -> s -> IO (a, l)
 evalWithRoot path act s = (flip evalLIO) s $ do
   l <- getLabel
-  ioTCB $ initFS l path
-  --ioTCB $ setOrMakeRoot l
+  ioTCB $ setRootOrInitFS l
   act
-  {-
-    where throwIOStr = throwIO . userError
-          setOrMakeRoot l = do
-            unless (isAbsolute path) $ throwIOStr "Root path must be absolute."
+    where setRootOrInitFS l = do
+            unless (isAbsolute path) $ throwIO FSRootInvalid
             exists <- doesDirectoryExist path
             if exists
-              then do hasLabel <- doesFileExist $ path </> labelFile
-                      unless hasLabel $ throwIOStr "No label file found."
-              else makeRoot l path
-            writeIORef rootDir path
-          tryReadLabel _ path = do
-             mL <- decode <$> B.readFile path
-             case mL of
-               Left _ -> throwIO . userError $ "Could not read label file"
-               Right l -> return l
-               -}
-
+              then checkFS path
+              else initFS l path
 
 -- | Initialize the filesystem with a given label and root file path.
 initFS :: (Label l, Serialize l)
@@ -92,7 +105,7 @@ initFS :: (Label l, Serialize l)
        -> FilePath      -- ^ Path to the filesystem root
        -> IO ()
 initFS l path = do
-  unless (isAbsolute path) $ throwIOStr $ "Root path must be absolute."
+  unless (isAbsolute path) $ throwIO FSRootInvalid
   -- Create root of filesystem
   createDirectory path
   -- Create the shadow object store
@@ -102,8 +115,24 @@ initFS l path = do
   writeIORef rootDir path
   rootObj <- newDirObj l
   linkRoot rootObj
-  return ()
-    where throwIOStr = throwIO . userError
+  -- Create magic file:
+  B.writeFile (path </> magicFile) magicContent
+
+-- | Check the filesystem structure.
+checkFS :: FilePath -> IO ()
+checkFS path = do
+  -- check that the ROOT link exists
+  hasRootLink <- fileExist $ path </> rootLink
+  putStrLn $ path </> rootLink
+  unless hasRootLink $ throwIO FSRootCorrupt
+  -- find obj dir:
+  hasObjDir <- doesDirectoryExist $ path </> objDir
+  unless hasObjDir $ throwIO FSRootCorrupt
+  -- check magic file:
+  magicOK <- (B.readFile (path </> magicFile) >>= \c -> return (c==magicContent))
+               `catchIO` (return False)
+  unless magicOK $ throwIO FSRootCorrupt
+  writeIORef rootDir path
 
 
 --
@@ -218,7 +247,7 @@ createLabelFileIfMissing dir l = do
               Right l' -> return (l == l')
 
 
--- | Link the 'rootFile' to an object directory.
+-- | Link the 'rootLink' to an object directory.
 linkRoot :: NewObject -> IO ()
 linkRoot newO@(New o) = do
   root <- getRootDir
@@ -226,7 +255,7 @@ linkRoot newO@(New o) = do
                   DirObj p -> return p
                   _        -> throwIO . userError $ "Root must be a directory."
   let objPath = newObjPath `rmSuffix` tmpExt
-  let name = root </> rootFile
+  let name = root </> rootLink
   createSymbolicLink (objPath `rmPrefix` root) name `onException` (cleanUpNewObj newO)
   rename newObjPath objPath `onException` (do ignoreErr $ removeFile name
                                               cleanUpNewObj newO)
@@ -236,16 +265,16 @@ linkObj_ :: FilePath -> NewObject -> IO ()
 linkObj_ f n = linkObj f n >> return ()
 
 
--- | Link a file path to an object.
+-- | Link a filepath to an object.
 linkObj :: FilePath -> NewObject -> IO Object
 linkObj name' newO@(New o) = do
   root <- getRootDir
   let newObjPath = case o of
-           DirObj p    -> p
-           FileObj h p -> p
+                     DirObj p    -> p
+                     FileObj h p -> p
       objPath = newObjPath `rmSuffix` tmpExt
-  link <- readSymbolicLink (root </> rootFile)
-  let name = root </>  rootFile </> name'
+  link <- readSymbolicLink (root </> rootLink)
+  let name = root </>  rootLink </> name'
       relObjPath = (".." </> ".." </> (objPath `rmPrefix` (root </> objDir)))
   createSymbolicLink relObjPath name `onException` (cleanUpNewObj newO)
   rename newObjPath objPath `onException` (do ignoreErr $ removeFile name
@@ -253,6 +282,18 @@ linkObj name' newO@(New o) = do
   return $ case o of
              DirObj _    -> DirObj objPath
              FileObj h _ -> FileObj h objPath
+
+-- | It's possible that either a program crashed before renaming a
+-- 'NewObject' into a 'Object', or that another thread is calling
+-- 'linkObj' and for some reason is being slow betweeen the
+-- 'createSymbolicLink' and 'rename' calls.  Either way it should be
+-- fine for us just to 'rename' the 'NewObject', because the link to
+-- the object would not exist if the 'NewObject' were not ready to be
+-- renamed.
+fixObjLink :: FilePath -> IO ()
+fixObjLink f = do
+  exists <- catchIO (getFileStatus f >> return True) (return False)
+  unless exists $ ignoreErr $ rename (f </> tmpExt) f
 
 -- | Clean up a newly created object. If the object is a temporary
 -- directory, remove it. If it's a file, close the handle, and remove
@@ -302,7 +343,7 @@ lookupObjPath :: (LabelState l s, Serialize l)
 lookupObjPath = lookupObjPathP NoPrivs
 
 -- | Same as 'lookupObjPath' but takes an additionally privilege object
--- exercised when tainting the process.
+-- that is exercised when raising the current label.
 lookupObjPathP :: (Priv l p, LabelState l s, Serialize l)
                => p         -- ^ Privilege 
                -> FilePath  -- ^ Path to object
@@ -310,21 +351,16 @@ lookupObjPathP :: (Priv l p, LabelState l s, Serialize l)
 lookupObjPathP p f' = do
   f <- cleanUpPath f'
   root <- ioTCB $ getRootDir
-  pathTaintTCB p root rootFile
+  pathTaintTCB p root rootLink
   let dirs = splitDirectories f
   dir <- foldlM (\a b ->  pathTaintTCB p a b >> return (a </> b))
-                (root </> rootFile)
+                (root </> rootLink)
                 (safeinit dirs)
   let objPath = (dir </> safelast dirs)
   l <- getObjLabelTCB objPath
+  -- TODO: 
+  --ioTCB $ fixObjLink objPath
   return . LFilePathTCB $ labelTCB l objPath
-  {-
-  stat <- rtioTCB $ getFileStatus objPath
-  lS <- rtioTCB $ C.readFile (objPath </> ".." </> labelFile)
-  case decode lS of
-    Left _ -> throwIO . userError $ "Invalid label file."
-    Right l ->  return . LFilePathTCB $ labelTCB l objPath
-  -}
   where safeinit [] = []
         safeinit x  = init x
         safelast [] = []
@@ -424,25 +460,3 @@ ignoreErr m = catchIO m (return ())
 -- | Same as 'catch', but only catches 'IOException's.
 catchIO :: IO a -> IO a -> IO a
 catchIO a h = E.catch a ((const :: a -> E.IOException -> a) h)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

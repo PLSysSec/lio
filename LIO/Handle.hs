@@ -19,19 +19,30 @@
 --
 -- The actual storage of labeled files is handled by the "LIO.FS"
 -- module.
-module LIO.Handle {-( DirectoryOps(..)
-                  , CloseOps (..)
-                  , HandleOps (..)
-                  , LHandle
-                  , hlabelOf
-                  , mkDir, mkLHandle
+module LIO.Handle ( -- * Generic Handle operations
+                    DirectoryOps(..)
+                  , CloseOps(..)
+                  , HandleOps(..)
                   , readFile, writeFile
-                  , createDirectoryPR, openFilePR, writeFilePR
-                  , createDirectoryP, openFileP, writeFileP
                   , IOMode(..)
-                  )  -} where
+                  -- * LIO Handle
+                  , LHandle, labelOfHandle 
+                  -- ** Privileged combinators
+                  , getDirectoryContentsP
+                  , createDirectoryP
+                  , openFileP
+                  , hCloseP
+                  , hFlushP 
+                  , hGetP
+                  , hGetNonBlockingP
+                  , hGetContentsP
+                  , hPutP
+                  , hPutStrP
+                  , hPutStrLnP
+                  , readFileP, writeFileP
+                  ) where
 
-import Prelude hiding (catch)
+import Prelude hiding (catch, readFile, writeFile)
 import LIO.TCB
 import LIO.FS
 import Data.Serialize
@@ -39,94 +50,102 @@ import Data.Serialize
 import System.IO (IOMode(..))
 import qualified System.IO as IO
 import qualified System.Directory as IO
+import System.FilePath
+import System.Posix.Files
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Char8 as C
 
---
---
--- TODO: REMOVE
-import qualified Control.Exception as E
-import System.Posix.Unistd
-import System.FilePath
-import System.Posix.Files
-import System.Process
-import Data.Functor
-import LIO.DCLabel hiding(Label)
-import DCLabel.PrettyShow
-import DCLabel.Core (createPrivTCB)
-import Control.Monad
-
-instance Serialize DCLabel where
-  put = put . show
-  get = read <$> get
-
-dcEvalWithRoot :: FilePath -> DC a ->  IO (a, DCLabel)
-dcEvalWithRoot path act = evalWithRoot path act ()
-
-main = do
-  system "rm -rf /tmp/rootFS"
-  (_,l) <-  dcEvalWithRoot "/tmp/rootFS" $ do
-    ioTCB $ do
-      createDirectoryTCB (newDC "alice" "alice") "alice"
-      createDirectoryTCB (newDC "bob"   (<>)) "bob"
-      createDirectoryTCB (newDC "wtf"   (<>)) ("bob" </> "wtf")
-      createDirectoryTCB (newDC "crap"  (<>)) ("bob" </> "wtf" </> "crap")
-      createDirectoryTCB (newDC "hiho"  (<>)) ("bob" </> "wtf" </> "crap" </> "wee")
-      do h <- createFileTCB (newDC "leet"  (<>)) ("bob" </> "wtf" </> "leet") WriteMode
-         hPutStrLn h (LC.pack "w00t")
-         hClose h
-      do h <- createFileTCB (newDC "neat"  (<>)) ("neat") WriteMode
-         hPutStrLn h (LC.pack "n347")
-         hClose h
-    --(lookupObjPathP NoPrivs "/bob/nothere" >> return () )`catch` (\(_::E.SomeException) -> return ())
-    --getDirectoryContents "bob/" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
-    printCurLabel "A"
-    l <- getLabel
-    h <- openFileP (createPrivTCB $ newPriv ("bob" ./\. "wtf"))
-                   (Just $ newDC "leet2"  (<>))
-                   ("bob" </> "wtf" </> "leet2") AppendMode
-    printCurLabel "B"
-    hPutStrLn h (LC.pack "w88t")
-    hClose h
-{-
-    h <- openFileP (createPrivTCB $ newPriv ("bob" ./\. "wtf"))
-                   Nothing --(newDC "leet2" (<>))
-                   "bob/wtf/leet"
-                   ReadMode
-    printCurLabel "B"
-    hGetContents h >>= \c -> ioTCB $ LC.hPutStrLn IO.stdout (c :: L.ByteString)
--}
-    printCurLabel "C"
-    {-
-    getDirectoryContents "alice" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
-    ioTCB $ putStrLn "----"
-    createDirectory  "alice/wink"
-    ioTCB $ putStrLn "----"
-    getDirectoryContents "bob" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
-    ioTCB $ putStrLn "----"
-    createDirectoryP (createPrivTCB $ newPriv ("bob" ./\. "alice"))
-                     (newDC ("alice" ./\. "bob") ("alice"))
-                     "alice/crazyie"
-    getDirectoryContents "alice/" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
-    -}
-    return ()
-  putStrLn . prettyShow $ l
-
-printCurLabel s = do l <- getLabel 
-                     ioTCB . putStrLn $ s ++ ": " ++ (prettyShow l)
-
---
---
+-- %--
+-- %--
+-- %-- TODO: REMOVE
+-- %import qualified Control.Exception as E
+-- %import System.Posix.Unistd
+-- %import System.Posix.Unistd
+-- %import System.Process
+-- %import Data.Functor
+-- %import LIO.DCLabel hiding(Label)
+-- %import DCLabel.PrettyShow
+-- %import DCLabel.Core (createPrivTCB)
+-- %import Control.Monad
+-- %
+-- %instance Serialize DCLabel where
+-- %  put = put . show
+-- %  get = read <$> get
+-- %
+-- %dcEvalWithRoot :: FilePath -> DC a ->  IO (a, DCLabel)
+-- %dcEvalWithRoot path act = evalWithRoot path act ()
+-- %
+-- %main = do
+-- %--  system "rm -rf /tmp/rootFS"
+-- %  (_,l) <-  dcEvalWithRoot "/tmp/rootFS" $ do
+-- %{-
+-- %    ioTCB $ do
+-- %      createDirectoryTCB (newDC "alice" "alice") "alice"
+-- %      createDirectoryTCB (newDC "bob"   (<>)) "bob"
+-- %      createDirectoryTCB (newDC "wtf"   (<>)) ("bob" </> "wtf")
+-- %      createDirectoryTCB (newDC "crap"  (<>)) ("bob" </> "wtf" </> "crap")
+-- %      createDirectoryTCB (newDC "hiho"  (<>)) ("bob" </> "wtf" </> "crap" </> "wee")
+-- %      do h <- createFileTCB (newDC "leet"  (<>)) ("bob" </> "wtf" </> "leet") WriteMode
+-- %         hPutStrLn h (LC.pack "w00t")
+-- %         hClose h
+-- %      do h <- createFileTCB (newDC "neat"  (<>)) ("neat") WriteMode
+-- %         hPutStrLn h (LC.pack "n347")
+-- %         hClose h
+-- %-}
+-- %    --(lookupObjPathP NoPrivs "/bob/nothere" >> return () )`catch` (\(_::E.SomeException) -> return ())
+-- %    --getDirectoryContents "bob/" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
+-- %
+-- %    printCurLabel "A"
+-- %    l <- getLabel
+-- %    h <- openFileP (createPrivTCB $ newPriv ("bob" ./\. "wtf"))
+-- %                   (Just $ newDC "leet2"  (<>))
+-- %                   ("bob" </> "wtf" </> "leet4") AppendMode
+-- %    printCurLabel "B"
+-- %    hPutStrLn h (LC.pack "w88t")
+-- %    hClose h
+-- %{-
+-- %    h <- openFileP (createPrivTCB $ newPriv ("bob" ./\. "wtf"))
+-- %                   Nothing --(newDC "leet2" (<>))
+-- %                   "bob/wtf/leet"
+-- %                   ReadMode
+-- %    printCurLabel "B"
+-- %    hGetContents h >>= \c -> ioTCB $ LC.hPutStrLn IO.stdout (c :: L.ByteString)
+-- %-}
+-- %    printCurLabel "C"
+-- %    {-
+-- %    getDirectoryContents "alice" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
+-- %    ioTCB $ putStrLn "----"
+-- %    createDirectory  "alice/wink"
+-- %    ioTCB $ putStrLn "----"
+-- %    getDirectoryContents "bob" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
+-- %    ioTCB $ putStrLn "----"
+-- %    createDirectoryP (createPrivTCB $ newPriv ("bob" ./\. "alice"))
+-- %                     (newDC ("alice" ./\. "bob") ("alice"))
+-- %                     "alice/crazyie"
+-- %    getDirectoryContents "alice/" >>= \d -> ioTCB $ mapM_ IO.putStrLn d
+-- %    -}
+-- %    return ()
+-- %  putStrLn . prettyShow $ l
+-- %
+-- %printCurLabel s = do l <- getLabel 
+-- %                     ioTCB . putStrLn $ s ++ ": " ++ (prettyShow l)
+-- %
+-- %--
+-- %--
 
 
 -- | Class used to abstract reading and creating directories, and
 -- opening (possibly creating) files.
 class (Monad m) => DirectoryOps h m | m -> h where
+  -- | Get the contents of a directory.
   getDirectoryContents :: FilePath -> m [FilePath]
+  -- | Create a directory at the supplied path.
+  -- The LIO instance labels the directory with the current label.
   createDirectory      :: FilePath -> m ()
-  openFile             :: FilePath -> IO.IOMode -> m h
+  -- | Open handle to manage the file at the supplied path.
+  openFile             :: FilePath -> IOMode -> m h
 
 -- | Class used to abstract close and flush operations on handles.
 class (Monad m) => CloseOps h m where
@@ -328,3 +347,31 @@ hPutStrP = hPutP
 hPutStrLnP :: (LabelState l s, Priv l p, HandleOps IO.Handle b IO)
             => p -> LHandle l -> b -> LIO l s ()
 hPutStrLnP p (LHandleTCB l h) s  = wguardP p l >> rtioTCB (hPutStrLn h s)
+
+--
+-- Special cases
+--
+
+-- | Reads a file and returns the contents of the file as a (Byte)String.
+readFile :: (DirectoryOps h m, HandleOps h b m) => FilePath -> m b
+readFile path = openFile path ReadMode >>= hGetContents
+
+-- | Write a (Byte)String to a file.
+writeFile :: (DirectoryOps h m, HandleOps h b m, OnExceptionTCB m)
+          => FilePath -> b -> m ()
+writeFile path contents = bracketTCB (openFile path WriteMode) hClose
+                          (flip hPut contents)
+
+readFileP :: (Priv l p, HandleOps IO.Handle b IO
+             , LabelState l s, Serialize l) =>
+             p -> FilePath -> LIO l s b
+readFileP privs path = openFileP privs Nothing path ReadMode >>= hGetContents
+
+-- | Same as 'writeFile' but uses privilege in opening the file.
+writeFileP  :: (Priv l p, HandleOps IO.Handle b IO
+               , LabelState l s, Serialize l) =>
+               p -> FilePath -> b -> LIO l s ()
+writeFileP privs path contents = do
+  l <- getLabel
+  bracketTCB (openFileP privs (Just l) path WriteMode) hClose
+             (flip hPut contents)
