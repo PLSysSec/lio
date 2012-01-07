@@ -138,9 +138,6 @@
    to fix up these inconsistencies on-the-fly as it encounters them.
    However, it could possibly leave some stranded temporary
    @.label@ files. 
-   TODO can be used to do a full filesystem cleanup (this should only
-   be run periodically as it is a costly operation).
-
 
 -}
 
@@ -160,10 +157,9 @@ module LIO.FS ( evalWithRoot
               ) where
 
 
--- TODO: safe imports
 import Prelude hiding (catch)
-import Control.Monad (unless)
 import LIO.TCB 
+import Control.Monad (unless)
 import System.FilePath
 import System.Posix.Files
 import System.Directory
