@@ -50,11 +50,12 @@ Library
                  filepath >= 1.1 && < 2,
                  mtl >= 1.1.0.2 && < 3,
                  old-time >= 1 && < 2,
-                 unix >= 2.3 && < 3,
+                 unix > 2.5.0.0 && < 3,
                  SHA >= 1.4.1.1 && < 2,
                  time >= 1.1.4 && < 2,
                  dclabel >= 0.0.1 && < 2,
-                 cereal >= 0.3.3 && < 0.4
+                 cereal >= 0.3.3 && < 0.4,
+                 base64-bytestring >= 0.1.0.4
 
   ghc-options: -Wall -Werror -fno-warn-orphans
 

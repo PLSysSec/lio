@@ -362,9 +362,11 @@ putTCB ls = get >>= put . update
 newState :: (LabelState l s) => s -> LIOstate l s
 newState s = LIOstate { labelState = s , lioL = lbot , lioC = ltop }
 
+-- | Lift an IO computation into @LIO@.
 mkLIO :: (LabelState l s) => (LIOstate l s -> IO (a, LIOstate l s)) -> LIO l s a
 mkLIO = LIO . StateT
 
+-- | Given an LIO computation and state, run it.
 unLIO :: (LabelState l s) => LIO l s a -> LIOstate l s -> IO (a, LIOstate l s)
 unLIO (LIO m) = runStateT m
 

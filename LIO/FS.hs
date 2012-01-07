@@ -1,16 +1,25 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
+{- | This module implements a labeled filesystem as a file store in
+   which a label is associated with every file and directory. The
+   module "LIO.Handle" provides an interface for working with labeled
+   directories and files -- this module provides the underlying
+   low-level (mostly trusted) interface.
+-}
+
+
 module LIO.FS ( evalWithRoot
-              -- * Creating and find labeled objects
+              -- * Creating and finding (labeled) objects
               , lookupObjPath, lookupObjPathP
               , getObjLabelTCB
               , createFileTCB, createDirectoryTCB
-              -- * Labeled FilePath
+              -- * Labeled 'FilePath'
               , LFilePath, labelOfFilePath
               , unlabelFilePath
               , unlabelFilePathP
               , unlabelFilePathTCB
-              -- * Misc helper
+              -- * Misc helper functions
               , cleanUpPath, stripSlash
               ) where
 
@@ -24,20 +33,22 @@ import System.Directory
 import Control.Exception (Exception)
 import qualified Control.Exception as E
 import qualified Data.ByteString as B
+import qualified Data.ByteString.Lazy as LB
 import qualified Data.ByteString.Char8 as C
 import Data.Serialize
 import Data.IORef
 import Data.Functor
+import Data.Tuple (swap)
 import Data.Foldable (foldlM)
 import Data.Typeable
-import Data.List (isPrefixOf, isSuffixOf)
+import Data.List (isPrefixOf)
 import System.IO.Unsafe
 import System.IO
 import qualified System.IO.Error as IOError
 
-import qualified LIO.Armor as Codec
+import qualified Data.ByteString.Base64.URL as Codec
 import qualified Data.Digest.Pure.SHA as SHA
-import qualified LIO.TmpFile as Tmp
+import System.Posix.Temp 
 
 
 --
@@ -53,9 +64,13 @@ rootDir = unsafePerformIO $ newIORef undefined
 getRootDir :: IO FilePath
 getRootDir = readIORef rootDir
 
--- | Extension of temporary file.
-tmpExt :: FilePath
-tmpExt = "~"
+-- | Temporary files have the prefix \'#\'.
+tmpPrefix :: FilePath
+tmpPrefix = "#"
+
+-- | Prefix of object filenames.
+objPrefix :: FilePath
+objPrefix = "obj"
 
 -- | Shadow directory containing the actual FS objects.
 objDir :: FilePath
@@ -86,6 +101,7 @@ magicContent = B.pack  [ 0x7f, 0x45, 0x4c, 0x46, 0x01
 data FSErr = FSRootCorrupt -- ^ Root structure is corrupt
            | FSRootInvalid -- ^ Root is invalid (must be absolute).
       deriving Typeable
+
 instance Exception FSErr
 
 instance Show FSErr where
@@ -93,22 +109,29 @@ instance Show FSErr where
   show FSRootInvalid = "Root is invalid (must be absolute)"
   
 
--- | Same as 'evalLIO', but takes an additional parameter
--- corresponding to the path of the labeled filesystem. If the
--- labeled filesystem does not exist, it is created at the specified
--- path with the root having the starting label of an "LIO" computation.
+-- | Same as 'evalLIO', but takes 2 additional parameter
+-- corresponding to the path of the labeled filesystem and the label
+-- of the root. If the labeled filesystem does not exist, it is created
+-- at the specified path with the root having the supplied label.
+--
+-- If the filesystem exists, the supplied label is ignored and thus
+-- not necessary. However, if the root label is not provided and the
+-- filesystem has not been initialized, then 'lbot' is used as the
+-- root label.
 evalWithRoot :: (Serialize l, LabelState l s)
-            => FilePath -> LIO l s a -> s -> IO (a, l)
-evalWithRoot path act s = (flip evalLIO) s $ do
-  l <- getLabel
-  ioTCB $ setRootOrInitFS l
-  act
-    where setRootOrInitFS l = do
-            unless (isAbsolute path) $ throwIO FSRootInvalid
-            exists <- doesDirectoryExist path
-            if exists
-              then checkFS path
-              else initFS l path
+            => FilePath  -- ^ Filesystem root
+            -> Maybe l   -- ^ Label of root
+            -> LIO l s a -- ^ LIO action
+            -> s         -- ^ Initial state
+            -> IO (a, l)
+evalWithRoot path ml act s = setRootOrInitFS >> evalLIO act s
+  where setRootOrInitFS = do
+          unless (isAbsolute path) $ throwIO FSRootInvalid
+          exists <- doesDirectoryExist path
+          let l = maybe lbot id ml
+          if exists
+            then checkFS path
+            else initFS l path
 
 -- | Initialize the filesystem with a given label and root file path.
 initFS :: (Label l, Serialize l)
@@ -153,7 +176,8 @@ checkFS path = do
 -- of a label (as opposed to e.g. just 64-base encoding of the label)
 -- in order to keep the filename lengths to a reasonable size.
 encodeLabel :: (Serialize l, Label l) => l -> FilePath
-encodeLabel l = Codec.armor32 . SHA.bytestringDigest . SHA.sha1 $ encodeLazy l
+encodeLabel l = enc . SHA.bytestringDigest . SHA.sha1 $ encodeLazy l
+  where enc = C.unpack . Codec.encode . B.concat . LB.toChunks
 
 -- | An object can be a directory or a file.
 data Object  = DirObj  FilePath         -- ^ Directory object
@@ -173,11 +197,11 @@ newFileObj :: (Serialize l, Label l) => l -> IOMode -> IO NewObject
 newFileObj l m = newObj l $ \p -> (New . uncurry FileObj) <$> mkTmpObjFile m p
 
 -- | Create a new temporary unique object directory. The function retries if
--- there exists an object with the same name but no 'tmpExt' suffix.
+-- there exists an object with the same name but no 'tmpPrefix'.
 mkTmpObjDir :: FilePath -> IO FilePath
 mkTmpObjDir path = do
-  dir <- Tmp.mkTmpDir' path tmpExt
-  exists <- doesDirectoryExist (dir `rmSuffix` tmpExt)
+  dir <- mkdtemp $ path </> (tmpPrefix ++ objPrefix) 
+  exists <- doesDirectoryExist (rmTmpPrefix dir)
   if exists
     then do ignoreErr $ removeDirectory dir
             mkTmpObjDir path
@@ -185,16 +209,16 @@ mkTmpObjDir path = do
 
 
 -- | Create a new temporary unique object file. The function retries if
--- there exists an object with the same name but no 'tmpExt' suffix.
+-- there exists an object with the same name but no 'tmpPrefix'.
 mkTmpObjFile :: IOMode -> FilePath -> IO (Handle, FilePath)
 mkTmpObjFile mode path = do
-  res@(h,file) <- Tmp.mkTmpFile mode path tmpExt
-  exists <- doesFileExist (file `rmSuffix` tmpExt)
+  res@(file, h) <- mkstemp $ path </> (tmpPrefix ++ objPrefix)
+  exists <- doesFileExist (rmTmpPrefix file)
   if exists
     then do hClose h 
             ignoreErr $ removeFile file
             mkTmpObjFile mode path
-    else return res
+    else return . swap $ res
 
 -- | Create a new file or directory object (given the make temporary
 -- object functino). For example, we can create a new file object as:
@@ -258,9 +282,10 @@ linkRoot newO@(New o) = do
   newObjPath <- case o of
                   DirObj p -> return p
                   _        -> throwIO . userError $ "Root must be a directory."
-  let objPath = newObjPath `rmSuffix` tmpExt
+  let objPath = rmTmpPrefix newObjPath
   let name = root </> rootLink
-  createSymbolicLink (objPath `rmPrefix` root) name `onException` (cleanUpNewObj newO)
+  createSymbolicLink (objPath `rmPrefixDir` root) name
+    `onException` (cleanUpNewObj newO)
   rename newObjPath objPath `onException` (do ignoreErr $ removeFile name
                                               cleanUpNewObj newO)
 
@@ -276,9 +301,9 @@ linkObj name' newO@(New o) = do
   let newObjPath = case o of
                      DirObj p    -> p
                      FileObj _ p -> p
-      objPath = newObjPath `rmSuffix` tmpExt
+      objPath = rmTmpPrefix newObjPath
   let name = root </>  rootLink </> name'
-      relObjPath = (".." </> ".." </> (objPath `rmPrefix` (root </> objDir)))
+      relObjPath = (".." </> ".." </> (objPath `rmPrefixDir` (root </> objDir)))
   createSymbolicLink relObjPath name `onException` (cleanUpNewObj newO)
   rename newObjPath objPath `onException` (do ignoreErr $ removeFile name
                                               cleanUpNewObj newO)
@@ -288,7 +313,7 @@ linkObj name' newO@(New o) = do
 
 -- | It's possible that either a program crashed before renaming a
 -- 'NewObject' into a 'Object', or that another thread is calling
--- 'linkObj' and for some reason is being slow betweeen the
+-- 'linkObj' and for some reason is being slow between the
 -- 'createSymbolicLink' and 'rename' calls.  Either way it should be
 -- fine for us just to 'rename' the 'NewObject', because the link to
 -- the object would not exist if the 'NewObject' were not ready to be
@@ -297,7 +322,7 @@ linkObj name' newO@(New o) = do
 fixObjLink :: FilePath -> IO ()
 fixObjLink f = do
   exists <- catchIO (getFileStatus f >> return True) (return False)
-  unless exists $ ignoreErr $ rename (f ++ tmpExt) f
+  unless exists $ ignoreErr $ rename (tmpPrefix ++ f) f
 
 -- | Clean up a newly created object. If the object is a temporary
 -- directory, remove it. If it's a file, close the handle, and remove
@@ -307,7 +332,7 @@ cleanUpNewObj (New o) = ignoreErr $ case o of
                                       DirObj p -> removeDirectory p
                                       FileObj h p -> hClose h >> removeFile p
 
--- | Labeled file path.
+-- | 'Label' associated with a 'FilePath'.
 newtype LFilePath l = LFilePathTCB (Labeled l FilePath)
 
 -- | Get the label of a labeled  filepath.
@@ -335,10 +360,12 @@ unlabelFilePath = unlabelFilePathP NoPrivs
 -- labeled file system), find the path to the corresponding object.
 -- The current label is raised to reflect all the directories traversed.
 -- Note that if the object does not exist an exception will be thrown;
--- the label of the exception will be the label of the last directory
--- before lookup failure. Additionally, this function cleans up the
--- path before doing the lookup, so e.g., a path @/foo/bar/..@ will
--- first be rewritten to @/foo@ and thus not reflect a traversal to @bar@.
+-- the label of the exception will be the join of all the directory labels 
+-- up to the lookup failure.
+--
+-- Additionally, this function cleans up the
+-- path before doing the lookup, so e.g., path @/foo/bar/..@ will
+-- first be rewritten to @/foo@ and thus no traversal to @bar@.
 -- Note that this is a more permissive behavior than forcing the read
 -- of @..@ from @bar@.
 lookupObjPath :: (LabelState l s, Serialize l)
@@ -346,7 +373,7 @@ lookupObjPath :: (LabelState l s, Serialize l)
               -> LIO l s (LFilePath l)
 lookupObjPath = lookupObjPathP NoPrivs
 
--- | Same as 'lookupObjPath' but takes an additionally privilege object
+-- | Same as 'lookupObjPath' but takes an additional privilege object
 -- that is exercised when raising the current label.
 lookupObjPathP :: (Priv l p, LabelState l s, Serialize l)
                => p         -- ^ Privilege 
@@ -363,10 +390,9 @@ lookupObjPathP p f' = do
   let objPath = (dir </> safelast dirs)
   l <- getObjLabelTCB objPath
   return . LFilePathTCB $ labelTCB l objPath
-  where safeinit [] = []
-        safeinit x  = init x
-        safelast [] = []
-        safelast x  = last x
+    where safelast [] = ""
+          safelast x  = last x
+
 
 -- | Read the label file of an object. Note that because the format
 -- of the supplied path is not checked this function is considered to
@@ -376,7 +402,8 @@ getObjLabelTCB objPath = rtioTCB $ do
   root <- getRootDir
   symLink <- readSymbolicLink objPath
   let absObjPath = root </> objDir </>
-                      ((symLink `rmPrefix` (".." </> "..")) `rmPrefix` objDir)
+                      ((symLink `rmPrefixDir` (".." </> ".."))
+                                `rmPrefixDir` objDir)
   lS  <- C.readFile $ (takeDirectory absObjPath) </> labelFile
   case decode lS of
     Left _  -> throwIO . userError $ "Invalid label file."
@@ -400,11 +427,11 @@ pathTaintTCB p root f' = do
     Left _ -> throwIO . userError $ "Invalid label file."
     Right l -> taintP p l
 
--- | Remove the slashes form the front of a path.
+-- | Remove any 'pathSeparator's from the front of a file path.
 stripSlash :: FilePath -> FilePath 
 stripSlash [] = []
-stripSlash ('/':xs) = stripSlash xs
-stripSlash x = x
+stripSlash xx@(x:xs) | x == pathSeparator = stripSlash xs
+                     | otherwise          = xx
 
 -- | Cleanup a file path, if it starts out with a @..@, we consider
 -- this invalid as it can be used explore parts of the file system
@@ -446,15 +473,25 @@ createFileTCB l p m = do
 -- Helper functions
 --
 
--- | Remove the suffix (usually 'tmpExt') from a list (usually filename).
-rmSuffix :: Eq a => [a] -> [a] -> [a]
-rmSuffix p e = if e `isSuffixOf` p
-  then take (length p - length e) p
-  else p
+-- | Remove the prefix from a list (usually 'FilePath').
+rmPrefix :: Eq a => [a] -- ^ String
+                 -> [a] -- ^ Prefix
+                 -> [a]
+rmPrefix s pre = if pre `isPrefixOf` s
+                   then drop (length pre) s
+                   else s
 
--- | @rmPrefix path prefix@ removes @prefix@ from @path@.
-rmPrefix :: FilePath -> FilePath -> FilePath
-rmPrefix path prefix = 
+-- | Remove the 'tmpPrefix' prefix from a file or directory.
+rmTmpPrefix :: FilePath -> FilePath
+rmTmpPrefix path =
+  let ds = splitDirectories path
+  in (joinPath $ safeinit ds) 
+     </> ((last ds) `rmPrefix` tmpPrefix)
+
+
+-- | @rmPrefixDir path prefix@ removes @prefix@ from @path@.
+rmPrefixDir :: FilePath -> FilePath -> FilePath
+rmPrefixDir path prefix = 
   if prefix `isPrefixOf` path
     then let p = splitDirectories path
              x = splitDirectories prefix
@@ -468,3 +505,8 @@ ignoreErr m = catchIO m (return ())
 -- | Same as 'catch', but only catches 'IOException's.
 catchIO :: IO a -> IO a -> IO a
 catchIO a h = E.catch a ((const :: a -> E.IOException -> a) h)
+
+-- | Same as 'init', but does not crash on empty list.
+safeinit :: [a] -> [a]
+safeinit [] = []
+safeinit x  = init x

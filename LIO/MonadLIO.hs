@@ -23,6 +23,7 @@ import LIO.TCB (LIO, LabelState)
 import Control.Monad.Trans (MonadTrans(..))
 -- #endif
 
+-- |  MonadIO-like class.
 class (Monad m, LabelState l s) => MonadLIO m l s | m -> l s where
     liftLIO :: LIO l s a -> m a
     liftIO  :: LIO l s a -> m a

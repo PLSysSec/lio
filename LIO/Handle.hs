@@ -7,7 +7,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
--- |This module abstracts the basic 'FileHandle' methods provided by
+-- | This module abstracts the basic 'FileHandle' methods provided by
 -- the system library, and provides an 'LHandle' (Labeled Handle) type
 -- that can be manipulated from within the 'LIO' Monad.
 -- (There is no notion of changeable current working directory in
@@ -15,11 +15,14 @@
 --
 -- The actual storage of labeled files is handled by the "LIO.FS"
 -- module.
-module LIO.Handle ( -- * Generic Handle operations
-                    DirectoryOps(..)
+module LIO.Handle (
+                  -- * LIO with FS
+                    evalWithRoot
+                  -- * Generic Handle operations
+                  , DirectoryOps(..)
                   , CloseOps(..)
                   , HandleOps(..)
-                  , readFile, writeFile
+                  , readFile, writeFile, writeFileL
                   , IOMode(..)
                   -- * LIO Handle
                   , LHandle, labelOfHandle 
@@ -35,7 +38,7 @@ module LIO.Handle ( -- * Generic Handle operations
                   , hPutP
                   , hPutStrP
                   , hPutStrLnP
-                  , readFileP, writeFileP
+                  , readFileP, writeFileP, writeFileLP
                   ) where
 
 import Prelude hiding (catch, readFile, writeFile)
@@ -277,10 +280,12 @@ writeFile :: (DirectoryOps h m, HandleOps h b m, OnExceptionTCB m)
 writeFile path contents = bracketTCB (openFile path WriteMode) hClose
                           (flip hPut contents)
 
+-- | Same as 'readFile' but uses privilege in opening the file.
 readFileP :: (Priv l p, HandleOps IO.Handle b IO
              , LabelState l s, Serialize l) =>
              p -> FilePath -> LIO l s b
-readFileP privs path = openFileP privs Nothing path ReadMode >>= hGetContents
+readFileP privs path = openFileP privs Nothing path ReadMode >>=
+                       hGetContentsP privs
 
 -- | Same as 'writeFile' but uses privilege in opening the file.
 writeFileP  :: (Priv l p, HandleOps IO.Handle b IO
@@ -288,5 +293,19 @@ writeFileP  :: (Priv l p, HandleOps IO.Handle b IO
                p -> FilePath -> b -> LIO l s ()
 writeFileP privs path contents = do
   l <- getLabel
-  bracketTCB (openFileP privs (Just l) path WriteMode) hClose
-             (flip hPut contents)
+  bracketTCB (openFileP privs (Just l) path WriteMode) (hCloseP privs)
+             (flip (hPutP privs) contents)
+
+-- | Same as 'writeFile' but also takes the label of the file.
+writeFileL  :: (HandleOps IO.Handle b IO
+               , LabelState l s, Serialize l) =>
+               l -> FilePath -> b -> LIO l s ()
+writeFileL l path contents = writeFileLP NoPrivs l path contents
+
+-- | Same as 'writeFileL' but uses privilege in opening the file.
+writeFileLP  :: (Priv l p, HandleOps IO.Handle b IO
+               , LabelState l s, Serialize l) =>
+               p -> l -> FilePath -> b -> LIO l s ()
+writeFileLP privs l path contents = do
+  bracketTCB (openFileP privs (Just l) path WriteMode) (hCloseP privs)
+             (flip (hPutP privs) contents)
