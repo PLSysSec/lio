@@ -112,9 +112,11 @@ alicesCode p = do
 --
 
 claricesCode :: DCPrivTCB -> DC ()
-claricesCode p = when malicious $ do
-  files <- getDirectoryContentsP p "bobOralice"
-  forM_ files $ \f -> putStrLnTCB f
+claricesCode p = do
+  discard_ $ createDirectoryP p lclarice "clarice"
+  when malicious $ do
+    files <- getDirectoryContentsP p "bobOralice"
+    forM_ files $ \f -> putStrLnTCB f
 
 
 --

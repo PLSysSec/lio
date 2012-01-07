@@ -6,6 +6,136 @@
    module "LIO.Handle" provides an interface for working with labeled
    directories and files -- this module provides the underlying
    low-level (mostly trusted) interface.
+
+   The file store contains 3 components:
+
+   * @.magic@ file containing a sequence of pre-defined bytes. The
+     existence of this file and correct contents indicates that
+     the file store and root of the labeled filesystem were created
+     before any system crash.
+
+   * @.obj@ directory containing all the objects (files and
+     directories) in the filesystem, organized according to the
+     object's label.
+
+   * @ROOT@ symbolic link pointing to a directory object in @.obj@,
+     representing the root of the filesystem.
+
+   As the details of @.magic@ and @ROOT@ are straight forward, we
+   now focus on the details of @.obj@.
+
+   Each object is stored in @.obj@ in a directory corresponding
+   to the label of the file. For example, an object protected by
+   @bob@'s label will exist as:
+
+   > .obj/oTAUzOt5YoQAyThw89eSgWuig-0=/obj012345
+
+   where @oTAUzOt5YoQAyThw89eSgWuig-0=@ is the base64url encoding of
+   the (SHA-224 hash of) label @bob@, and @obj012345@ is the object's
+   name. Each label directory also contains a @.label@ file whose
+   contents correspond to the serialization of the label. Hence, for
+   example,
+
+   > .obj/oTAUzOt5YoQAyThw89eSgWuig-0=/.label
+
+   would have @bob@'s label.
+   
+   Every object in a label directory is either a file or a directory.
+   If the object is a directory, its contents will strictly have
+   symbolic links to objects in the file store. This is more easily
+   understood using an example.
+
+   Consider the following familiar filesystem layout, containing 4
+   directories and 2 files:
+
+   >
+   > /
+   > |-- bobOralice      (type: directory, label: bob \/ alice)
+   > |   |-- alice       (type: directory, label: alice)
+   > |   |-- bob         (type: directory, label: bob)
+   > |   |   '-- secret  (type: file     , label: bob)
+   > |   '-- messages    (type: file     , label: bob \/ alice)
+   > '-- clarice         (type: directory, label: clarice)
+   >
+
+   Suppose we take @/lioFS@ as the location of the file store for our
+   labeled filesystem. The above files and directories will have the
+   same layout in our file system, but each file/directory points to
+   an object in the object store (@.obj@), as shown below. 
+
+   >
+   > /lioFS/ROOT
+   > |-- bobOralice -> ../../c_EkXYGrmrSit9j_8VjP_-8DgaM=/objXIBabq
+   > |   |-- alice -> ../../12to8q3vDp7ApyKEQk2LQ_2nrvs=/objqZeR5w
+   > |   |-- bob -> ../../oTAUzOt5YoQAyThw89eSgWuig-0=/objtsePnc
+   > |   |   '-- secret -> ../../oTAUzOt5YoQAyThw89eSgWuig-0=/objFIQCIm
+   > |   '-- messages -> ../../c_EkXYGrmrSit9j_8VjP_-8DgaM=/objQaiwuA
+   > '-- clarice -> ../../wordEFmBzWc7Q6qP-TetDgZaG8A=/objOMh0mj
+   >
+
+   Note that, to a user, the interface (see "LIO.Handle") is
+   unchanged and they do not need to handle or understand the
+   underlying file store. We refer to this view as \"friendly\". The
+   file store for the above layout is:
+
+   >
+   > /lioFS/
+   > |-- .magic
+   > |-- .obj
+   > |   |-- 12to8q3vDp7ApyKEQk2LQ_2nrvs=
+   > |   |   |-- .label (=alice's label)
+   > |   |   '-- objqZeR5w
+   > |   |-- c_EkXYGrmrSit9j_8VjP_-8DgaM=
+   > |   |   |-- .label (=label bob \/ alice)
+   > |   |   |-- objQaiwuA
+   > |   |   '-- objXIBabq
+   > |   |       |-- alice -> ../../12to8q3vDp7ApyKEQk2LQ_2nrvs=/objqZeR5w
+   > |   |       |-- bob -> ../../oTAUzOt5YoQAyThw89eSgWuig-0=/objtsePnc
+   > |   |       '-- messages -> ../../c_EkXYGrmrSit9j_8VjP_-8DgaM=/objQaiwuA
+   > |   |-- jX7q5Kb8_G4GsjgNpOHB17kypQo=
+   > |   |   |-- .label (=label of the filesystem root)
+   > |   |   '-- objTj5JZD
+   > |   |       |-- bobOralice -> ../../c_EkXYGrmrSit9j_8VjP_-8DgaM=/objXIBabq
+   > |   |       '-- clarice -> ../../wordEFmBzWc7Q6qP-TetDgZaG8A=/objOMh0mj
+   > |   |-- oTAUzOt5YoQAyThw89eSgWuig-0=
+   > |   |   |-- .label (=bob's label)
+   > |   |   |-- objFIQCIm
+   > |   |   '-- objtsePnc
+   > |   |       '-- secret -> ../../oTAUzOt5YoQAyThw89eSgWuig-0=/objFIQCIm
+   > |   '-- wordEFmBzWc7Q6qP-TetDgZaG8A=
+   > |       |-- .label (=clarice's label)
+   > |       '-- objOMh0mj
+   > '-- ROOT -> .obj/jX7q5Kb8_G4GsjgNpOHB17kypQo=/objTj5JZD
+   >
+
+   Observe that every directory object contains symbolic links
+   pointing to file or directory objects in the store.
+
+   Accessing any file or directory in the \"friendly\" view requires
+   a lookup ('lookupObjPath') of the corresponding object. Each
+   path is, however, relative to the root. So, for example,
+   looking up @\/aliceOrbob\/bob\/@ actually corresponds to looking
+   up @\/lioFS\/ROOT\/aliceOrbob\/bob\/@. This prevents untrusted code
+   from accessing objects by guessing filenames and further allows
+   untrusted code to pick arbitrary filenames (including @.label@,
+   @.obj@, etc.).
+
+   Several precautions are taken to keep the filesystem in a working
+   state in case of a crash.  The code tries to maintain the invariant
+   that any inconsistencies will either be:
+
+     1. temporary files or directories whose names start with the
+        \"@#@\" character, or
+
+     2.  dangling symbolic links.
+
+   Both of these inconsistencies can be checked and cleaned up
+   locally without examining the whole file system.  The code tries
+   to fix up these inconsistencies on-the-fly as it encounters them.
+   However, it could possibly leave some stranded temporary
+   @.label@ files.
+
+
 -}
 
 
@@ -80,7 +210,7 @@ objDir = ".obj"
 labelFile :: FilePath
 labelFile = ".label"
 
--- | Root of the file system.
+-- | Root of the filesystem.
 rootLink :: FilePath
 rootLink = "ROOT"
 
@@ -109,13 +239,13 @@ instance Show FSErr where
   show FSRootInvalid = "Root is invalid (must be absolute)"
   
 
--- | Same as 'evalLIO', but takes 2 additional parameter
--- corresponding to the path of the labeled filesystem and the label
--- of the root. If the labeled filesystem does not exist, it is created
--- at the specified path with the root having the supplied label.
---
--- If the filesystem exists, the supplied label is ignored and thus
--- not necessary. However, if the root label is not provided and the
+-- | Same as 'evalLIO', but takes two additional parameters
+-- corresponding to the path of the labeled filesystem store and the
+-- label of the root. If the labeled filesystem store does not exist,
+-- it is created at the specified path with the root having the
+-- supplied label.
+-- If the filesystem does exist, the supplied label is ignored and thus
+-- unnecessary. However, if the root label is not provided and the
 -- filesystem has not been initialized, then 'lbot' is used as the
 -- root label.
 evalWithRoot :: (Serialize l, LabelState l s)
@@ -357,7 +487,7 @@ unlabelFilePath :: LabelState l s
 unlabelFilePath = unlabelFilePathP NoPrivs
 
 -- | Given a pathname (forced to be relative to the root of the
--- labeled file system), find the path to the corresponding object.
+-- labeled filesystem), find the path to the corresponding object.
 -- The current label is raised to reflect all the directories traversed.
 -- Note that if the object does not exist an exception will be thrown;
 -- the label of the exception will be the join of all the directory labels 
@@ -434,7 +564,7 @@ stripSlash xx@(x:xs) | x == pathSeparator = stripSlash xs
                      | otherwise          = xx
 
 -- | Cleanup a file path, if it starts out with a @..@, we consider
--- this invalid as it can be used explore parts of the file system
+-- this invalid as it can be used explore parts of the filesystem
 -- that should otherwise be unaccessible. Similarly, we remove any @.@
 -- from the path.
 cleanUpPath :: LabelState l s => FilePath -> LIO l s FilePath 
