@@ -1,7 +1,2 @@
-- high level documentation of FS
 - Test, test, test
-- Maybe make errors more readable if
-  executing evalLIOTCB. Of course, add evalLIOTCB
-
-SafeHaskell:
-  - LIO.MonadLIO: cannot safely import Control.Monad.Trans.
+- Make LIO errors more user-friendly

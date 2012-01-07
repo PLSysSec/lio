@@ -101,10 +101,6 @@ module LIO.TCB (-- * Basic Label Functions
 
 #if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
 import safe Prelude hiding (catch)
-import Control.Monad.Error
--- #warning "Did not safely import Control.Monad.Error"
-import Control.Monad.State.Lazy hiding (put, get)
--- #warning "Did not safely import Control.Monad.State.Lazy"
 import safe Control.Exception hiding (catch, handle, throw, throwIO,
                                  onException, block, unblock, evaluate)
 import safe qualified Control.Exception as E
@@ -114,11 +110,8 @@ import safe Data.Functor
 import safe Control.Applicative
 import safe Text.Read (minPrec)
 import safe LIO.MonadCatch
-
 #else
 import Prelude hiding (catch)
-import Control.Monad.Error
-import Control.Monad.State.Lazy hiding (put, get)
 import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
@@ -126,8 +119,10 @@ import Data.Functor
 import Control.Applicative
 import Text.Read (minPrec)
 import LIO.MonadCatch
-
 #endif
+
+import Control.Monad.Error
+import Control.Monad.State.Lazy hiding (put, get)
 
 ---------------------------------------------------------------------
 -- Basic label functions --------------------------------------------

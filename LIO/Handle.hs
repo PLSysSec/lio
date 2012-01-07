@@ -8,15 +8,33 @@
 {-# LANGUAGE FunctionalDependencies #-}
 
 -- | This module abstracts the basic 'FileHandle' methods provided by
--- the system library, and provides an 'LHandle' (Labeled Handle) type
--- that can be manipulated from within the 'LIO' Monad.
+-- the system library, and provides an 'LHandle' ('Labeled' 'Handle')
+-- type that can be manipulated from within the 'LIO' Monad.
 -- (There is no notion of changeable current working directory in
--- the 'LIO' Monad.)
+-- the 'LIO' Monad, nor symbolic links.)
 --
 -- The actual storage of labeled files is handled by the "LIO.FS"
 -- module.
+--
+-- /IMPORTANT:/ To use a labeled filesystem you must use 'evalWithRoot',
+-- otherwise any actions built using the combinators of this module will
+-- crash.
+--
+-- An example use is shown below: 
+--
+-- >
+-- >  main = dcEvalWithRoot "/tmp/lioFS" $ do
+-- >    createDirectoryP p lsecrets "secrets"
+-- >    writeFileP p ("secrets" </> "alice" ) "I like Bob!"
+-- >      where p = ...
+-- >            lsecrets = ....
+-- >
+--
+-- The file store for the labeled filesystem (see "LIO.FS") will
+-- be created in @\/tmp\/lioFS@, but this is transparent and the user
+-- can think of the filesystem as having root @/@.
 module LIO.Handle (
-                  -- * LIO with FS
+                  -- * LIO with filesystem support
                     evalWithRoot
                   -- * Generic Handle operations
                   , DirectoryOps(..)
@@ -41,13 +59,20 @@ module LIO.Handle (
                   , readFileP, writeFileP, writeFileLP
                   ) where
 
+
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+import safe Prelude hiding (catch, readFile, writeFile)
+import safe System.IO (IOMode(..))
+import safe qualified System.IO as IO
+#else
 import Prelude hiding (catch, readFile, writeFile)
+import System.IO (IOMode(..))
+import qualified System.IO as IO
+#endif
+
 import LIO.TCB
 import LIO.FS
 import Data.Serialize
--- TODO: safe imports
-import System.IO (IOMode(..))
-import qualified System.IO as IO
 import qualified System.Directory as IO
 import System.FilePath
 import qualified Data.ByteString.Lazy as L

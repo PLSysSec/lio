@@ -1,3 +1,7 @@
+{-# LANGUAGE CPP #-}
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+{-# LANGUAGE SafeImports #-}
+#endif
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -133,7 +137,9 @@
    locally without examining the whole file system.  The code tries
    to fix up these inconsistencies on-the-fly as it encounters them.
    However, it could possibly leave some stranded temporary
-   @.label@ files.
+   @.label@ files. 
+   TODO can be used to do a full filesystem cleanup (this should only
+   be run periodically as it is a costly operation).
 
 
 -}
@@ -154,6 +160,7 @@ module LIO.FS ( evalWithRoot
               ) where
 
 
+-- TODO: safe imports
 import Prelude hiding (catch)
 import Control.Monad (unless)
 import LIO.TCB 

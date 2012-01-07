@@ -15,13 +15,7 @@
 module LIO.MonadLIO (MonadLIO(..)) where
 
 import LIO.TCB (LIO, LabelState)
-
--- #if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
--- #warning "Did not safely import Control.Monad.Trans"
--- import safe Control.Monad.Trans (MonadTrans(..))
--- #slse
 import Control.Monad.Trans (MonadTrans(..))
--- #endif
 
 -- |  MonadIO-like class.
 class (Monad m, LabelState l s) => MonadLIO m l s | m -> l s where
