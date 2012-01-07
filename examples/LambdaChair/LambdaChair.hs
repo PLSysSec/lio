@@ -35,7 +35,7 @@ import LIO.MonadLIO
 import LIO.MonadCatch (throwIO)
 import LIO.DCLabel hiding (name)
 import DCLabel.Safe hiding (name)
-import DCLabel.TCB (Disj(..), Conj(..), Label(..))
+import DCLabel.TCB (Disj(..), Conj(..), Component(..))
 import DCLabel.PrettyShow
 
 import qualified Data.ByteString.Char8 as C
@@ -280,7 +280,7 @@ retrievePaper pId = do
       case mRev of 
         Nothing -> return $ Left "Invalid Id"
         Just rev -> let as = assignments u
-                        priv = genPrivTCB (listToLabel $ map id2cat as)
+                        priv = genPrivTCB (listToComponent $ map id2cat as)
                     in  doReadPaper priv rev
        where doReadPaper priv rev = liftReviewDC $ do
                  (Paper lPaper) <- readLIORefP priv (paper rev)
@@ -323,7 +323,7 @@ getOutputChLbl = do
       let cs = conflicts u -- conflicting reviews
           c_cat = map id2conf_cat (cs) -- conflicting categories
           nc_cat = map id2cat (as \\ cs) -- noconflicting categories
-      return $ newDC (listToLabel $ c_cat ++ nc_cat) (<>)
+      return $ newDC (listToComponent $ c_cat ++ nc_cat) (<>)
         where id2cat i = MkDisj [ principal . C.pack $ "Review"++(show i)]
               id2conf_cat i = MkDisj [ principal . C.pack $ "Review" ++ (show i)
                                      , principal $ "CONFLICT" ]
@@ -365,7 +365,7 @@ appendToReview pId content = do
 -- ^ Set the current label to the assignments
 assign2curLabel :: [Id] -> ReviewDC() 
 assign2curLabel as = liftReviewDC $ do
-  let l = newDC (<>) (listToLabel $ map id2cat as)
+  let l = newDC (<>) (listToComponent $ map id2cat as)
   setLabelTCB l
         where id2cat i = MkDisj [principal . C.pack $ "Review"++(show i)]
   

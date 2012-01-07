@@ -3,7 +3,7 @@ import Prelude hiding (catch)
 import LIO
 import LIO.TCB (ioTCB)
 import LIO.MonadCatch
-import LIO.DCLabel hiding (label)
+import LIO.DCLabel
 import LIO.Concurrent
 import DCLabel.PrettyShow
 

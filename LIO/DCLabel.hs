@@ -30,8 +30,7 @@ import safe Data.Typeable
 import Data.Typeable
 #endif
 
-import DCLabel.Safe hiding ( Label
-                           , Priv
+import DCLabel.Safe hiding ( Priv
                            , bottom
                            , top
                            , join
@@ -41,7 +40,7 @@ import qualified DCLabel.Core as DCL
 
 deriving instance Typeable DCL.Disj
 deriving instance Typeable DCL.Conj
-deriving instance Typeable DCL.Label
+deriving instance Typeable DCL.Component
 deriving instance Typeable DCL.DCLabel
 
 
@@ -84,11 +83,11 @@ instance Priv DCLabel DCL.TCBPriv where
                                 , not (lp `DCL.implies` (c2l [c]))]
               rs''     = c2l [c | c <- getCats gs
                                 , not (rs' `DCL.implies` (c2l [c]))]
-              rs       = rs' `DCL.and_label` rs''
-              ri       = (li `DCL.and_label` lp) `DCL.or_label` gi
+              rs       = rs' `DCL.and_component` rs''
+              ri       = (li `DCL.and_component` lp) `DCL.or_component` gi
          in DCL.toLNF $ simpleNewLabel p (newDC rs ri)
-              where getCats = DCL.conj . DCL.label
-                    c2l = DCL.MkLabel . DCL.MkConj
+              where getCats = DCL.conj . DCL.component
+                    c2l = DCL.MkComponent . DCL.MkConj
                     simpleNewLabel pr lr | pr == DCL.rootPrivTCB = g   
                                          | pr == DCL.noPriv      = l `lub` g
                                          | otherwise             = lr
@@ -98,7 +97,7 @@ instance Priv DCLabel DCL.TCBPriv where
 --
 
 -- | A @DCLabel@ category set.
-type DCCatSet = DCL.Label
+type DCCatSet = DCL.Component
 -- | A @DCLabel@ (untrusted) privilege.
 type DCPriv = DCL.Priv
 -- | A @DCLabel@ privilege.
@@ -121,3 +120,13 @@ type DC = LIO DCLabel ()
 -- computation's result and the label of the result.
 evalDC :: DC a -> IO (a, DCLabel)
 evalDC m = evalLIO m ()
+
+
+
+--
+-- Making DC Labels serializable
+--
+
+
+
+

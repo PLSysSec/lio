@@ -5,6 +5,8 @@
 	cabal update
 	cabal install hscolour
 	cabal install SHA
+	cabal install cereal
+	cabal install directory filepath base64-bytestring
 	cabal install dclabel
 
 * Documentation.  The documentation must be extracted from the source
