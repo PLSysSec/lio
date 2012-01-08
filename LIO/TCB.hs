@@ -581,7 +581,8 @@ toLabeledP :: (Priv l p, LabelState l s)
 toLabeledP p l m = do
   aguardP p l
   save_s <- get
-  a <- m
+  a <- m `catchTCB` (\(LabeledExceptionTCB le se) -> ioTCB $ throwIO
+                       (LabeledExceptionTCB (l `lub` le) se))
   s <- get
   put s { lioL = lioL save_s, lioC = lioC save_s}
   unless (leqp p (lioL s) l) $ throwIO LerrLow -- l is too low
