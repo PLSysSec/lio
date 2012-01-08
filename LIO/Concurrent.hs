@@ -25,11 +25,11 @@ forkLIO m = do
 
 -- | Same as 'lFork', but the supplied set of priviliges are accounted
 -- for when performing label comparisons.
-lForkP :: (Priv l p, LabelState l s, Show a)
+lForkP :: (Priv l p, LabelState l s)
        => p -> l -> LIO l s a -> LIO l s (LRes l a)
 lForkP p l m = do
   mv <- newEmptyLMVarP p l
-  _ <- forkLIO $ do res <- (Right <$> m) `catchTCB` (return . Left)
+  _ <- forkLIO $ do res <- (Right <$> m) `catchTCB` (return . Left .  lubErr)
                     lastL <- getLabel
                     putLMVarTCB mv (if leqp p lastL l
                                       then res
@@ -37,6 +37,7 @@ lForkP p l m = do
 
   return $ LRes mv
     where mkErr cl e = Left . (LabeledExceptionTCB cl) . toException $ e
+          lubErr (LabeledExceptionTCB le e) = LabeledExceptionTCB (l `lub` le) e
 
 -- | Labeled fork. @lFork@ allows one to invoke computations taht
 -- would otherwise raise the current label, but without actually
@@ -59,7 +60,7 @@ lForkP p l m = do
 -- or \"promise\". Moreover, to guarantee that the computation has
 -- completed, it is important that some thread actually touch the
 -- future, i.e., perform an 'lWait'.
-lFork :: (LabelState l s, Show a)
+lFork :: (LabelState l s)
       => l                  -- ^ Label of result
       -> LIO l s a          -- ^ Computation to execute in separate thread
       -> LIO l s (LRes l a) -- ^ Labeled result
