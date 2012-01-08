@@ -1,11 +1,19 @@
-General:
-  - Test, test, test                            (?.?.?)
-  - Make LIO errors more user-friendly          (0.1.2)
+BUGS:
+  - toLabeled (and lFork) -- exception thrown in  (0.1.1)
+    toLabeld should be labeled by the lub of the
+    toLabeled label and the exception label;
+    not just the exception label
 
-FS:
-  - add rename, renameDirectory                 (0.1.1)
-  - add removeFile, removeDirectory             (0.1.1)
-      howtwo: 1.) remove obj, 2.) remove link
-  - add cleanup function that scans whole fs    (0.1.1)
+General:
+  - Test, test, test                              (?.?.?)
+  - Make LIO errors more user-friendly            (0.1.2)
+                                                  
+Concurrency:                                      
+  - Add support for labeled Channels              (0.1.1)
+FS:                                               
+  - add rename, renameDirectory                   (0.1.1)
+  - add removeFile, removeDirectory               (0.1.1)
+      howtwo: 1.) remove obj, 2.) remove link     
+  - add cleanup function that scans whole fs      (0.1.1)
       howto: 1.) scan & fix from ROOT 
              2.) remove any #obj from .obj
