@@ -1,9 +1,3 @@
-BUGS:
-  - toLabeled (and lFork) -- exception thrown in  (0.1.1)
-    toLabeld should be labeled by the lub of the
-    toLabeled label and the exception label;
-    not just the exception label
-
 General:
   - Test, test, test                              (?.?.?)
   - Make LIO errors more user-friendly            (0.1.2)
