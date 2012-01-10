@@ -1,3 +1,6 @@
+Documentation:
+  - Update documentation to reflect internal      (0.1.0)
+    privileges
 General:
   - Test, test, test                              (?.?.?)
   - Make LIO errors more user-friendly            (0.1.2)
