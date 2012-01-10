@@ -251,11 +251,11 @@ instance Show FSErr where
 -- unnecessary. However, if the root label is not provided and the
 -- filesystem has not been initialized, then 'lbot' is used as the
 -- root label.
-evalWithRoot :: (Serialize l, LabelState l s)
-            => FilePath  -- ^ Filesystem root
-            -> Maybe l   -- ^ Label of root
-            -> LIO l s a -- ^ LIO action
-            -> s         -- ^ Initial state
+evalWithRoot :: (Serialize l, LabelState l p s)
+            => FilePath    -- ^ Filesystem root
+            -> Maybe l     -- ^ Label of root
+            -> LIO l p s a -- ^ LIO action
+            -> s           -- ^ Initial state
             -> IO (a, l)
 evalWithRoot path ml act s = setRootOrInitFS >> evalLIO act s
   where setRootOrInitFS = do
@@ -478,16 +478,16 @@ unlabelFilePathTCB (LFilePathTCB l) = unlabelTCB l
 
 -- | Same as 'unlabelFilePath' but uses privileges to unlabel the
 -- filepath.
-unlabelFilePathP :: (Priv l p, LabelState l s)
-                 => p -> LFilePath l -> LIO l s FilePath
+unlabelFilePathP :: (LabelState l p s)
+                 => p -> LFilePath l -> LIO l p s FilePath
 unlabelFilePathP p (LFilePathTCB l) = unlabelP p l
 
 -- | Unlabel a filepath. If the path corresponds to a directory, you
 -- can now get the contents of the directory; if it's a file, you can
 -- open the file.
-unlabelFilePath :: LabelState l s
-                 => LFilePath l -> LIO l s FilePath
-unlabelFilePath = unlabelFilePathP NoPrivs
+unlabelFilePath :: LabelState l p s
+                 => LFilePath l -> LIO l p s FilePath
+unlabelFilePath f = getPrivileges >>= \p -> unlabelFilePathP p f
 
 -- | Given a pathname (forced to be relative to the root of the
 -- labeled filesystem), find the path to the corresponding object.
@@ -501,17 +501,17 @@ unlabelFilePath = unlabelFilePathP NoPrivs
 -- first be rewritten to @/foo@ and thus no traversal to @bar@.
 -- Note that this is a more permissive behavior than forcing the read
 -- of @..@ from @bar@.
-lookupObjPath :: (LabelState l s, Serialize l)
+lookupObjPath :: (LabelState l p s, Serialize l)
               => FilePath  -- ^ Path to object
-              -> LIO l s (LFilePath l)
-lookupObjPath = lookupObjPathP NoPrivs
+              -> LIO l p s (LFilePath l)
+lookupObjPath f = getPrivileges >>= \p -> lookupObjPathP p f
 
 -- | Same as 'lookupObjPath' but takes an additional privilege object
 -- that is exercised when raising the current label.
-lookupObjPathP :: (Priv l p, LabelState l s, Serialize l)
+lookupObjPathP :: (LabelState l p s, Serialize l)
                => p         -- ^ Privilege 
                -> FilePath  -- ^ Path to object
-               -> LIO l s (LFilePath l)
+               -> LIO l p s (LFilePath l)
 lookupObjPathP p f' = do
   f <- cleanUpPath f'
   root <- ioTCB $ getRootDir
@@ -530,7 +530,7 @@ lookupObjPathP p f' = do
 -- | Read the label file of an object. Note that because the format
 -- of the supplied path is not checked this function is considered to
 -- be in the @TCB@.
-getObjLabelTCB :: (Serialize l, LabelState l s) => FilePath -> LIO l s l
+getObjLabelTCB :: (Serialize l, LabelState l p s) => FilePath -> LIO l p s l
 getObjLabelTCB objPath = rtioTCB $ do
   root <- getRootDir
   symLink <- readSymbolicLink objPath
@@ -548,8 +548,8 @@ getObjLabelTCB objPath = rtioTCB $ do
 -- a process that traverses a filesystem tree. The function is @TCB@
 -- because we do not check any properties of the root -- it is
 -- primarily used by 'lookupObjPathP'.
-pathTaintTCB :: (Serialize l, Priv l p, LabelState l s)
-              => p -> FilePath -> FilePath -> LIO l s ()
+pathTaintTCB :: (Serialize l, LabelState l p s)
+              => p -> FilePath -> FilePath -> LIO l p s ()
 pathTaintTCB p root f' = do
   let f = stripSlash f'
   rootL <- rtioTCB $ readSymbolicLink (root </> f)
@@ -570,7 +570,7 @@ stripSlash xx@(x:xs) | x == pathSeparator = stripSlash xs
 -- this invalid as it can be used explore parts of the filesystem
 -- that should otherwise be unaccessible. Similarly, we remove any @.@
 -- from the path.
-cleanUpPath :: LabelState l s => FilePath -> LIO l s FilePath 
+cleanUpPath :: LabelState l p s => FilePath -> LIO l p s FilePath 
 cleanUpPath f = rtioTCB $ doit $ splitDirectories . normalise . stripSlash $ f
   where doit []          = return []
         doit ("..":[])   = return "/"

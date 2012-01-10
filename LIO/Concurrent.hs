@@ -17,7 +17,7 @@ import Control.Exception (toException)
 import Data.Functor
 
 -- | An LIO fork.
-forkLIO :: (LabelState l s) => LIO l s () -> LIO l s ThreadId
+forkLIO :: (LabelState l p s) => LIO l p s () -> LIO l p s ThreadId
 forkLIO m = do
   s <- getTCB
   ioTCB . forkIO $ evalLIO m s >> return ()
@@ -25,8 +25,8 @@ forkLIO m = do
 
 -- | Same as 'lFork', but the supplied set of priviliges are accounted
 -- for when performing label comparisons.
-lForkP :: (Priv l p, LabelState l s)
-       => p -> l -> LIO l s a -> LIO l s (LRes l a)
+lForkP :: (LabelState l p s)
+       => p -> l -> LIO l p s a -> LIO l p s (LRes l a)
 lForkP p l m = do
   mv <- newEmptyLMVarP p l
   _ <- forkLIO $ do res <- (Right <$> m) `catchTCB` (return . Left .  lubErr)
@@ -60,11 +60,11 @@ lForkP p l m = do
 -- or \"promise\". Moreover, to guarantee that the computation has
 -- completed, it is important that some thread actually touch the
 -- future, i.e., perform an 'lWait'.
-lFork :: (LabelState l s)
-      => l                  -- ^ Label of result
-      -> LIO l s a          -- ^ Computation to execute in separate thread
-      -> LIO l s (LRes l a) -- ^ Labeled result
-lFork = lForkP NoPrivs
+lFork :: (LabelState l p s)
+      => l                    -- ^ Label of result
+      -> LIO l p s a          -- ^ Computation to execute in separate thread
+      -> LIO l p s (LRes l a) -- ^ Labeled result
+lFork l m = getPrivileges >>= \p -> lForkP p l m
 
 -- | A labeled thread result is simply a wrapper for a labeled MVar. A
 -- thread can observe the result of another thread, only after raising
@@ -72,7 +72,7 @@ lFork = lForkP NoPrivs
 data LRes l a = LRes (LMVar l (Either (LabeledException l) a))
 
 -- | Same as 'lWait', but uses priviliges in label checks and raises.
-lWaitP :: (Priv l p, LabelState l s) => p -> LRes l a -> LIO l s a
+lWaitP :: (LabelState l p s) => p -> LRes l a -> LIO l p s a
 lWaitP p (LRes mv) = do
   ea <- takeLMVarP p mv
   case ea of
@@ -88,5 +88,5 @@ lWaitP p (LRes mv) = do
 -- if it violates clearance), the exceptin is rethrown. Similarly, if 
 -- the thread reads values above the result label, an exception is
 -- thrown in place of the result.
-lWait :: (LabelState l s) => LRes l a -> LIO l s a
-lWait = lWaitP NoPrivs
+lWait :: (LabelState l p s) => LRes l a -> LIO l p s a
+lWait v = getPrivileges >>= \p -> lWaitP p v

@@ -18,13 +18,14 @@ import LIO.TCB (LIO, LabelState)
 import Control.Monad.Trans (MonadTrans(..))
 
 -- |  MonadIO-like class.
-class (Monad m, LabelState l s) => MonadLIO m l s | m -> l s where
-    liftLIO :: LIO l s a -> m a
-    liftIO  :: LIO l s a -> m a
+class (Monad m, LabelState l p s) => MonadLIO m l p s | m -> l p s where
+    liftLIO :: LIO l p s a -> m a
+    liftIO  :: LIO l p s a -> m a
     liftIO  = liftLIO
 
-instance (LabelState l s) => MonadLIO (LIO l s) l s where
+instance (LabelState l p s) => MonadLIO (LIO l p s) l p s where
     liftLIO = id
 
-instance (MonadLIO m l s, MonadTrans t, Monad (t m)) => MonadLIO (t m) l s where
+instance (MonadLIO m l p s, MonadTrans t, Monad (t m))
+         => MonadLIO (t m) l p s where
    liftLIO = lift . liftLIO

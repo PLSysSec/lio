@@ -42,8 +42,8 @@ data LIORef l a = LIORefTCB l (IORef a)
 -- | Same as 'newLIORef' except @newLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
-newLIORefP :: (Priv l p, LabelState l s)
-           => p -> l -> a -> LIO l s (LIORef l a)
+newLIORefP :: (LabelState l p s)
+           => p -> l -> a -> LIO l p s (LIORef l a)
 newLIORefP p l a = do
   aguardP p l
   ior <- rtioTCB $ newIORef a
@@ -52,14 +52,14 @@ newLIORefP p l a = do
 -- | To create a new reference the label of the reference must be
 -- below the thread's current clearance and above the current label.
 -- If this is the case, the reference is built.
-newLIORef :: (LabelState l s)
-          => l                    -- ^ Label of reference
-          -> a                    -- ^ Initial value
-          -> LIO l s (LIORef l a) -- ^ Mutable reference
-newLIORef = newLIORefP NoPrivs
+newLIORef :: (LabelState l p s)
+          => l                      -- ^ Label of reference
+          -> a                      -- ^ Initial value
+          -> LIO l p s (LIORef l a) -- ^ Mutable reference
+newLIORef l x = getPrivileges >>= \p -> newLIORefP p l x
 
 -- | Trusted constructor that creates labeled references.
-newLIORefTCB :: (LabelState l s) => l -> a -> LIO l s (LIORef l a)
+newLIORefTCB :: (LabelState l p s) => l -> a -> LIO l p s (LIORef l a)
 newLIORefTCB l a = do
   ior <- rtioTCB $ newIORef a
   return $ LIORefTCB l ior
@@ -70,7 +70,7 @@ labelOfLIORef (LIORefTCB l _) = l
 
 -- | Same as 'readLIORef' except @readLIORefP@ takes a privilege object
 -- which is used when the current label is raised.
-readLIORefP :: (Priv l p, LabelState l s) => p -> LIORef l a -> LIO l s a
+readLIORefP :: (LabelState l p s) => p -> LIORef l a -> LIO l p s a
 readLIORefP p (LIORefTCB l r) = do
   taintP p l 
   rtioTCB $ readIORef r
@@ -80,19 +80,19 @@ readLIORefP p (LIORefTCB l r) = do
 -- the current label is raised to the join of the current label and
 -- the reference label. To avoid failures use 'labelOfLIORef' to check
 -- that a read will suceed.
-readLIORef :: (Label l, LabelState l s) => LIORef l a -> LIO l s a
-readLIORef = readLIORefP NoPrivs
+readLIORef :: (LabelState l p s) => LIORef l a -> LIO l p s a
+readLIORef x = getPrivileges >>= \p -> readLIORefP p x 
 
 -- | Trusted function used to read the value of a reference without
 -- raising the current label.
-readLIORefTCB :: (LabelState l s) => LIORef l a -> LIO l s a
+readLIORefTCB :: (LabelState l p s) => LIORef l a -> LIO l p s a
 readLIORefTCB (LIORefTCB _ r) = rtioTCB $ readIORef r
 
 -- | Same as 'writeLIORef' except @writeLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
-writeLIORefP :: (Priv l p, LabelState l s)
-             => p -> LIORef l a -> a -> LIO l s ()
+writeLIORefP :: (LabelState l p s)
+             => p -> LIORef l a -> a -> LIO l p s ()
 writeLIORefP p (LIORefTCB l r) a = do
   aguardP p l 
   rtioTCB $ writeIORef r a
@@ -100,19 +100,19 @@ writeLIORefP p (LIORefTCB l r) a = do
 -- | Write a new value into a labeled reference. A write succeeds if
 -- the current label can-flow-to the label of the reference, and the
 -- label of the reference can-flow-to the current clearance.
-writeLIORef :: (LabelState l s) => LIORef l a -> a -> LIO l s ()
-writeLIORef = writeLIORefP NoPrivs 
+writeLIORef :: (LabelState l p s) => LIORef l a -> a -> LIO l p s ()
+writeLIORef x a = getPrivileges >>= \p -> writeLIORefP p x a
 
 -- | Trusted function used to write a new value into a labeled
 -- reference, ignoring IFC.
-writeLIORefTCB :: (LabelState l s) => LIORef l a -> a -> LIO l s ()
+writeLIORefTCB :: (LabelState l p s) => LIORef l a -> a -> LIO l p s ()
 writeLIORefTCB (LIORefTCB _ r) a = rtioTCB $ writeIORef r a
 
 -- | Same as 'modifyLIORef' except @modifyLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
-modifyLIORefP :: (LabelState l s, Priv l p)
-              =>  p -> LIORef l a -> (a -> a) -> LIO l s ()
+modifyLIORefP :: (LabelState l p s)
+              =>  p -> LIORef l a -> (a -> a) -> LIO l p s ()
 modifyLIORefP p (LIORefTCB l r) f = do
   aguardP p l 
   rtioTCB $ modifyIORef r f
@@ -123,23 +123,23 @@ modifyLIORefP p (LIORefTCB l r) f = do
 -- current clearance. Note that because a modifer is provided, the
 -- reference contents are not observable by the outer computation and
 -- so it is not required that the current label be raised.
-modifyLIORef :: (LabelState l s)
+modifyLIORef :: (LabelState l p s)
              =>  LIORef l a            -- ^ Labeled reference
              -> (a -> a)               -- ^ Modifier
-             -> LIO l s ()
-modifyLIORef = modifyLIORefP NoPrivs
+             -> LIO l p s ()
+modifyLIORef x f = getPrivileges >>= \p -> modifyLIORefP p x f
 
 -- | Trusted function that mutates the contents on an 'LIORef',
 -- ignoring IFC.
-modifyLIORefTCB :: (LabelState l s)
-                =>  LIORef l a -> (a -> a) -> LIO l s ()
+modifyLIORefTCB :: (LabelState l p s)
+                =>  LIORef l a -> (a -> a) -> LIO l p s ()
 modifyLIORefTCB (LIORefTCB _ r) f = rtioTCB $ modifyIORef r f
 
 
 -- | Same as 'atomicModifyLIORef' except @atomicModifyLIORefP@ takes
 -- a set of privileges which are accounted for in label comparisons.
-atomicModifyLIORefP :: (Priv l p, LabelState l s) =>
-                       p -> LIORef l a -> (a -> (a, b)) -> LIO l s b
+atomicModifyLIORefP :: (LabelState l p s) =>
+                       p -> LIORef l a -> (a -> (a, b)) -> LIO l p s b
 atomicModifyLIORefP p (LIORefTCB l r) f = do
   aguardP p l
   rtioTCB $ atomicModifyIORef r f
@@ -147,13 +147,13 @@ atomicModifyLIORefP p (LIORefTCB l r) f = do
 -- | Atomically modifies the contents of an 'LIORef'. It is required
 -- that the label of the reference be above the current label, but
 -- below the current clearance. 
-atomicModifyLIORef :: (LabelState l s) =>
-                      LIORef l a -> (a -> (a, b)) -> LIO l s b
-atomicModifyLIORef = atomicModifyLIORefP NoPrivs
+atomicModifyLIORef :: (LabelState l p s) =>
+                      LIORef l a -> (a -> (a, b)) -> LIO l p s b
+atomicModifyLIORef x f = getPrivileges >>= \p -> atomicModifyLIORefP p x f
 
 -- | Trusted function used to atomically modify the contents of a
 -- labeled reference, ignoring IFC.
-atomicModifyLIORefTCB :: (LabelState l s)
-                      => LIORef l a -> (a -> (a, b)) -> LIO l s b
+atomicModifyLIORefTCB :: (LabelState l p s)
+                      => LIORef l a -> (a -> (a, b)) -> LIO l p s b
 atomicModifyLIORefTCB (LIORefTCB _ r) f = rtioTCB $ atomicModifyIORef r f
 

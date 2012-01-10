@@ -108,13 +108,13 @@ type DCPrivTCB = DCL.TCBPriv
 -- LIO aliases
 --
 
-instance LabelState DCLabel () where
+instance LabelState DCLabel DCPrivTCB () where
 
 -- | The type for 'Labeled' values uinsg 'DCLabel' as the label.
 type DCLabeled a = Labeled DCLabel a
 
 -- | The monad for LIO computations using 'DCLabel' as the label.
-type DC = LIO DCLabel ()
+type DC = LIO DCLabel DCPrivTCB ()
 
 -- | Runs a computation in the LIO Monad, returning both the
 -- computation's result and the label of the result.
