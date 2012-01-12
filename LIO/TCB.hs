@@ -413,22 +413,22 @@ getPrivileges = lioP <$> get
 -- a @withPrivileges@ block, the functions that do not end in @..P@ can
 -- be used instead of those ending in @..P@. So, for example,
 --
--- > unlabelP p x
+-- >  unlabelP p x
 --
--- can istead be written as:
+-- can instead be written as:
 --
--- > withPrivileges p $ unlabel x
+-- >  withPrivileges p $ unlabel x
 --
 -- Note that combinators that end in @..P@ will /not/ use the underlying
 -- privileges of a @withPrivileges@ block -- only the explicitly
 -- passsed privileges are used. To use both, you must first invoke
 -- 'getPrivileges':
 --
--- > withPrivileges p0 $ do
--- >  ...
--- >  p0 <- getPrivileges
--- >  unlabelP (p0 `mappend` p1) x
--- >  ...
+-- >  withPrivileges p0 $ do
+-- >    ...
+-- >    p0 <- getPrivileges
+-- >    unlabelP (p0 `mappend` p1) x
+-- >    ...
 --
 -- The original privileges of the thread are restored after
 -- the action is executed within the @withPrivileges@ block.
@@ -437,7 +437,7 @@ getPrivileges = lioP <$> get
 -- an implicit, but less safe, interface (provide getter/setter, and
 -- always use underlying privileges) we provide this primitive. It
 -- allows for the use of implicit privileges by explicitly enclosing
--- the code with a @withPrivileges$ block.
+-- the code with a @withPrivileges@ block.
 withPrivileges :: (LabelState l p s) => p -> LIO l p s a -> LIO l p s a
 withPrivileges p m = do
   s <- get
