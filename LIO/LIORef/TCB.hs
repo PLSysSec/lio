@@ -44,7 +44,7 @@ data LIORef l a = LIORefTCB l (IORef a)
 -- the reference to the current label and clearance.
 newLIORefP :: (LabelState l p s)
            => p -> l -> a -> LIO l p s (LIORef l a)
-newLIORefP p l a = do
+newLIORefP p' l a = withCombinedPrivs p' $ \p -> do
   aguardP p l
   ior <- rtioTCB $ newIORef a
   return $ LIORefTCB l ior
@@ -71,7 +71,7 @@ labelOfLIORef (LIORefTCB l _) = l
 -- | Same as 'readLIORef' except @readLIORefP@ takes a privilege object
 -- which is used when the current label is raised.
 readLIORefP :: (LabelState l p s) => p -> LIORef l a -> LIO l p s a
-readLIORefP p (LIORefTCB l r) = do
+readLIORefP p' (LIORefTCB l r) = withCombinedPrivs p' $ \p -> do
   taintP p l 
   rtioTCB $ readIORef r
 
@@ -93,7 +93,7 @@ readLIORefTCB (LIORefTCB _ r) = rtioTCB $ readIORef r
 -- the reference to the current label and clearance.
 writeLIORefP :: (LabelState l p s)
              => p -> LIORef l a -> a -> LIO l p s ()
-writeLIORefP p (LIORefTCB l r) a = do
+writeLIORefP p' (LIORefTCB l r) a = withCombinedPrivs p' $ \p -> do
   aguardP p l 
   rtioTCB $ writeIORef r a
 
@@ -113,7 +113,7 @@ writeLIORefTCB (LIORefTCB _ r) a = rtioTCB $ writeIORef r a
 -- the reference to the current label and clearance.
 modifyLIORefP :: (LabelState l p s)
               =>  p -> LIORef l a -> (a -> a) -> LIO l p s ()
-modifyLIORefP p (LIORefTCB l r) f = do
+modifyLIORefP p' (LIORefTCB l r) f = withCombinedPrivs p' $ \p -> do
   aguardP p l 
   rtioTCB $ modifyIORef r f
 
@@ -140,7 +140,7 @@ modifyLIORefTCB (LIORefTCB _ r) f = rtioTCB $ modifyIORef r f
 -- a set of privileges which are accounted for in label comparisons.
 atomicModifyLIORefP :: (LabelState l p s) =>
                        p -> LIORef l a -> (a -> (a, b)) -> LIO l p s b
-atomicModifyLIORefP p (LIORefTCB l r) f = do
+atomicModifyLIORefP p' (LIORefTCB l r) f = withCombinedPrivs p' $ \p -> do
   aguardP p l
   rtioTCB $ atomicModifyIORef r f
 

@@ -27,7 +27,7 @@ forkLIO m = do
 -- for when performing label comparisons.
 lForkP :: (LabelState l p s)
        => p -> l -> LIO l p s a -> LIO l p s (LRes l a)
-lForkP p l m = do
+lForkP p' l m = withCombinedPrivs p' $ \p -> do
   mv <- newEmptyLMVarP p l
   _ <- forkLIO $ do res <- (Right <$> m) `catchTCB` (return . Left .  lubErr)
                     lastL <- getLabel
@@ -73,7 +73,7 @@ data LRes l a = LRes (LMVar l (Either (LabeledException l) a))
 
 -- | Same as 'lWait', but uses priviliges in label checks and raises.
 lWaitP :: (LabelState l p s) => p -> LRes l a -> LIO l p s a
-lWaitP p (LRes mv) = do
+lWaitP p' (LRes mv) = withCombinedPrivs p' $ \p -> do
   ea <- takeLMVarP p mv
   case ea of
     Right x -> return x

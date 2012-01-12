@@ -120,13 +120,3 @@ type DC = LIO DCLabel DCPrivTCB ()
 -- computation's result and the label of the result.
 evalDC :: DC a -> IO (a, DCLabel)
 evalDC m = evalLIO m ()
-
-
-
---
--- Making DC Labels serializable
---
-
-
-
-

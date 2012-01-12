@@ -158,8 +158,8 @@ getDirectoryContentsP :: (LabelState l p s, Serialize l)
                       => p              -- ^ Privilege
                       -> FilePath       -- ^ Directory
                       -> LIO l p s [FilePath]
-getDirectoryContentsP priv dir = do
-  path <- lookupObjPathP priv dir >>= unlabelFilePathP priv
+getDirectoryContentsP p' dir = withCombinedPrivs p' $ \p -> do
+  path <- lookupObjPathP p dir >>= unlabelFilePathP p
   rtioTCB $ IO.getDirectoryContents path
 
 -- | Create a directory at the supplied path with the given label.
@@ -173,7 +173,7 @@ createDirectoryP :: (LabelState l p s, Serialize l)
                  -> l           -- ^ Label of new directory
                  -> FilePath    -- ^ Path of directory
                  -> LIO l p s ()
-createDirectoryP priv ldir path' = do
+createDirectoryP p ldir path' = withCombinedPrivs p $ \priv -> do
   path <- cleanUpPath path'
   aguardP priv ldir
   lcDir <- lookupObjPathP priv (containingDir path)
@@ -198,7 +198,7 @@ openFileP :: (LabelState l p s, Serialize l)
           -> FilePath   -- ^ File to open
           -> IOMode     -- ^ Mode of handle
           -> LIO l p s (LHandle l)
-openFileP priv mlfile path' mode = do
+openFileP p mlfile path' mode = withCombinedPrivs p $ \priv -> do
   path <- cleanUpPath path'
   let containingDir = takeDirectory path
       fileName      = takeFileName  path
@@ -247,11 +247,13 @@ instance (LabelState l p s, CloseOps (LHandle l) (LIO l p s)
 
 -- | Close a labeled file handle.
 hCloseP :: (LabelState l p s) => p -> LHandle l -> LIO l p s ()
-hCloseP p (LHandleTCB l h) = wguardP p l >> rtioTCB (hClose h)
+hCloseP p' (LHandleTCB l h) = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hClose h)
 
 -- | Flush a labeled file handle.
 hFlushP :: (LabelState l p s) => p -> LHandle l -> LIO l p s ()
-hFlushP p (LHandleTCB l h) = wguardP p l >> rtioTCB (hFlush h)
+hFlushP p' (LHandleTCB l h) = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hFlush h)
 
 -- | Read @n@ bytes from the labeled handle, using privileges when
 -- performing label comparisons and tainting.
@@ -260,7 +262,8 @@ hGetP :: (LabelState l p s, HandleOps IO.Handle b IO)
       -> LHandle l      -- ^ Labeled handle
       -> Int            -- ^ Number of bytes to read
       -> LIO l p s b
-hGetP p (LHandleTCB l h) n  = wguardP p l >> rtioTCB (hGet h n)
+hGetP p' (LHandleTCB l h) n = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hGet h n)
 
 -- | Same as 'hGetP', but will not block waiting for data to become
 -- available. Instead, it returns whatever data is available.
@@ -268,21 +271,24 @@ hGetP p (LHandleTCB l h) n  = wguardP p l >> rtioTCB (hGet h n)
 -- the current label.
 hGetNonBlockingP :: (LabelState l p s, HandleOps IO.Handle b IO)
                  => p -> LHandle l -> Int -> LIO l p s b
-hGetNonBlockingP p (LHandleTCB l h) n = wguardP p l >> rtioTCB (hGetNonBlocking h n)
+hGetNonBlockingP p' (LHandleTCB l h) n = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hGetNonBlocking h n)
 
 -- | Read the entire labeled handle contents and close handle upon
 -- reading @EOF@.  Privileges are used in the label comparisons
 -- and when raising the current label.
 hGetContentsP :: (LabelState l p s, HandleOps IO.Handle b IO)
               => p -> LHandle l -> LIO l p s b
-hGetContentsP p (LHandleTCB l h) = wguardP p l >> rtioTCB (hGetContents h)
+hGetContentsP p' (LHandleTCB l h) = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hGetContents h)
 
 -- | Output the given (Byte)String to the specified labeled handle.
 -- Privileges are used in the label comparisons and when raising
 -- the current label.
 hPutP :: (LabelState l p s, HandleOps IO.Handle b IO)
       => p -> LHandle l -> b -> LIO l p s ()
-hPutP p (LHandleTCB l h) s  = wguardP p l >> rtioTCB (hPut h s)
+hPutP p' (LHandleTCB l h) s = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hPut h s)
 
 -- | Synonym for 'hPutP'.
 hPutStrP :: (LabelState l p s, HandleOps IO.Handle b IO)
@@ -294,7 +300,8 @@ hPutStrP = hPutP
 -- comparisons and when raising the current label.
 hPutStrLnP :: (LabelState l p s, HandleOps IO.Handle b IO)
             => p -> LHandle l -> b -> LIO l p s ()
-hPutStrLnP p (LHandleTCB l h) s  = wguardP p l >> rtioTCB (hPutStrLn h s)
+hPutStrLnP p' (LHandleTCB l h) s = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hPutStrLn h s)
 
 --
 -- Special cases
@@ -313,13 +320,13 @@ writeFile path contents = bracketTCB (openFile path WriteMode) hClose
 -- | Same as 'readFile' but uses privilege in opening the file.
 readFileP :: (HandleOps IO.Handle b IO, LabelState l p s, Serialize l) =>
              p -> FilePath -> LIO l p s b
-readFileP privs path = openFileP privs Nothing path ReadMode >>=
-                       hGetContentsP privs
+readFileP p' path =  withCombinedPrivs p' $ \p ->
+  openFileP p Nothing path ReadMode >>= hGetContentsP p
 
 -- | Same as 'writeFile' but uses privilege in opening the file.
 writeFileP  :: (HandleOps IO.Handle b IO, LabelState l p s, Serialize l) =>
                p -> FilePath -> b -> LIO l p s ()
-writeFileP privs path contents = do
+writeFileP p' path contents = withCombinedPrivs p' $ \privs -> do
   l <- getLabel
   bracketTCB (openFileP privs (Just l) path WriteMode) (hCloseP privs)
              (flip (hPutP privs) contents)
@@ -333,6 +340,6 @@ writeFileL l path contents = getPrivileges >>= \p ->
 -- | Same as 'writeFileL' but uses privilege in opening the file.
 writeFileLP  :: (HandleOps IO.Handle b IO, LabelState l p s, Serialize l) =>
                p -> l -> FilePath -> b -> LIO l p s ()
-writeFileLP privs l path contents = do
+writeFileLP p' l path contents = withCombinedPrivs p' $ \privs -> do
   bracketTCB (openFileP privs (Just l) path WriteMode) (hCloseP privs)
              (flip (hPutP privs) contents)

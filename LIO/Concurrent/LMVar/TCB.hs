@@ -57,7 +57,7 @@ labelOfLMVar (LMVarTCB l _) = l
 -- privileges which are accounted for in comparing the label of
 -- the MVar to the current label and clearance.
 newEmptyLMVarP :: (LabelState l p s) => p -> l -> LIO l p s (LMVar l a)
-newEmptyLMVarP p l = do
+newEmptyLMVarP p' l = withCombinedPrivs p' $ \p -> do
   aguardP p l
   iom <- ioTCB $ newEmptyMVar
   return $ LMVarTCB l iom
@@ -80,7 +80,7 @@ newEmptyLMVarTCB l = do
 -- accounted for in comparing the label of the MVar to the current label
 -- and clearance.
 newLMVarP :: (LabelState l p s) => p -> l -> a -> LIO l p s (LMVar l a)
-newLMVarP p l a = do
+newLMVarP p' l a = withCombinedPrivs p' $ \p -> do
   aguardP p l
   m <- ioTCB $ newMVar a
   return $ LMVarTCB l m
@@ -104,7 +104,7 @@ newLMVarTCB l a = do
 -- | Same as 'takeLMVar' except @takeLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
 takeLMVarP :: (LabelState l p s) => p -> LMVar l a -> LIO l p s a
-takeLMVarP p (LMVarTCB l m) = do
+takeLMVarP p' (LMVarTCB l m) = withCombinedPrivs p' $ \p -> do
   wguardP p l
   ioTCB $ takeMVar m
 
@@ -126,7 +126,7 @@ takeLMVarTCB (LMVarTCB _ m) = ioTCB $ takeMVar m
 -- | Same as 'putLMVar' except @putLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
 putLMVarP :: (LabelState l p s) => p -> LMVar l a -> a -> LIO l p s ()
-putLMVarP p (LMVarTCB l m) a = do
+putLMVarP p' (LMVarTCB l m) a = withCombinedPrivs p' $ \p -> do
   wguardP p l
   val <- ioTCB $ putMVar m a
   return val
@@ -152,7 +152,7 @@ putLMVarTCB (LMVarTCB _ m) a = ioTCB $ putMVar m a
 -- | Same as 'readLMVar' except @readLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
 readLMVarP :: (LabelState l p s) => p -> LMVar l a -> LIO l p s a
-readLMVarP p (LMVarTCB l m) = do
+readLMVarP p' (LMVarTCB l m) = withCombinedPrivs p' $ \p -> do
   wguardP p l
   ioTCB $ readMVar m 
 
@@ -169,7 +169,7 @@ readLMVarTCB (LMVarTCB _ m) = ioTCB $ readMVar m
 -- | Same as 'swapLMVar' except @swapLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
 swapLMVarP :: (LabelState l p s) => p -> LMVar l a -> a -> LIO l p s a
-swapLMVarP p (LMVarTCB l m) x =  do
+swapLMVarP p' (LMVarTCB l m) x = withCombinedPrivs p' $ \p -> do
   wguardP p l
   ioTCB $ swapMVar m x
 
@@ -192,7 +192,7 @@ swapLMVarTCB (LMVarTCB _ m) x = ioTCB $ swapMVar m x
 -- | Same as 'tryTakeLMVar', but uses priviliges when raising current label.
 tryTakeLMVarP :: (LabelState l p s)
               => p -> LMVar l a -> LIO l p s (Maybe a)
-tryTakeLMVarP p (LMVarTCB l m) = do
+tryTakeLMVarP p' (LMVarTCB l m) = withCombinedPrivs p' $ \p -> do
   wguardP p l
   ioTCB $ tryTakeMVar m
 
@@ -208,7 +208,7 @@ tryTakeLMVarTCB (LMVarTCB _ m) = ioTCB $ tryTakeMVar m
 -- | Same as 'tryPutLMVar', but uses privileges when raising current label.
 tryPutLMVarP :: (LabelState l p s)
               => p -> LMVar l a -> a -> LIO l p s Bool
-tryPutLMVarP p (LMVarTCB l m) x = do
+tryPutLMVarP p' (LMVarTCB l m) x = withCombinedPrivs p' $ \p -> do
   wguardP p l
   ioTCB $ tryPutMVar m x
 
@@ -224,7 +224,7 @@ tryPutLMVarTCB (LMVarTCB _ m) x = ioTCB $ tryPutMVar m x
 
 -- | Same as 'isEmptyLMVar', but uses privileges when raising current label.
 isEmptyLMVarP :: (LabelState l p s) => p -> LMVar l a -> LIO l p s Bool
-isEmptyLMVarP p (LMVarTCB l m) = do
+isEmptyLMVarP p' (LMVarTCB l m) = withCombinedPrivs p' $ \p -> do
   taintP p l
   ioTCB $ isEmptyMVar m
 
@@ -244,7 +244,7 @@ isEmptyLMVarTCB (LMVarTCB _ m) = ioTCB $ isEmptyMVar m
 -- comparisons/raises.
 withLMVarP :: (LabelState l p s)
           => p -> LMVar l a -> (a -> LIO l p s b) -> LIO l p s b
-withLMVarP p m@(LMVarTCB l _) io = do
+withLMVarP p' m@(LMVarTCB l _) io = withCombinedPrivs p' $ \p -> do
   wguardP p l
   withLMVarTCB m io
 

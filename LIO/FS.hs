@@ -487,7 +487,7 @@ unlabelFilePathTCB (LFilePathTCB l) = unlabelTCB l
 -- filepath.
 unlabelFilePathP :: (LabelState l p s)
                  => p -> LFilePath l -> LIO l p s FilePath
-unlabelFilePathP p (LFilePathTCB l) = unlabelP p l
+unlabelFilePathP p' (LFilePathTCB l) = withCombinedPrivs p' $ \p -> unlabelP p l
 
 -- | Unlabel a filepath. If the path corresponds to a directory, you
 -- can now get the contents of the directory; if it's a file, you can
@@ -519,7 +519,7 @@ lookupObjPathP :: (LabelState l p s, Serialize l)
                => p         -- ^ Privilege 
                -> FilePath  -- ^ Path to object
                -> LIO l p s (LFilePath l)
-lookupObjPathP p f' = do
+lookupObjPathP p' f' = withCombinedPrivs p' $ \p -> do
   f <- cleanUpPath f'
   root <- ioTCB $ getRootDir
   pathTaintTCB p root rootLink

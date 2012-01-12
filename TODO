@@ -19,3 +19,8 @@ FS:
              2.) remove any #obj from .obj
   - change filesystem to use xattr                (0.1.2)
   - use the xattr package and extended attributes (0.2.0)
+
+Cleanup:
+  - remove getPrivileges from all the non ...P    (0.1.2)
+    combinators and pass NoPrivs again since
+    ...P combinators now handle current privileges
