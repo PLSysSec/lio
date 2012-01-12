@@ -181,7 +181,14 @@ import qualified System.IO.Error as IOError
 
 import qualified Data.ByteString.Base64.URL as Codec
 import qualified Data.Digest.Pure.SHA as SHA
+
+#if __GLASGOW_HASKELL__ >= 706
 import System.Posix.Temp 
+#else
+-- Patch to unix package will not be up on Hackage until GHC 7.6, so
+-- we include the implementation with LIO until this is the case
+import System.Posix.Tmp 
+#endif
 
 
 --
