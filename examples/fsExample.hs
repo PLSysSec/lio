@@ -19,10 +19,6 @@ import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 
-instance Serialize DCLabel where
-  put = put . show
-  get = read <$> get
-
 lpub :: DCLabel
 lpub = newDC (<>) (<>)
 

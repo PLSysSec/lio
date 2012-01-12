@@ -19,10 +19,12 @@ module LIO.DCLabel ( -- * DCLabel export
                      -- * Renamed privileges
                    , DCPriv, DCPrivTCB
                      -- * Useful aliases for the LIO Monad
-                   , DCLabeled, DC, evalDC
+                   , DCLabeled, DC, evalDC, evalDCWithRoot 
                    )where
 
 import LIO.TCB
+
+import LIO.Handle (evalWithRoot)
 
 #if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
 import safe Data.Typeable
@@ -120,3 +122,7 @@ type DC = LIO DCLabel DCPrivTCB ()
 -- computation's result and the label of the result.
 evalDC :: DC a -> IO (a, DCLabel)
 evalDC m = evalLIO m ()
+
+-- | Same as 'evalDC', but with support for filesystem.
+evalDCWithRoot ::  FilePath -> Maybe DCLabel -> DC a -> IO (a, DCLabel)
+evalDCWithRoot path ml act = evalWithRoot path ml act ()
