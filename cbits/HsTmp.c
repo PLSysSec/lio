@@ -1,19 +1,19 @@
 #include "HsTmp.h"
 
 #if HAVE_MKSTEMP
-int __hscore_mkstemp(char *filetemplate) {
+int __hstmp_mkstemp(char *filetemplate) {
     return (mkstemp(filetemplate));
 }
 #endif
 
 #if HAVE_MKSTEMPS
-int __hscore_mkstemps(char *filetemplate, int suffixlen) {
+int __hstmp_mkstemps(char *filetemplate, int suffixlen) {
     return (mkstemps(filetemplate, suffixlen));
 }
 #endif
 
 #if HAVE_MKDTEMP
-char *__hscore_mkdtemp(char *filetemplate) {
+char *__hstmp_mkdtemp(char *filetemplate) {
     return (mkdtemp(filetemplate));
 }
 #endif
