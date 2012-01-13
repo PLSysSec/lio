@@ -536,6 +536,7 @@ rtioTCB io = do
 
 -- | @Labeled@ is a type representing labeled data.  
 data Labeled l t = LabeledTCB l t
+  deriving (Typeable)
 
 -- | Returns label of a 'Labeled' type.
 labelOf :: Label l => Labeled l a -> l
