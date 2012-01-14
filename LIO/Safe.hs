@@ -9,6 +9,8 @@
 
 module LIO.Safe ( Label(..)
                  , Priv(..), NoPrivs(..)
+                 , getPrivileges, withPrivileges
+                 , withCombinedPrivs 
                  , LIO, LabelState
                  , evalLIO
                  , getLabel, setLabelP
@@ -28,6 +30,8 @@ module LIO.Safe ( Label(..)
 
 import LIO.TCB ( Label(..)
                , Priv(..), NoPrivs(..)
+               , getPrivileges, withPrivileges
+               , withCombinedPrivs 
                , LIO, LabelState
                , evalLIO
                , getLabel, setLabelP
