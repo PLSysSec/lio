@@ -58,8 +58,12 @@ lForkP p' l m = withCombinedPrivs p' $ \p -> do
 -- result. It is require that this label is above the current label,
 -- and below the current clearance. Moreover, the supplied computation
 -- must not read anything more sensitive, i.e., with a label above the
--- supplied label --- doing so will result in an exception being
--- thrown. 
+-- supplied label --- doing so will result in an exception (whose
+-- label will reflect this observation) being thrown. 
+--
+-- If an exception is thrown in the inner computation, the exception
+-- label will be raised to the join of the result label and original
+-- exception label.
 -- 
 -- Not that, compared to 'toLabeled', @lFork@ immediately returns a
 -- labeled result of type 'LRes', which is essentially a \"future\",

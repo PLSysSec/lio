@@ -605,25 +605,38 @@ taintLabeled l (LabeledTCB la a) = do
   return $ LabeledTCB (lub l la) a
 
 
--- | @toLabeled@ is the dual of @unlabel@.  It allows one to invoke
+-- | @toLabeled@ is the dual of 'unlabel'.  It allows one to invoke
 -- computations that would raise the current label, but without
--- actually raising the label.  Instead, the result of the computation
--- is packaged into a 'Labeled' with a supplied label.
--- Thus, to get at the result of the
--- computation one will have to call 'unlabel' and raise the label, but
--- this can be postponed, or done inside some other call to 'toLabeled'.
--- This suggests that the provided label must be above the current
--- label and below the current clearance.
+-- actually raising the label.  Instead, the result of the
+-- computation is packaged into a 'Labeled' with a supplied
+-- label. (Of couse, the computation executed by @toLabeled@ must
+-- most observe any data whose label exceeds the supplied label.)
 --
--- Note that @toLabeled@ always restores the clearance to whatever it was
--- when it was invoked, regardless of what occurred in the computation
--- producing the value of the 'Labeled'. 
--- This highlights one main use of clearance: to ensure that a @Labeled@
--- computed does not exceed a particular label.
+-- To get at the result of the computation one will have to call
+-- 'unlabel' and raise the label, but this can be postponed, or
+-- done inside some other call to 'toLabeled'.  This suggests that
+-- the provided label must be above the current label and below
+-- the current clearance.
+--
+-- Note that @toLabeled@ always restores the clearance to whatever
+-- it was when it was invoked, regardless of what occurred in the
+-- computation producing the value of the 'Labeled'.  This highlights
+-- one main use of clearance: to ensure that a @Labeled@ computed
+-- does not exceed a particular label.
+--
+-- If an exception is thrown a a @toLabeled@ block, the join of
+-- the exception label and supplied label will be used as the new
+-- label.  If the current label of the inner computation is above
+-- the supplied label, an exception (whose label will reflect this
+-- observatoin) is throw by @toLabeled@.
 --
 -- WARNING: @toLabeled@ is susceptible to termination attacks.
 --
-toLabeled :: (LabelState l p s) => l -> LIO l p s a -> LIO l p s (Labeled l a)
+toLabeled :: (LabelState l p s)
+          => l -- ^ Label of result and upper bound on
+               --  inner-computations' observation
+          -> LIO l p s a -- ^ Inner computation
+          -> LIO l p s (Labeled l a)
 toLabeled l x = getPrivileges >>= \p -> toLabeledP p l x
 {-# WARNING toLabeled "toLabeled is susceptible to termination attacks" #-}
 
