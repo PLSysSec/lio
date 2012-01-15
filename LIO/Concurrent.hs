@@ -29,15 +29,21 @@ lForkP :: (LabelState l p s)
        => p -> l -> LIO l p s a -> LIO l p s (LRes l a)
 lForkP p' l m = withCombinedPrivs p' $ \p -> do
   mv <- newEmptyLMVarP p l
-  _ <- forkLIO $ do res <- (Right <$> m) `catchTCB` (return . Left .  lubErr)
-                    lastL <- getLabel
-                    putLMVarTCB mv (if leqp p lastL l
-                                      then res
-                                      else (mkErr lastL LerrLow))
+  _ <- forkLIO $ do
+         res <- (Right <$> m) `catchTCB` (return . Left . (lubErr l))
+         lastL <- getLabel
+         putLMVarTCB mv (if leqp p lastL l
+                           then res
+                           else let l' = lub lastL l
+                                in Left . mkErr . (lub l') $
+                                      either getELabel (const l') res
+                        )
 
   return $ LRes mv
-    where mkErr cl e = Left . (LabeledExceptionTCB cl) . toException $ e
-          lubErr (LabeledExceptionTCB le e) = LabeledExceptionTCB (l `lub` le) e
+    where mkErr le = LabeledExceptionTCB le $ toException LerrLow
+          lubErr lnew (LabeledExceptionTCB le e) =
+                  LabeledExceptionTCB (le `lub` lnew) e
+          getELabel (LabeledExceptionTCB le _) = le
 
 -- | Labeled fork. @lFork@ allows one to invoke computations taht
 -- would otherwise raise the current label, but without actually

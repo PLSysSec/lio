@@ -637,12 +637,19 @@ toLabeledP :: (LabelState l p s)
 toLabeledP p' l m = withCombinedPrivs p' $ \p -> do
   aguardP p l
   save_s <- get
-  a <- m `catchTCB` (\(LabeledExceptionTCB le se) -> ioTCB $ throwIO
-                       (LabeledExceptionTCB (l `lub` le) se))
+  --
+  res <- (Right <$> m) `catchTCB` (return . Left .  (lubErr l))
   s <- get
+  let lastL = lioL s
   put s { lioL = lioL save_s, lioC = lioC save_s}
-  unless (leqp p (lioL s) l) $ throwIO LerrLow -- l is too low
-  return $ LabeledTCB l a
+  if leqp p lastL l
+    then either (ioTCB . throwIO) (return . LabeledTCB l) res
+    else let l' = lub lastL l
+         in ioTCB . throwIO . mkErr . (lub l') $ either getELabel (const l') res
+    where mkErr le = LabeledExceptionTCB le $ toException LerrLow
+          lubErr lnew (LabeledExceptionTCB le e) =
+                  LabeledExceptionTCB (le `lub` lnew) e
+          getELabel (LabeledExceptionTCB le _) = le
 {-# WARNING toLabeledP "toLabeledP is susceptible to termination attacks" #-}
 
 -- | Executes a computation that would raise the current label, but
