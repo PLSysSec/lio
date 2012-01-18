@@ -827,7 +827,7 @@ aguardP :: (LabelState l p s) => p -> l -> LIO l p s ()
 aguardP p' newl = withCombinedPrivs p' $ \p -> do
   c <- getClearance
   l <- getLabel
-  unless (leqp p newl c) $ throwIO LerrClearance
+  unless (newl `leq` c)  $ throwIO LerrClearance
   unless (leqp p l newl) $ throwIO LerrLow
 
 
@@ -956,7 +956,7 @@ catchP p' io handler = withCombinedPrivs p' $ \p -> do
     (unLIO io s) `catch` (\e@(LabeledExceptionTCB le se) ->
       case fromException se of
         Nothing -> throwIO e
-        Just e' -> if leqp p le clr
+        Just e' -> if le `leq` clr
                      then unLIO (taintP p le >> handler e') s
                      else throwIO e)
   put s'
