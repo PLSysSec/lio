@@ -55,7 +55,7 @@ module LIO.TCB (-- * Basic Label Functions
                 Label(..)
                 -- * Basic Privilige Functions
                 -- $privs
-               , Priv(..), NoPrivs(..)
+               , Priv(..), noPrivs
                , getPrivileges, withPrivileges
                , withCombinedPrivs 
                -- * Labeled IO Monad (LIO)
@@ -265,7 +265,7 @@ class (Label l, Monoid p, PrivTCB p) => Priv l p where
 
     -- | Roughly speaking, @L_r = lostar p L L_g@ computes how close
     -- one can come to downgrading data labeled @L@ to the goal label
-    -- @L_g@, given privileges @p@.  When @p == 'NoPrivs'@, the resulting
+    -- @L_g@, given privileges @p@.  When @p == 'noPrivs'@, the resulting
     -- label @L_r == L ``lub``L_g@.  If @p@ contains all possible privileges,
     -- then @L_r == L_g@.
     --
@@ -301,16 +301,9 @@ class MintTCB t i where
     -- can define instances of mintTCB.
     mintTCB :: i -> t
 
--- |A generic 'Priv' instance that works for all 'Label's and confers
--- no downgrading privileges.
-data NoPrivs = NoPrivs
-instance PrivTCB NoPrivs
-instance Monoid NoPrivs where
-    mempty      = NoPrivs
-    mappend _ _ = NoPrivs
-instance (Label l) => Priv l NoPrivs where
-    leqp _ a b      = leq a b
-    lostar _ l goal = lub l goal
+-- | Alias for 'mempty'.
+noPrivs :: Monoid p => p
+noPrivs = mempty
 
 ---------------------------------------------------------------------
 -- Labeled IO -------------------------------------------------------
@@ -373,7 +366,7 @@ newState :: (LabelState l p s) => s -> LIOstate l p s
 newState s = LIOstate { labelState = s
                       , lioL = lbot
                       , lioC = ltop
-                      , lioP = mempty }
+                      , lioP = noPrivs }
 
 -- | Lift an IO computation into @LIO@.
 mkLIO :: (LabelState l p s)
@@ -934,7 +927,7 @@ instance (LabelState l p s) => MonadCatch (LIO l p s) where
     -- | Basic function for catching labeled exceptions. (The fact that
     -- they are labeled is hidden from the handler.)
     --
-    -- > catch = catchP NoPrivs
+    -- > catch = catchP noPrivs
     --
     catch x h = getPrivileges >>= \p -> catchP p x h
 

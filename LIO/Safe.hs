@@ -8,7 +8,7 @@
 -- module for documentation.
 
 module LIO.Safe ( Label(..)
-                 , Priv(..), NoPrivs(..)
+                 , Priv(..), noPrivs
                  , getPrivileges, withPrivileges
                  , withCombinedPrivs 
                  , LIO, LabelState
@@ -29,7 +29,7 @@ module LIO.Safe ( Label(..)
                  ) where
 
 import LIO.TCB ( Label(..)
-               , Priv(..), NoPrivs(..)
+               , Priv(..), noPrivs
                , getPrivileges, withPrivileges
                , withCombinedPrivs 
                , LIO, LabelState
