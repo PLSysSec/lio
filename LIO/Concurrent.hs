@@ -20,7 +20,7 @@ import Data.Functor
 forkLIO :: (LabelState l p s) => LIO l p s () -> LIO l p s ThreadId
 forkLIO m = do
   s <- getTCB
-  ioTCB . forkIO $ evalLIO m s >> return ()
+  ioTCB . forkIO $ runLIO m s >> return ()
 
 
 -- | Same as 'lFork', but the supplied set of priviliges are accounted

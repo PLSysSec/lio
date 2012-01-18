@@ -95,6 +95,7 @@ module LIO.TCB (-- * Basic Label Functions
                -- ** Labeled IO Monad (LIO)
                , LIOstate(..)
                , getTCB, putTCB
+               , getLabelStateTCB, putLabelStateTCB
                , setLabelTCB, lowerClrTCB
                -- ** Labeled Values
                , ShowTCB(..), ReadTCB(..)
@@ -341,21 +342,24 @@ data LIOstate l p s = LIOstate { labelState :: s -- ^ label-specific state
 newtype LIO l p s a = LIO (StateT (LIOstate l p s) IO a)
     deriving (Functor, Applicative, Monad)
 
-get :: (LabelState l p s) => LIO l p s (LIOstate l p s)
-get = mkLIO $ \s -> return (s, s)
 
-put :: (LabelState l p s) => LIOstate l p s -> LIO l p s ()
-put s = mkLIO $ \_ -> return (() , s)
+-- | Get internal state.
+getTCB :: (LabelState l p s) => LIO l p s (LIOstate l p s)
+getTCB = mkLIO $ \s -> return (s, s)
+
+-- | Put internal state.
+putTCB :: (LabelState l p s) => LIOstate l p s -> LIO l p s ()
+putTCB s = mkLIO $ \_ -> return (() , s)
 
 -- | Returns label-specific state of the 'LIO' monad.  This is the
 -- data specified as the second argument of 'evalLIO', whose type is
 -- @s@ in the monad @LIO l s@.
-getTCB :: (LabelState l p s) => LIO l p s s
-getTCB = labelState <$> get
+getLabelStateTCB :: (LabelState l p s) => LIO l p s s
+getLabelStateTCB = labelState <$> getTCB
 
 -- | Sets the label-specific state of the 'LIO' monad.  See 'getTCB'.
-putTCB :: (LabelState l p s) => s -> LIO l p s ()
-putTCB ls = get >>= put . update
+putLabelStateTCB :: (LabelState l p s) => s -> LIO l p s ()
+putLabelStateTCB ls = getTCB >>= putTCB . update
     where update s = s { labelState = ls }
 
 -- | Generate a fresh state to pass 'runLIO' when invoking it for the
@@ -402,16 +406,16 @@ evalLIO m s = do (a, ls) <- runLIO m (newState s)
 
 -- | Returns the current value of the thread's label.
 getLabel :: (LabelState l p s) => LIO l p s l
-getLabel = lioL <$> get
+getLabel = lioL <$> getTCB
 
 -- | Returns the current value of the thread's clearance.
 getClearance :: (LabelState l p s) => LIO l p s l
-getClearance = lioC <$> get
+getClearance = lioC <$> getTCB
 
 
 -- | Returns the current privileges.
 getPrivileges :: (LabelState l p s) => LIO l p s p
-getPrivileges = lioP <$> get
+getPrivileges = lioP <$> getTCB
 
 -- | Execute an LIO action with a set of underlying privileges. Within
 -- a @withPrivileges@ block, the supplied privileges are used in every 
@@ -433,11 +437,11 @@ getPrivileges = lioP <$> get
 -- @withPrivileges@ block.
 withPrivileges :: (LabelState l p s) => p -> LIO l p s a -> LIO l p s a
 withPrivileges p m = do
-  s <- get
+  s <- getTCB
   p0 <- getPrivileges
-  put s { lioP = p `mappend` p0 }
+  putTCB s { lioP = p `mappend` p0 }
   a <- m
-  put s { lioP = p0 }
+  putTCB s { lioP = p0 }
   return a
 
 -- | If the current label is @oldLabel@ and the current clearance is
@@ -449,41 +453,41 @@ withPrivileges p m = do
 -- functionality that @setLabel@ would.
 setLabelP :: (LabelState l p s) => p -> l -> LIO l p s ()
 setLabelP p' l = withCombinedPrivs p' $ \p -> do
-  s <- get
+  s <- getTCB
   if leqp p (lioL s) l
-    then put s { lioL = l }
+    then putTCB s { lioL = l }
     else throwIO LerrPriv
 
 -- | Set the current label to anything, with no security check.
 setLabelTCB :: (LabelState l p s) => l -> LIO l p s ()
-setLabelTCB l = do s <- get
+setLabelTCB l = do s <- getTCB
                    if l `leq` lioC s
-                      then put s { lioL = l }
+                      then putTCB s { lioL = l }
                       else throwIO LerrClearance
 
 -- | Reduce the current clearance. One cannot raise the current label
 -- or create object with labels higher than the current clearance.
 lowerClr :: (LabelState l p s) => l -> LIO l p s ()
-lowerClr l = get >>= doit
+lowerClr l = getTCB >>= doit
     where doit s | not $ l `leq` lioC s = throwIO LerrClearance
                  | not $ lioL s `leq` l = throwIO LerrLow
-                 | otherwise            = put s { lioC = l }
+                 | otherwise            = putTCB s { lioC = l }
 
 -- | Raise the current clearance (undoing the effects of 'lowerClr').
 -- This requires privileges.
 lowerClrP :: (LabelState l p s) => p -> l -> LIO l p s ()
-lowerClrP p' l = withCombinedPrivs p' $ \p -> get >>= doit p
+lowerClrP p' l = withCombinedPrivs p' $ \p -> getTCB >>= doit p
     where doit p s | not $ leqp p l $ lioC s = throwIO LerrPriv
                    | not $ lioL s `leq` l = throwIO LerrLow
-                   | otherwise            = put s { lioC = l }
+                   | otherwise            = putTCB s { lioC = l }
 
 -- | Set the current clearance to anything, with no security check.
 lowerClrTCB :: (LabelState l p s) => l -> LIO l p s ()
-lowerClrTCB l = get >>= doit
+lowerClrTCB l = getTCB >>= doit
     where doit s | not $ lioL s `leq` l =
             throwIO $ LerrInval ("Cannot lower the current clearance"
                                  ++ " below current label.")
-                 | otherwise            = put s { lioC = l }
+                 | otherwise            = putTCB s { lioC = l }
 
 -- | Lowers the clearance of a computation, then restores the
 -- clearance to its previous value.  Useful to wrap around a
@@ -499,10 +503,10 @@ lowerClrTCB l = get >>= doit
 -- supplied argument using 'lowerClrP'.
 withClearance :: (LabelState l p s) => l -> LIO l p s a -> LIO l p s a
 withClearance l m = do
-  s <- get
-  put s { lioC = l `glb` lioC s }
+  s <- getTCB
+  putTCB s { lioC = l `glb` lioC s }
   a <- m
-  put s { lioC = lioC s }
+  putTCB s { lioC = lioC s }
   return a
 
 -- | Lifts an 'IO' computation into the 'LIO' monad.  Note that
@@ -551,7 +555,7 @@ label l a = getPrivileges >>= \p -> labelP p l a
 -- use 'lowerClrP' to raise the clearance first if you wish to
 -- create an 'Labeled' at a higher label than the current clearance.
 labelP :: (LabelState l p s) => p -> l -> a -> LIO l p s (Labeled l a)
-labelP p' l a = withCombinedPrivs p' $ \p -> get >>= doit p
+labelP p' l a = withCombinedPrivs p' $ \p -> getTCB >>= doit p
     where doit p s | not $ l `leq` lioC s    = throwIO LerrClearance
                    | not $ leqp p (lioL s) l = throwIO LerrLow
                    | otherwise               = return $ LabeledTCB l a
@@ -642,12 +646,12 @@ toLabeledP :: (LabelState l p s)
            => p -> l -> LIO l p s a -> LIO l p s (Labeled l a)
 toLabeledP p' l m = withCombinedPrivs p' $ \p -> do
   aguardP p l
-  save_s <- get
+  save_s <- getTCB
   --
   res <- (Right <$> m) `catchTCB` (return . Left .  (lubErr l))
-  s <- get
+  s <- getTCB
   let lastL = lioL s
-  put s { lioL = lioL save_s, lioC = lioC save_s}
+  putTCB s { lioL = lioL save_s, lioC = lioC save_s}
   if leqp p lastL l
     then either (ioTCB . throwIO) (return . LabeledTCB l) res
     else let l' = lub lastL l
@@ -769,10 +773,10 @@ gtaint :: (LabelState l p s) =>
        -> l                     -- ^ @l@ - Label to taint with
        -> LIO l p s ()
 gtaint mylub l = do
-  s <- get
+  s <- getTCB
   let lnew = l `mylub` (lioL s)
   if lnew `leq` lioC s
-     then put s { lioL = lnew }
+     then putTCB s { lioL = lnew }
      else ioTCB $ E.throwIO $ LabeledExceptionTCB (lioL s)
           (toException LerrClearance)
 
@@ -943,7 +947,7 @@ catchP :: (Exception e, LabelState l p s)
        -> (e -> LIO l p s a) -- ^ Exception handler
        -> LIO l p s a        -- ^ Result of computation or handler
 catchP p' io handler = withCombinedPrivs p' $ \p -> do
-  s <- get
+  s <- getTCB
   clr <- getClearance
   (a, s') <- ioTCB $ do
     (unLIO io s) `catch` (\e@(LabeledExceptionTCB le se) ->
@@ -952,7 +956,7 @@ catchP p' io handler = withCombinedPrivs p' $ \p -> do
         Just e' -> if le `leq` clr
                      then unLIO (taintP p le >> handler e') s
                      else throwIO e)
-  put s'
+  putTCB s'
   return a
 
 -- | Trusted catch functin.
@@ -961,10 +965,10 @@ catchTCB :: (LabelState l p s)
          -> (LabeledException l -> LIO l p s a) -- ^ Exception handler
          -> LIO l p s a        -- ^ Result of computation or handler
 catchTCB io handler = do
-  s <- get
+  s <- getTCB
   (a, s') <- ioTCB $ do
     (unLIO io s) `E.catch` (\e -> unLIO (handler e) s)
-  put s'
+  putTCB s'
   return a
 
 -- | Version of 'catchP' with arguments swapped.
