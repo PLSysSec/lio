@@ -42,7 +42,7 @@ peekFilePath = peekCString
 #endif
 
 #if HAVE_MKSTEMP
-foreign import ccall unsafe "HsUnix.h __hscore_mkstemp"
+foreign import ccall unsafe "HsUnix.h __hstmp_mkstemp"
   c_mkstemp :: CString -> IO CInt
 #endif
 
@@ -64,7 +64,7 @@ mkstemp = error "System.Posix.Temp.mkstemp: not supported"
 #endif
 
 #if HAVE_MKSTEMPS
-foreign import ccall unsafe "HsUnix.h __hscore_mkstemps"
+foreign import ccall unsafe "HsUnix.h __hstmp_mkstemps"
   c_mkstemps :: CString -> CInt -> IO CInt
 #endif
 
@@ -92,7 +92,7 @@ mkstemps = error "System.Posix.Temp.mkstemps: not supported"
 #endif
 
 #if HAVE_MKDTEMP
-foreign import ccall unsafe "HsUnix.h __hscore_mkdtemp"
+foreign import ccall unsafe "HsUnix.h __hstmp_mkdtemp"
   c_mkdtemp :: CString -> IO CString
 #endif
 
