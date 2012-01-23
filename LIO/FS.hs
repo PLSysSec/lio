@@ -494,7 +494,7 @@ unlabelFilePathP p' (LFilePathTCB l) = withCombinedPrivs p' $ \p -> unlabelP p l
 -- open the file.
 unlabelFilePath :: LabelState l p s
                  => LFilePath l -> LIO l p s FilePath
-unlabelFilePath f = getPrivileges >>= \p -> unlabelFilePathP p f
+unlabelFilePath = unlabelFilePathP noPrivs
 
 -- | Given a pathname (forced to be relative to the root of the
 -- labeled filesystem), find the path to the corresponding object.
@@ -511,7 +511,7 @@ unlabelFilePath f = getPrivileges >>= \p -> unlabelFilePathP p f
 lookupObjPath :: (LabelState l p s, Serialize l)
               => FilePath  -- ^ Path to object
               -> LIO l p s (LFilePath l)
-lookupObjPath f = getPrivileges >>= \p -> lookupObjPathP p f
+lookupObjPath = lookupObjPathP noPrivs
 
 -- | Same as 'lookupObjPath' but takes an additional privilege object
 -- that is exercised when raising the current label.

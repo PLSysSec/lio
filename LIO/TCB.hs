@@ -60,7 +60,7 @@ module LIO.TCB (-- * Basic Label Functions
                , withCombinedPrivs 
                -- * Labeled IO Monad (LIO)
                -- $LIO
-               , LIO, LabelState
+               , LIO(..), LabelState
                , evalLIO, runLIO
                , newState
                , getLabel, setLabelP
@@ -544,7 +544,7 @@ labelOf (LabeledTCB l _) = l
 -- @ccurrent@, then the label @l@ specified must satisfy
 -- @lcurrent ``leq`` l && l ``leq`` ccurrent@.
 label :: (LabelState l p s) => l -> a -> LIO l p s (Labeled l a)
-label l a = getPrivileges >>= \p -> labelP p l a
+label = labelP noPrivs
 
 -- | Constructs a 'Labeled' using privilege to allow the `Labeled`'s label
 -- to be below the current label.  If the current label is @lcurrent@
@@ -576,7 +576,7 @@ labelTCB l a = LabeledTCB l a
 -- However, you can use 'labelOf' to check if 'unlabel' will succeed
 -- without throwing an exception.
 unlabel :: (LabelState l p s) => Labeled l a -> LIO l p s a
-unlabel x = getPrivileges >>= \p -> unlabelP p x
+unlabel = unlabelP noPrivs
 
 -- | Extracts the value of an 'Labeled' just like 'unlabel', but takes a
 -- privilege argument to minimize the amount the current label must be
@@ -634,7 +634,7 @@ toLabeled :: (LabelState l p s)
                --  inner-computations' observation
           -> LIO l p s a -- ^ Inner computation
           -> LIO l p s (Labeled l a)
-toLabeled l x = getPrivileges >>= \p -> toLabeledP p l x
+toLabeled = toLabeledP noPrivs
 {-# WARNING toLabeled "toLabeled is susceptible to termination attacks" #-}
 
 -- | Same as 'toLabeled' but allows one to supply a privilege object
@@ -651,7 +651,7 @@ toLabeledP p' l m = withCombinedPrivs p' $ \p -> do
   res <- (Right <$> m) `catchTCB` (return . Left .  (lubErr l))
   s <- getTCB
   let lastL = lioL s
-  putTCB s { lioL = lioL save_s, lioC = lioC save_s}
+  putTCB s { lioL = lioL save_s, lioC = lioC save_s, lioP = lioP save_s }
   if leqp p lastL l
     then either (ioTCB . throwIO) (return . LabeledTCB l) res
     else let l' = lub lastL l
@@ -680,7 +680,7 @@ toLabeledP p' l m = withCombinedPrivs p' $ \p -> do
 -- WARNING: discard is susceptible to termination attacks.
 --
 discard :: (LabelState l p s) =>  l -> LIO l p s a -> LIO l p s ()
-discard l x = getPrivileges >>= \p -> discardP p l x
+discard = discardP noPrivs
 {-# WARNING discard "discard is susceptible to termination attacks" #-}
 
 -- | Same as 'discard', but uses privileges when comparing initial and
@@ -802,7 +802,7 @@ taintP p' l = withCombinedPrivs p' $ \p -> gtaint (lostar p) l
 -- @l' ``leq`` l@ before doing the same thing as @'taint' l@.  Throws
 -- @'LerrHigh'@ if the current label @l'@ is too high.
 wguard :: (LabelState l p s) => l -> LIO l p s ()
-wguard l = getPrivileges >>= \p -> wguardP p l
+wguard = wguardP noPrivs
 
 -- |Like 'wguard', but takes privilege argument to be more permissive.
 wguardP :: (LabelState l p s) => p -> l -> LIO l p s ()
@@ -817,7 +817,7 @@ wguardP p' l = withCombinedPrivs p' $ \p -> do
 -- objects--untrusted code shouldn't be able to create an object
 -- labeled @l@ unless @aguard l@ does not throw an exception.
 aguard :: (LabelState l p s) => l -> LIO l p s ()
-aguard l = getPrivileges >>= \p -> aguardP p l
+aguard = aguardP noPrivs
 
 -- | Like 'aguardP', but takes privilege argument to be more permissive.
 aguardP :: (LabelState l p s) => p -> l -> LIO l p s ()
@@ -933,7 +933,7 @@ instance (LabelState l p s) => MonadCatch (LIO l p s) where
     --
     -- > catch = catchP noPrivs
     --
-    catch x h = getPrivileges >>= \p -> catchP p x h
+    catch = catchP noPrivs
 
 
 -- | Catches an exception, so long as the label at the point where the

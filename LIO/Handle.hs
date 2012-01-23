@@ -139,13 +139,11 @@ labelOfHandle (LHandleTCB l _) = l
 
 instance (Serialize l, LabelState l p s)
           => DirectoryOps (LHandle l) (LIO l p s) where
-  getDirectoryContents f = getPrivileges >>= \p -> getDirectoryContentsP p f
+  getDirectoryContents = getDirectoryContentsP noPrivs
   createDirectory  f   = do l <- getLabel 
-                            p <- getPrivileges
-                            createDirectoryP p l f
+                            createDirectoryP noPrivs l f
   openFile f m         = do l <- getLabel 
-                            p <- getPrivileges
-                            openFileP p (Just l) f m
+                            openFileP noPrivs (Just l) f m
 
 -- | Get the contents of a directory. The current label is raised to
 -- the join of the current label and that of all the directories
@@ -233,17 +231,17 @@ openFileP p mlfile path' mode = withCombinedPrivs p $ \priv -> do
             
 
 instance (LabelState l p s) => CloseOps (LHandle l) (LIO l p s) where
-  hClose h = getPrivileges >>= \p -> hCloseP p h
-  hFlush h = getPrivileges >>= \p -> hFlushP p h
+  hClose = hCloseP noPrivs
+  hFlush = hFlushP noPrivs
 
 instance (LabelState l p s, CloseOps (LHandle l) (LIO l p s)
          , HandleOps IO.Handle b IO) =>
            HandleOps (LHandle l) b (LIO l p s) where
-  hGet h i            = getPrivileges >>= \p -> hGetP p h i
-  hGetNonBlocking h i = getPrivileges >>= \p -> hGetNonBlockingP p h i
-  hGetContents h      = getPrivileges >>= \p -> hGetContentsP p h
-  hPut h b            = getPrivileges >>= \p -> hPutP p h b
-  hPutStrLn h b       = getPrivileges >>= \p -> hPutStrLnP p h b
+  hGet            = hGetP noPrivs
+  hGetNonBlocking = hGetNonBlockingP noPrivs
+  hGetContents    = hGetContentsP noPrivs
+  hPut            = hPutP noPrivs
+  hPutStrLn       = hPutStrLnP noPrivs
 
 -- | Close a labeled file handle.
 hCloseP :: (LabelState l p s) => p -> LHandle l -> LIO l p s ()
@@ -334,8 +332,7 @@ writeFileP p' path contents = withCombinedPrivs p' $ \privs -> do
 -- | Same as 'writeFile' but also takes the label of the file.
 writeFileL  :: (HandleOps IO.Handle b IO, LabelState l p s, Serialize l) =>
                l -> FilePath -> b -> LIO l p s ()
-writeFileL l path contents = getPrivileges >>= \p ->
-                             writeFileLP p l path contents
+writeFileL = writeFileLP noPrivs
 
 -- | Same as 'writeFileL' but uses privilege in opening the file.
 writeFileLP  :: (HandleOps IO.Handle b IO, LabelState l p s, Serialize l) =>

@@ -74,7 +74,7 @@ lFork :: (LabelState l p s)
       => l                    -- ^ Label of result
       -> LIO l p s a          -- ^ Computation to execute in separate thread
       -> LIO l p s (LRes l a) -- ^ Labeled result
-lFork l m = getPrivileges >>= \p -> lForkP p l m
+lFork = lForkP noPrivs
 
 -- | A labeled thread result is simply a wrapper for a labeled MVar. A
 -- thread can observe the result of another thread, only after raising
@@ -99,4 +99,4 @@ lWaitP p' (LRes mv) = withCombinedPrivs p' $ \p -> do
 -- the thread reads values above the result label, an exception is
 -- thrown in place of the result.
 lWait :: (LabelState l p s) => LRes l a -> LIO l p s a
-lWait v = getPrivileges >>= \p -> lWaitP p v
+lWait = lWaitP noPrivs
