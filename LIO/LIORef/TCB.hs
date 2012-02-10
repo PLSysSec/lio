@@ -1,6 +1,9 @@
 {-# LANGUAGE CPP #-}
-#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702) && (__GLASGOW_HASKELL__ < 704)
 {-# LANGUAGE SafeImports #-}
+#endif
+#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 704)
+{-# LANGUAGE Unsafe #-}
 #endif
 -- |This module implements labeled IORefs.  The interface is analogous
 -- to "Data.IORef", but the operations take place in the LIO monad.

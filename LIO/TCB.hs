@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-#if __GLASGOW_HASKELL__ >= 702
+#if __GLASGOW_HASKELL__ >= 702 && __GLASGOW_HASKELL__ < 704
 {-# LANGUAGE SafeImports #-}
 #endif
 #if __GLASGOW_HASKELL__ >= 704
