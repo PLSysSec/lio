@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+#if __GLASGOW_HASKELL__ >= 702
 {-# LANGUAGE Trustworthy #-}
 #endif
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -60,7 +60,7 @@ module LIO.Handle (
                   ) where
 
 
-#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+#if __GLASGOW_HASKELL__ >= 702
 import safe Prelude hiding (catch, readFile, writeFile)
 import safe System.IO (IOMode(..))
 import safe qualified System.IO as IO

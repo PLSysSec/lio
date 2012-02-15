@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP #-}
-#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+#if __GLASGOW_HASKELL__ >= 702
 {-# LANGUAGE Safe #-}
 #endif
 -- |This module implements labeled IORefs.  The interface is analogous

@@ -26,7 +26,6 @@ import Control.Exception (SomeException, ErrorCall(..))
 import Control.Monad.State
 import Data.Maybe
 import Data.List
-import Data.Monoid
 
 import LIO.TCB
 import LIO.LIORef
@@ -146,7 +145,7 @@ getCurUser = do
 getPrivs :: ReviewDC DCPrivTCB
 getPrivs = do 
   u <- getCurUser
-  return $ maybe mempty (genPrivTCB . name) u
+  return $ maybe noPrivs (genPrivTCB . name) u
 
 -- ^ Write new users
 putUsers :: [User] -> ReviewDC ()

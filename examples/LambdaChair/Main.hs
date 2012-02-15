@@ -1,11 +1,14 @@
 {-# LANGUAGE CPP #-}
-#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+#if __GLASGOW_HASKELL__ >= 702 && __GLASGOW_HASKELL__ < 704
 {-# LANGUAGE SafeImports #-}
+#endif
+#if __GLASGOW_HASKELL__ >= 704
+{-# LANGUAGE Unsafe #-}
 #endif
 import LambdaChair
 import DCLabel.PrettyShow
 
-#if defined(__GLASGOW_HASKELL__) && (__GLASGOW_HASKELL__ >= 702)
+#if __GLASGOW_HASKELL__ >= 702
 import safe AliceCode as Alice
 import safe BobCode as Bob
 #else
