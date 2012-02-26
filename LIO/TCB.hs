@@ -56,8 +56,11 @@ module LIO.TCB (-- * Basic Label Functions
                 -- * Basic Privilige Functions
                 -- $privs
                , Priv(..), noPrivs
-               , getPrivileges, withPrivileges
-               , withCombinedPrivs 
+               , getPrivileges
+               , setPrivileges
+               , withPrivileges
+               , withCombinedPrivs
+               , dropPrivileges 
                -- * Labeled IO Monad (LIO)
                -- $LIO
                , LIO(..), LabelState
@@ -105,19 +108,10 @@ module LIO.TCB (-- * Basic Label Functions
                , ioTCB, rtioTCB
                ) where
 
-#if __GLASGOW_HASKELL__ >= 702
-import safe Prelude hiding (catch)
-import safe Control.Exception hiding (catch, handle, throw, throwIO,
-                                 onException, block, unblock, evaluate)
-import safe qualified Control.Exception as E
-import safe Data.Monoid
-import safe Data.Typeable
-import safe Data.Functor
-import safe Control.Applicative
-import safe Text.Read (minPrec)
-import safe LIO.MonadCatch
-#else
 import Prelude hiding (catch)
+import Control.Exception hiding (catch, handle, throw, throwIO,
+                                 onException, block, unblock,
+                                 evaluate, finally)
 import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
@@ -125,7 +119,6 @@ import Data.Functor
 import Control.Applicative
 import Text.Read (minPrec)
 import LIO.MonadCatch
-#endif
 
 import Control.Monad.Error
 import Control.Monad.State.Lazy hiding (put, get)
@@ -437,12 +430,30 @@ getPrivileges = lioP <$> getTCB
 -- @withPrivileges@ block.
 withPrivileges :: (LabelState l p s) => p -> LIO l p s a -> LIO l p s a
 withPrivileges p m = do
-  s <- getTCB
   p0 <- getPrivileges
-  putTCB s { lioP = p `mappend` p0 }
-  a <- m
-  putTCB s { lioP = p0 }
+  setPrivileges p
+  a <- m `finally` setPrivileges p0
   return a
+
+-- | Execute an 'LIO' action with the combination of the supplied
+-- privileges (usually passed to @...P@ functions) and current
+-- privileges.
+withCombinedPrivs :: LabelState l p s => p -> (p -> LIO l p s a) -> LIO l p s a
+withCombinedPrivs p0 io = do
+  p1 <- getPrivileges
+  io (p0 `mappend` p1)
+
+-- | Set the underlying privileges. Although this function is not
+-- unsafe, it is not exported by "LIO.Safe" as it provides a higher security
+-- risk. Users are encouraged to use 'withPrivileges'.
+setPrivileges :: (LabelState l p s) => p -> LIO l p s ()
+setPrivileges p = do s <- getTCB
+                     putTCB $ s { lioP = p }
+
+-- | Drop all privileges. It is useful to remove all privileges when
+-- executing some untrusted code withing a 'withPrivileges' block.
+dropPrivileges :: (LabelState l p s) => LIO l p s ()
+dropPrivileges = setPrivileges noPrivs
 
 -- | If the current label is @oldLabel@ and the current clearance is
 -- @clearance@, this function allows code to raise the label to
@@ -1029,16 +1040,3 @@ instance (LabelState l p s) => OnExceptionTCB (LIO l p s) where
 instance (LabelState l p s) => MonadError IOException (LIO l p s) where
     throwError = throwIO
     catchError = catch
-
-
---
--- Misc helper
---
-
--- | Execute an 'LIO' action with the combination of the supplied
--- privileges (usually passed to @...P@ functions) and current
--- privileges.
-withCombinedPrivs :: LabelState l p s => p -> (p -> LIO l p s a) -> LIO l p s a
-withCombinedPrivs p0 io = do
-  p1 <- getPrivileges
-  io (p0 `mappend` p1)

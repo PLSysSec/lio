@@ -11,6 +11,7 @@ module LIO.Safe ( Label(..)
                  , Priv(..), noPrivs
                  , getPrivileges, withPrivileges
                  , withCombinedPrivs 
+                 , dropPrivileges 
                  , LIO, LabelState
                  , evalLIO
                  , getLabel, setLabelP
@@ -32,6 +33,7 @@ import LIO.TCB ( Label(..)
                , Priv(..), noPrivs
                , getPrivileges, withPrivileges
                , withCombinedPrivs 
+               , dropPrivileges 
                , LIO, LabelState
                , evalLIO
                , getLabel, setLabelP
