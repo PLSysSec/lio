@@ -20,6 +20,8 @@ module LIO.DCLabel ( -- * DCLabel export
                    , DCPriv, DCPrivTCB
                      -- * Useful aliases for the LIO Monad
                    , DCLabeled, DC, evalDC, evalDCWithRoot 
+                     -- * Public label
+                   , lpub
                    )where
 
 import LIO.TCB
@@ -126,3 +128,7 @@ evalDC m = evalLIO m ()
 -- | Same as 'evalDC', but with support for filesystem.
 evalDCWithRoot ::  FilePath -> Maybe DCLabel -> DC a -> IO (a, DCLabel)
 evalDCWithRoot path ml act = evalWithRoot path ml act ()
+
+-- | Label corresponding to public data.
+lpub :: DCLabel
+lpub = newDC (<>) (<>)
