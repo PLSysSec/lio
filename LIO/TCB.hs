@@ -75,6 +75,7 @@ module LIO.TCB (-- * Basic Label Functions
                , label, labelP
                , unlabel, unlabelP
                , taintLabeled
+               , untaintLabeled, untaintLabeledP
                , toLabeled, toLabeledP, discard, discardP
                -- ** LIO Guards
                -- $guards
@@ -613,18 +614,18 @@ taintLabeled l (LabeledTCB la a) = do
   return $ LabeledTCB (lub l la) a
 
 
--- | Lowers the label of a 'Labeled' to the 'lostar' of it's current label
--- and the value supplied subject to the current prividege.
+-- | Downgrades the label of a 'Labeled' as much as possible given the
+-- current privilege.
 untaintLabeled :: (LabelState l p s)
-               => l -> Labeled l a -> LIO l p s (Labeled l a)
+               => Labeled l a -> LIO l p s (Labeled l a)
 untaintLabeled = untaintLabeledP noPrivs
 
 -- | Same as 'untaintLabeled' but combines the current privilege with the
 -- supplied privilege when downgrading the label.
 untaintLabeledP :: (LabelState l p s)
-                => p -> l -> Labeled l a -> LIO l p s (Labeled l a)
-untaintLabeledP p' l (LabeledTCB la a) = withCombinedPrivs p' $
-  \p -> return $ LabeledTCB (lostar p l la) a
+                => p -> Labeled l a -> LIO l p s (Labeled l a)
+untaintLabeledP p' (LabeledTCB la a) = withCombinedPrivs p' $
+  \p -> return $ LabeledTCB (lostar p la lbot) a
 
 -- | @toLabeled@ is the dual of 'unlabel'.  It allows one to invoke
 -- computations that would raise the current label, but without
