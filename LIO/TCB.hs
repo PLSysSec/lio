@@ -617,15 +617,25 @@ taintLabeled l (LabeledTCB la a) = do
 -- | Downgrades the label of a 'Labeled' as much as possible given the
 -- current privilege.
 untaintLabeled :: (LabelState l p s)
-               => Labeled l a -> LIO l p s (Labeled l a)
+               => l -> Labeled l a -> LIO l p s (Labeled l a)
 untaintLabeled = untaintLabeledP noPrivs
 
 -- | Same as 'untaintLabeled' but combines the current privilege with the
 -- supplied privilege when downgrading the label.
 untaintLabeledP :: (LabelState l p s)
-                => p -> Labeled l a -> LIO l p s (Labeled l a)
-untaintLabeledP p' (LabeledTCB la a) = withCombinedPrivs p' $
-  \p -> return $ LabeledTCB (lostar p la lbot) a
+                => p -> l -> Labeled l a -> LIO l p s (Labeled l a)
+untaintLabeledP p target lbld =
+  relabelP p (lostar p (labelOf lbld) target) lbld
+
+-- | Relabeles a @Labeled@ value if the given privilege combined
+-- with the current privileges permits it.
+relabelP :: (LabelState l p s)
+        => p -> l -> Labeled l a -> LIO l p s (Labeled l a)
+relabelP p' lbl (LabeledTCB la a) = withCombinedPrivs p' $
+  \p -> do
+    if leqp p lbl la && leqp p la lbl then
+      return $ LabeledTCB lbl a
+      else throwIO LerrClearance
 
 -- | @toLabeled@ is the dual of 'unlabel'.  It allows one to invoke
 -- computations that would raise the current label, but without
