@@ -20,6 +20,8 @@ module LIO.Safe ( Label(..)
                  , label, labelP
                  , unlabel, unlabelP
                  , taintLabeled
+                 , untaintLabeled, untaintLabeledP
+                 , relabelP
                  , toLabeled, toLabeledP, discard, discardP
                  , taint, taintP
                  , wguard, wguardP, aguard, aguardP
@@ -42,6 +44,8 @@ import LIO.TCB ( Label(..)
                , label, labelP
                , unlabel, unlabelP
                , taintLabeled
+               , untaintLabeled, untaintLabeledP
+               , relabelP
                , toLabeled, toLabeledP, discard, discardP
                , taint, taintP
                , wguard, wguardP, aguard, aguardP

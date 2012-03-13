@@ -76,6 +76,7 @@ module LIO.TCB (-- * Basic Label Functions
                , unlabel, unlabelP
                , taintLabeled
                , untaintLabeled, untaintLabeledP
+               , relabelP
                , toLabeled, toLabeledP, discard, discardP
                -- ** LIO Guards
                -- $guards
