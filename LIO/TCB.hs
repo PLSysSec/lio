@@ -636,7 +636,7 @@ relabelP p' lbl (LabeledTCB la a) = withCombinedPrivs p' $
   \p -> do
     if leqp p lbl la && leqp p la lbl then
       return $ LabeledTCB lbl a
-      else throwIO LerrClearance
+      else throwIO LerrPriv
 
 -- | @toLabeled@ is the dual of 'unlabel'.  It allows one to invoke
 -- computations that would raise the current label, but without
