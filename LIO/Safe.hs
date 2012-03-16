@@ -18,11 +18,14 @@ module LIO.Safe ( Label(..)
                  , getClearance, lowerClr, lowerClrP, withClearance
                  , labelOf
                  , label, labelP
-                 , unlabel, unlabelP
+                 , Unlabel, unlabel, unlabelP
                  , taintLabeled
+                 , LabeledThunk
+                 , labelOfThunk, labelOfThunkP
+                 , labelThunk, labelThunkP
                  , untaintLabeled, untaintLabeledP
                  , relabelP
-                 , toLabeled, toLabeledP, discard, discardP
+                 , toLabeledThunk, discard
                  , taint, taintP
                  , wguard, wguardP, aguard, aguardP
                  , Labeled
@@ -31,26 +34,4 @@ module LIO.Safe ( Label(..)
                  , evaluate
                  ) where
 
-import LIO.TCB ( Label(..)
-               , Priv(..), noPrivs
-               , getPrivileges, withPrivileges
-               , withCombinedPrivs 
-               , dropPrivileges 
-               , LIO, LabelState
-               , evalLIO
-               , getLabel, setLabelP
-               , getClearance, lowerClr, lowerClrP, withClearance
-               , labelOf
-               , label, labelP
-               , unlabel, unlabelP
-               , taintLabeled
-               , untaintLabeled, untaintLabeledP
-               , relabelP
-               , toLabeled, toLabeledP, discard, discardP
-               , taint, taintP
-               , wguard, wguardP, aguard, aguardP
-               , Labeled
-               , LabelFault(..)
-               , catchP, handleP, onExceptionP, bracketP
-               , evaluate
-               )
+import LIO.TCB

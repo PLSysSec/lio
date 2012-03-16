@@ -30,15 +30,21 @@
 -- A data structure 'Labeled' (labeled value) protects access to pure
 -- values.  Without the appropriate privileges, one cannot produce a
 -- pure value that depends on a secret 'Labeled', or conversely produce a
--- high-integrity 'Labeled' based on pure data.  The function 'toLabeled'
--- allows one to seal off the results of an LIO computation inside an
--- 'Labeled' without tainting the current flow of execution.  'unlabel'
--- conversely allows one to use the value stored within a 'Labeled'.
+-- high-integrity 'Labeled' based on pure data. 
 --
--- We note that using 'toLabeled' is /not/ safe with respect to
--- the termination covert channel. Specifically, LIO with 'toLabeled'
--- is only termination-insensitive non-interfering. For a
--- termination-sensitive 'toLabeled'-like function, see "LIO.Concurrent".
+-- Similarly a data structure 'LabledThunk' (labeld thunk) protects
+-- the result of a computation that possibly terminated with an
+-- exception. Specifically, the function 'toLabeledThunk'
+-- allows one to seal off the results of an LIO computation inside a
+-- 'LabeledThunk' without tainting the current flow of execution. 
+-- 'unlabel' conversely allows one to use the value stored within a
+-- 'LabeledThunk'.
+--
+-- We note that using 'toLabeledThunk' is /not/ safe with respect to the
+-- termination covert channel. Specifically, LIO with 'toLabeledThunk' is
+-- only termination-insensitive non-interfering. For a
+-- termination-sensitive 'toLabeledThunk'-like function, see
+-- "LIO.Concurrent".
 -- 
 -- Any code that imports this module is part of the
 -- /Trusted Computing Base/ (TCB) of the system.  Hence, untrusted
@@ -73,11 +79,15 @@ module LIO.TCB (-- * Basic Label Functions
                , Labeled
                , labelOf
                , label, labelP
-               , unlabel, unlabelP
+               , Unlabel(..)
                , taintLabeled
                , untaintLabeled, untaintLabeledP
                , relabelP
-               , toLabeled, toLabeledP, discard, discardP
+               -- * Labeled Thunks
+               , LabeledThunk
+               , labelOfThunk, labelOfThunkP
+               , labelThunk, labelThunkP
+               , toLabeledThunk, discard
                -- ** LIO Guards
                -- $guards
                , taint, taintP
@@ -104,7 +114,10 @@ module LIO.TCB (-- * Basic Label Functions
                , setLabelTCB, lowerClrTCB
                -- ** Labeled Values
                , ShowTCB(..), ReadTCB(..)
-               , labelTCB, unlabelTCB
+               , labelTCB
+               -- ** Labeled Thunks
+               , labelThunkTCB, labelOfThunkTCB
+               , unlabelThunkTCB 
                -- ** Labeled Exceptions
                , catchTCB, OnExceptionTCB(..)
                , ioTCB, rtioTCB
@@ -507,7 +520,7 @@ lowerClrTCB l = getTCB >>= doit
 -- | Lowers the clearance of a computation, then restores the
 -- clearance to its previous value.  Useful to wrap around a
 -- computation if you want to be sure you can catch exceptions thrown
--- by it.  Also useful to wrap around 'toLabeled' to ensure that the
+-- by it.  Also useful to wrap around 'toLabeledThunk' to ensure that the
 -- computation does not access data exceeding a particular label.  If
 -- @withClearance@ is given a label that can't flow to the current
 -- clearance, then the clearance is lowered to the greatest lower
@@ -579,32 +592,41 @@ labelP p' l a = withCombinedPrivs p' $ \p -> getTCB >>= doit p
 labelTCB :: Label l => l -> a -> Labeled l a
 labelTCB l a = LabeledTCB l a
 
--- | Within the 'LIO' monad, this function takes a 'Labeled' and returns
--- the value.  Thus, in the 'LIO' monad one can say:
 --
--- > x <- unlabel (xv :: Labeled SomeLabelType Int)
+-- Unlabeling labeled values
 --
--- And now it is possible to use the value of @x@, which is the pure
--- value of what was stored in @xv@.  Of course, @unlabel@ also raises
--- the current label.  If raising the label would exceed the current
--- clearance, then @unlabel@ throws 'LerrClearance'.
--- However, you can use 'labelOf' to check if 'unlabel' will succeed
--- without throwing an exception.
-unlabel :: (LabelState l p s) => Labeled l a -> LIO l p s a
-unlabel = unlabelP noPrivs
 
--- | Extracts the value of an 'Labeled' just like 'unlabel', but takes a
--- privilege argument to minimize the amount the current label must be
--- raised.  Will still throw 'LerrClearance' under the same
--- circumstances as 'unlabel'.
-unlabelP :: (LabelState l p s) => p -> Labeled l a -> LIO l p s a
-unlabelP p' (LabeledTCB la a) =  withCombinedPrivs p' $ \p ->
-                                  taintP p la >> return a
+-- | General class used for unlabeling labeled values (e.g., values of
+-- type 'Labeled', or 'LabeledThunk')
+class Unlabel labeledVal where
+  -- | Within the 'LIO' monad, this function takes a 'Labeled'-like
+  -- value  and returns the unlabeledvalue.  Thus, in the 'LIO' monad
+  -- one can say:
+  --
+  -- > x <- unlabel (xv :: LabeledTypeConstructor SomeLabelType Int)
+  --
+  -- And now it is possible to use the value of @x@, which is the pure
+  -- value of what was stored in @xv@.  Of course, @unlabel@ also raises
+  -- the current label.  If raising the label would exceed the current
+  -- clearance, then @unlabel@ throws 'LerrClearance'.
+  -- However, you can use 'labelOf' to check if 'unlabel' will succeed
+  -- without throwing an exception.
+  unlabel :: (LabelState l p s)  => labeledVal l a -> LIO l p s a
+  unlabel = unlabelP noPrivs
+  -- | Like 'unlabel', but takes a privilege argument to minimize the
+  -- amount the current label must be raised.  Will still throw
+  -- 'LerrClearance' under the same circumstances as 'unlabel'.
+  unlabelP :: (LabelState l p s) => p -> labeledVal l a -> LIO l p s a
+  -- | Same as 'unlabel', discarding the label and any IFC protection.
+  unlabelTCB :: Label l => labeledVal l a -> a
 
--- | Extracts the value from an 'Labeled', discarding the label and any
--- protection.
-unlabelTCB :: Label l => Labeled l a -> a
-unlabelTCB (LabeledTCB _ a) = a
+
+-- | Unlabeling functions for 'Labeled' type.
+instance Unlabel Labeled where
+  unlabel = unlabelP noPrivs
+  unlabelP p' (LabeledTCB la a) =  withCombinedPrivs p' $ \p ->
+                                    taintP p la >> return a
+  unlabelTCB (LabeledTCB _ a) = a
 
 -- | Raises the label of a 'Labeled' to the 'lub' of it's current label
 -- and the value supplied.  The label supplied must be less than the
@@ -634,71 +656,108 @@ untaintLabeledP p target lbld =
 -- with the current privileges permits it.
 relabelP :: (LabelState l p s)
         => p -> l -> Labeled l a -> LIO l p s (Labeled l a)
-relabelP p' lbl (LabeledTCB la a) = withCombinedPrivs p' $
-  \p -> do
-    if leqp p lbl la && leqp p la lbl then
-      return $ LabeledTCB lbl a
-      else throwIO LerrPriv
+relabelP p' lbl (LabeledTCB la a) = withCombinedPrivs p' $ \p -> do
+  if leqp p lbl la && leqp p la lbl
+    then return $ LabeledTCB lbl a
+    else throwIO LerrPriv
 
--- | @toLabeled@ is the dual of 'unlabel'.  It allows one to invoke
+
+--
+-- Labeled thunks
+--
+
+-- | A labeled thunk is either a labeled value that can be an
+-- exception or \"normal\" value.
+-- /Note:/ the label of a @LabeledThunk@ is protected by the label
+-- itself, and thus the current label must be raised to the join of the
+-- two labeles when observing the label (i.e., by a \"labelOfThunk\"
+-- function).
+newtype LabeledThunk l a = LabeledThunkTCB (Labeled l (Either SomeException a))
+
+-- | Create a 'LabelThunk' given a label and either exception or
+-- value. It must be that the label be between the current label and
+-- clearance.
+labelThunk :: LabelState l p s
+           => l -> Either SomeException a -> LIO l p s (LabeledThunk l a)
+labelThunk = labelThunkP noPrivs
+
+-- | Same as 'LabeledThunk' but uses privileges when comparing labels.
+labelThunkP :: LabelState l p s
+           => p -> l -> Either SomeException a -> LIO l p s (LabeledThunk l a)
+labelThunkP p l v = LabeledThunkTCB <$> labelP p l v
+
+-- | Same as 'LabeledThunk' but ignores IFC.
+labelThunkTCB :: LabelState l p s
+              => l -> Either SomeException a -> LabeledThunk l a
+labelThunkTCB l v = LabeledThunkTCB $ labelTCB l v
+
+-- | Get the label of a 'LabeledThunk'. Note that unlike 'Labeled' the
+-- label of a 'LabeledThunk' is protected by the label itself and thus
+-- the current label is raised to reflect this observation.
+labelOfThunk :: LabelState l p s => LabeledThunk l a -> LIO l p s l
+labelOfThunk = labelOfThunkP noPrivs
+
+-- | Same as 'labelOfThunk' but uses privileges when raising the current label.
+labelOfThunkP :: LabelState l p s
+              => p -> LabeledThunk l a -> LIO l p s l
+labelOfThunkP p (LabeledThunkTCB lv) = do
+  let l = labelOf lv
+  taintP p l
+  return l
+
+-- | Same as 'labelOfThunk' but ignores IFC.
+labelOfThunkTCB :: LabelState l p s => LabeledThunk l a ->  l
+labelOfThunkTCB (LabeledThunkTCB lv) = labelOf lv
+
+-- | Unlabeling functions for 'Labeled' type.
+instance Unlabel LabeledThunk where
+  unlabel = unlabelP noPrivs
+  unlabelP p' (LabeledThunkTCB lv) = withCombinedPrivs p' $ \p -> do
+    taintP p (labelOf lv)
+    either throwIO return $ unlabelTCB lv
+  unlabelTCB t = case unlabelThunkTCB t of
+                  Right x -> x
+                  Left e  -> error $ "unlabelTCB: exception " ++ show e
+
+-- | Trusted unlabel-'LabeledThunk' function.
+unlabelThunkTCB :: Label l => LabeledThunk l a -> Either SomeException a
+unlabelThunkTCB (LabeledThunkTCB lv) = unlabelTCB lv
+
+-- | @toLabeledThunk@ is the dual of 'unlabel'.  It allows one to invoke
 -- computations that would raise the current label, but without
 -- actually raising the label.  Instead, the result of the
--- computation is packaged into a 'Labeled' with a supplied
--- label. (Of couse, the computation executed by @toLabeled@ must
--- most observe any data whose label exceeds the supplied label.)
+-- computation is packaged into a 'LabeledThunk'a.
 --
 -- To get at the result of the computation one will have to call
 -- 'unlabel' and raise the label, but this can be postponed, or
--- done inside some other call to 'toLabeled'.  This suggests that
--- the provided label must be above the current label and below
--- the current clearance.
+-- done inside some other call to @toLabeledThunk@. 
 --
--- Note that @toLabeled@ always restores the clearance to whatever
+-- Note that @toLabeledThunk@ always restores the clearance to whatever
 -- it was when it was invoked, regardless of what occurred in the
--- computation producing the value of the 'Labeled'.  This highlights
--- one main use of clearance: to ensure that a @Labeled@ computed
+-- computation producing the value of the 'LabeledThunk'.  This highlights
+-- one main use of clearance: to ensure that a @LabeledThunk@ computed
 -- does not exceed a particular label.
 --
--- If an exception is thrown a a @toLabeled@ block, the join of
--- the exception label and supplied label will be used as the new
--- label.  If the current label of the inner computation is above
--- the supplied label, an exception (whose label will reflect this
--- observatoin) is throw by @toLabeled@.
+-- If an exception is thrown a a @toLabeledThunk@ block, the join of
+-- the exception label and current label will be used as the label of
+-- the thunk. 
 --
--- WARNING: @toLabeled@ is susceptible to termination attacks.
+-- WARNING: @toLabeledThunk@ is susceptible to termination attacks.
 --
-toLabeled :: (LabelState l p s)
-          => l -- ^ Label of result and upper bound on
-               --  inner-computations' observation
-          -> LIO l p s a -- ^ Inner computation
-          -> LIO l p s (Labeled l a)
-toLabeled = toLabeledP noPrivs
-{-# WARNING toLabeled "toLabeled is susceptible to termination attacks" #-}
-
--- | Same as 'toLabeled' but allows one to supply a privilege object
--- when comparing the initial and final label of the computation.
---
--- WARNING: @toLabeledP@ is susceptible to termination attacks.
---
-toLabeledP :: (LabelState l p s)
-           => p -> l -> LIO l p s a -> LIO l p s (Labeled l a)
-toLabeledP p' l m = withCombinedPrivs p' $ \p -> do
-  aguardP p l
+toLabeledThunk :: (LabelState l p s)
+          => LIO l p s a -- ^ Inner computation
+          -> LIO l p s (LabeledThunk l a)
+toLabeledThunk m = do
   save_s <- getTCB
   --
-  res <- (Right <$> m) `catchTCB` (return . Left .  (lubErr l))
+  res <- (Right <$> m) `catchTCB` (return . Left)
   s <- getTCB
   let lastL = lioL s
   putTCB s { lioL = lioL save_s, lioC = lioC save_s, lioP = lioP save_s }
-  if leqp p lastL l
-    then either (ioTCB . throwIO) (return . LabeledTCB l) res
-    else let l' = lub lastL l
-         in ioTCB . throwIO . mkErr . (lub l') $ either getELabel (const l') res
-    where mkErr le = LabeledExceptionTCB le $ toException LerrLow
-          lubErr lnew (LabeledExceptionTCB le e) =
-                  LabeledExceptionTCB (le `lub` lnew) e
-          getELabel (LabeledExceptionTCB le _) = le
-{-# WARNING toLabeledP "toLabeledP is susceptible to termination attacks" #-}
+  return $ case res of
+    Right r -> labelThunkTCB lastL (Right r)
+    Left (LabeledExceptionTCB le e) -> labelThunkTCB (lastL `lub` le) (Left e)
+{-# DEPRECATED toLabeledThunk "toLabeledThunk is susceptible to termination attacks, use lFork and lWait." #-}
 
 -- | Executes a computation that would raise the current label, but
 -- discards the result so as to keep the label the same.  Used when
@@ -707,26 +766,16 @@ toLabeledP p' l m = withCombinedPrivs p' $ \p -> do
 -- can execute
 --
 -- @
---   discard ltop $ 'hputStrLn' log_handle \"Log message\"
+--   discard $ 'hputStrLn' log_handle \"Log message\"
 -- @
 --
--- to create a log message without affecting the current label.  (Of
--- course, if @log_handle@ is closed and this throws an exception, it
--- may not be possible to catch the exception within the 'LIO' monad
--- without sufficient privileges--see 'catchP'.)
+-- to create a log message without affecting the current label.
 --
 -- WARNING: discard is susceptible to termination attacks.
 --
-discard :: (LabelState l p s) =>  l -> LIO l p s a -> LIO l p s ()
-discard = discardP noPrivs
-{-# WARNING discard "discard is susceptible to termination attacks" #-}
-
--- | Same as 'discard', but uses privileges when comparing initial and
--- final label of the computation.
-discardP :: (LabelState l p s) => p -> l -> LIO l p s a -> LIO l p s ()
-discardP p l m = toLabeledP p l m >> return ()
-{-# WARNING discardP "discardP is susceptible to termination attacks" #-}
-
+discard :: (LabelState l p s) =>  LIO l p s a -> LIO l p s ()
+discard m = void $ toLabeledThunk m
+{-# DEPRECATED discard "discard is susceptible to termination attacks, use lFork and lWait" #-}
 
 
 -- | It would be a security issue to make certain objects a member of

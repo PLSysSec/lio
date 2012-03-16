@@ -18,11 +18,12 @@ main =  do
   (_,l) <- evalDC $ do
     lb <- label m 6
     catch ( do
-      --r <- lFork ltop $ do
-      _ <- toLabeled ltop $ do
-        _ <- unlabel lb
-        throwIO (userError "label of this exception should be top, not M")
-      --lWait r
+      t <- toLabeledThunk $ do
+        b <- unlabel lb
+        if b == 5
+          then throwIO (userError "some exception")
+          else return ()
+      unlabel t
       return ()
      ) (\(e::SomeException) -> return ())
     return ()
