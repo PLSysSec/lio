@@ -19,20 +19,16 @@ module LIO.DCLabel ( -- * DCLabel export
                      -- * Renamed privileges
                    , DCPriv, DCPrivTCB
                      -- * Useful aliases for the LIO Monad
-                   , DCLabeled, DC, evalDC, evalDCWithRoot 
+                   , DCLabeled, DC, evalDC--, evalDCWithRoot 
                      -- * Public label
                    , lpub
                    )where
 
 import LIO.TCB
 
-import LIO.Handle (evalWithRoot)
+--import LIO.Handle (evalWithRoot)
 
-#if __GLASGOW_HASKELL__ >= 702
-import safe Data.Typeable
-#else
 import Data.Typeable
-#endif
 
 import DCLabel.Safe hiding ( Priv
                            , bottom
@@ -126,8 +122,8 @@ evalDC :: DC a -> IO (a, DCLabel)
 evalDC m = evalLIO m ()
 
 -- | Same as 'evalDC', but with support for filesystem.
-evalDCWithRoot ::  FilePath -> Maybe DCLabel -> DC a -> IO (a, DCLabel)
-evalDCWithRoot path ml act = evalWithRoot path ml act ()
+-- evalDCWithRoot ::  FilePath -> Maybe DCLabel -> DC a -> IO (a, DCLabel)
+-- evalDCWithRoot path ml act = evalWithRoot path ml act ()
 
 -- | Label corresponding to public data.
 lpub :: DCLabel

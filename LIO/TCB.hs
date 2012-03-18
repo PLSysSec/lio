@@ -118,6 +118,7 @@ import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
 import Data.Functor
+import Data.IORef
 import Control.Applicative
 import Text.Read (minPrec)
 import LIO.MonadCatch
@@ -435,9 +436,7 @@ withPrivileges p m = do
   p0 <- getPrivileges
   setPrivileges p
   -- restore privileges even if an exception is thrown
-  a <- m `catchTCB` (\e -> do setPrivileges p0
-                              ioTCB $ throwIO e)
-  setPrivileges p0
+  a <- m `finallyTCB` (setPrivileges p0)
   return a
 
 -- | Execute an 'LIO' action with the combination of the supplied
@@ -958,8 +957,19 @@ instance (LabelState l p s) => MonadCatch (LIO l p s) where
                 => ((forall a. LIO l p s a -> LIO l p s a) -> LIO l p s b)
                 -> LIOstate l p s
                 -> (forall a. IO a -> IO a) -> IO (b, LIOstate l p s)
-            -- this is a little bit like magic to make types work:
-            fun f s = \g -> unLIO (f (\x -> rtioTCB $ g (fst <$> unLIO x s))) s
+            -- a little bit of magic:
+            fun lioMask s = \ioRestore ->
+              unLIO' s $ lioMask $ \lioRestore -> do
+                            s'  <- getTCB
+                            ref <- ioTCB $ newIORef s'
+                            res <- ioTCB $ ioRestore $ do
+                              (a,s'') <- unLIO lioRestore s'
+                              writeIORef ref s''
+                              return a
+                            s'' <- ioTCB $ readIORef ref
+                            putTCB s''
+                            return res
+            unLIO' s act = unLIO act s
     -- | It is not possible to catch pure exceptions from within the 'LIO'
     -- monad, but @throwIO@ wraps up an exception with the current label,
     -- so that it can be caught with 'catch' or 'catchP'..
@@ -974,29 +984,22 @@ instance (LabelState l p s) => MonadCatch (LIO l p s) where
     --
     catch = catchP noPrivs
 
-
 -- | Catches an exception, so long as the label at the point where the
 -- exception was thrown can flow to the label at which @catchP@ is
 -- invoked, modulo the privileges specified.  Note that the handler
--- receives an extra first argument (before the exception), which
--- is the label when the exception was thrown.
+-- raises the current label to the joint of the current label and 
+-- exception label.
 catchP :: (Exception e, LabelState l p s)
        => p   -- ^ Privileges with which to downgrade exception
        -> LIO l p s a        -- ^ Computation to run
        -> (e -> LIO l p s a) -- ^ Exception handler
        -> LIO l p s a        -- ^ Result of computation or handler
 catchP p' io handler = withCombinedPrivs p' $ \p -> do
-  s <- getTCB
   clr <- getClearance
-  (a, s') <- ioTCB $ do
-    (unLIO io s) `catch` (\e@(LabeledExceptionTCB le se) ->
+  io `catchTCB` (\e@(LabeledExceptionTCB le se) ->
       case fromException se of
-        Nothing -> throwIO e
-        Just e' -> if le `leq` clr
-                     then unLIO (taintP p le >> handler e') s
-                     else throwIO e)
-  putTCB s'
-  return a
+        Just e' | le `leq` clr -> taintP p le >> handler e'
+        _                      -> throwIO e)
 
 -- | Trusted catch functin.
 catchTCB :: (LabelState l p s)
@@ -1055,6 +1058,10 @@ evaluate = rtioTCB . E.evaluate
 class (MonadCatch m) => OnExceptionTCB m where
     onExceptionTCB :: m a -> m b -> m a
     finallyTCB     :: m a -> m b -> m a
+    finallyTCB a b = mask $ \restore -> do
+                       r <- restore a `onExceptionTCB` b
+                       _ <-  b
+                       return r
     bracketTCB     :: m a -> (a -> m c) -> (a -> m b) -> m b
     bracketTCB     = genericBracket onExceptionTCB
 
@@ -1063,8 +1070,8 @@ instance OnExceptionTCB IO where
     bracketTCB     = E.bracket
 
 instance (LabelState l p s) => OnExceptionTCB (LIO l p s) where
-    onExceptionTCB m cleanup = mkLIO $ \s ->
-      unLIO m s `catch` (\e -> unLIO cleanup s >> throwIO (e :: SomeException))
+    onExceptionTCB io cleanup = io `catchTCB` (\e -> do void cleanup 
+                                                        ioTCB $ E.throwIO e)
 
 instance (LabelState l p s) => MonadError IOException (LIO l p s) where
     throwError = throwIO

@@ -11,14 +11,16 @@ import Test.QuickCheck.Monadic
 
 import Data.List (tails)
 import Data.Functor ((<$>))
-import Control.Monad (liftM, void)
+import Data.IORef
 
 import LIO.TCB
 import LIO.DCLabel
 import DCLabel.TCB
 import DCLabel.PrettyShow
 
+import Control.Monad (liftM, void, forM_)
 import Control.Exception (SomeException(..))
+import Control.Concurrent
 
 import System.IO.Unsafe
 
@@ -82,12 +84,12 @@ monadicDC (MkPropertyM m) =
   where dorun x =fst <$> evalDC x
 
 -- Helper function
-printLIOState :: DC ()
-printLIOState = do
+printLIOState :: String -> DC ()
+printLIOState m = do
   s <- getTCB
-  ioTCB . putStrLn $    "\nLabel = " ++ (prettyShow $ lioL s ) 
-                     ++ "\nClear = " ++ (prettyShow $ lioC s ) 
-                     ++ "\nPrivs = " ++ (prettyShow $ lioP s ) 
+  ioTCB . putStrLn $ "\n" ++ m ++ ":\nLabel = " ++ (prettyShow $ lioL s ) 
+                          ++ "\nClear = " ++ (prettyShow $ lioC s ) 
+                          ++ "\nPrivs = " ++ (prettyShow $ lioP s ) 
 
 --
 --
@@ -125,6 +127,34 @@ tests = [
     , testProperty
         "does not untaint computation: toLabeled" $
         prop_catch_preserves_taint withPrivileges
+    ]
+  , testGroup "onException" [
+      testProperty
+        "does not untaint computation: id" $
+        prop_onException_preserves_taint (const id)
+    , testProperty
+        "does not untaint computation: withPrivileges" $
+        prop_onException_preserves_taint withPrivileges
+    , testProperty
+        "does not untaint computation: toLabeled" $
+        prop_onException_preserves_taint withPrivileges
+    ]
+  , testGroup "mask" [
+      testProperty
+        "does not untaint computation: id" $
+        prop_mask_preserves_taint (const id)
+    , testProperty
+        "does not untaint computation: withPrivileges" $
+        prop_mask_preserves_taint withPrivileges
+    , testProperty
+        "does not untaint computation: toLabeled" $
+        prop_mask_preserves_taint withPrivileges
+    , testProperty
+        "restore allows throwTo exceptions" $
+        prop_mask_correct  True
+    , testProperty
+        "mask without restore ignores throwTo exceptions" $
+        prop_mask_correct  False
     ]
   ]
 
@@ -177,7 +207,7 @@ prop_withPrivileges_no_escalate = monadicDC $ do
 -- catch related
 -- 
 
--- | Tainted computation within catch does not get
+-- | Taint within catch does not get ignored
 prop_catch_preserves_taint :: (TCBPriv -> DC DCLabel -> DC DCLabel) -> Property 
 prop_catch_preserves_taint wrapper = monadicDC $ do
   p <- pick (arbitrary :: Gen TCBPriv)
@@ -188,3 +218,56 @@ prop_catch_preserves_taint wrapper = monadicDC $ do
                     ) (\(SomeException _) -> getLabel)
   l'' <- run $ getLabel
   assert $ l == l' && l == l''
+
+--
+-- onException related
+-- 
+
+-- | onException does not ignore taint
+prop_onException_preserves_taint :: (TCBPriv -> DC DCLabel -> DC DCLabel)
+                                 -> Property 
+prop_onException_preserves_taint wrapper = monadicDC $ do
+  p <- pick (arbitrary :: Gen TCBPriv)
+  l  <- pick (arbitrary :: Gen DCLabel)
+  l' <- run $ catch ((wrapper p $ do taint l
+                                     _ <- throwIO (userError "u")
+                                     getLabel
+                     ) `onException`
+                         (return ())) (\(SomeException _) -> getLabel)
+  l'' <- run $ getLabel
+  assert $ l == l' && l == l''
+
+--
+-- mask related
+-- 
+
+-- | onException does not ignore taint
+prop_mask_preserves_taint :: (TCBPriv -> DC DCLabel -> DC DCLabel) -> Property 
+prop_mask_preserves_taint wrapper = monadicDC $ do
+  p  <- pick (arbitrary :: Gen TCBPriv)
+  l  <- pick (arbitrary :: Gen DCLabel)
+  doRestore <- pick (arbitrary :: Gen Bool)
+  l' <- run $ catch (mask $ \restore -> (if doRestore then restore else id) $
+                       wrapper p $ do taint l
+                                      _ <- throwIO (userError "u")
+                                      getLabel
+                    ) (\(SomeException _) -> getLabel)
+  l'' <- run $ getLabel
+  assert $ l == l' && l == l''
+
+
+-- | Check that if restore is used then a throwTo is not ignored.
+-- Conversely, if restore is not used then a throwTo should not affect
+-- the count.
+prop_mask_correct :: Bool -> Property
+prop_mask_correct doRestore = monadicIO $ do
+  let count = 100000
+  ref <- run $ newIORef 1
+  run $ do
+    tid <- forkIO $ (\(SomeException _) -> return ()) `handle` (void $ evalDC $ 
+        mask $ \restore -> (if doRestore then restore else id) $ do
+          forM_ [1..count] (ioTCB . writeIORef ref))
+    threadDelay 10
+    throwTo tid (userError "kill")
+  res <- run $ readIORef ref
+  assert $ if doRestore then res < count else res == count
