@@ -113,7 +113,7 @@ module LIO.TCB (-- * Basic Label Functions
 import Prelude hiding (catch)
 import Control.Exception hiding (catch, handle, throw, throwIO,
                                  onException, block, unblock,
-                                 evaluate, finally)
+                                 evaluate, finally, mask)
 import qualified Control.Exception as E
 import Data.Monoid
 import Data.Typeable
@@ -434,7 +434,10 @@ withPrivileges :: (LabelState l p s) => p -> LIO l p s a -> LIO l p s a
 withPrivileges p m = do
   p0 <- getPrivileges
   setPrivileges p
-  a <- m `finally` setPrivileges p0
+  -- restore privileges even if an exception is thrown
+  a <- m `catchTCB` (\e -> do setPrivileges p0
+                              ioTCB $ throwIO e)
+  setPrivileges p0
   return a
 
 -- | Execute an 'LIO' action with the combination of the supplied
@@ -1051,6 +1054,7 @@ evaluate = rtioTCB . E.evaluate
 -- of these methods.
 class (MonadCatch m) => OnExceptionTCB m where
     onExceptionTCB :: m a -> m b -> m a
+    finallyTCB     :: m a -> m b -> m a
     bracketTCB     :: m a -> (a -> m c) -> (a -> m b) -> m b
     bracketTCB     = genericBracket onExceptionTCB
 
