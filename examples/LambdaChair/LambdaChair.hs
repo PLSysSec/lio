@@ -324,8 +324,8 @@ getOutputChLbl = do
           nc_cat = map id2cat (as \\ cs) -- noconflicting categories
       return $ newDC (listToComponent $ c_cat ++ nc_cat) (<>)
         where id2cat i = MkDisj [ principal . C.pack $ "Review"++(show i)]
-              id2conf_cat i = MkDisj [ principal . C.pack $ "Review" ++ (show i)
-                                     , principal $ "CONFLICT" ]
+              id2conf_cat i = MkDisj [ principal $ "Review" ++ (show i)
+                                     , "CONFLICT" ]
           
 -- ^ Print if the current label flows to the output channel label, i.e.,
 -- there is no conflict of interest.
@@ -356,7 +356,7 @@ appendToReview pId content = do
                    doWriteReview privs rev content
                    return $ Right ()
    where doWriteReview privs rev content = liftReviewDC $ do
-           toLabeledP privs ltop $ do
+           toLabeledThunk $ do
              (Review rs) <- readLIORef (review rev)
              -- restrict writes: 
              writeLIORef (review rev) (Review (rs++content))
