@@ -27,7 +27,7 @@ Description:
         The library depends on the @DCLabel@ module. You can read more on
         DC Labels here:
         <http://www.scs.stanford.edu/~deian/dclabels/>.
-Cabal-Version:  >= 1.6
+Cabal-Version:  >= 1.8
 
 Build-Type:     Configure
 Extra-source-files:
@@ -96,3 +96,19 @@ Library
     Includes: HsTmp.h
     Install-Includes: HsTmp.h HsTmpConfig.h
     C-Sources:	cbits/HsTmp.c
+
+test-suite tests
+  type: exitcode-stdio-1.0
+  hs-source-dirs: tests
+  main-is: Tests.hs
+
+  ghc-options:
+    -Wall -threaded -rtsopts
+
+  build-depends:
+    QuickCheck,
+    base,
+    dclabel,
+    lio,
+    test-framework,
+    test-framework-quickcheck2
