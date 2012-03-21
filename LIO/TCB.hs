@@ -1,7 +1,4 @@
 {-# LANGUAGE CPP #-}
-#if __GLASGOW_HASKELL__ >= 702 && __GLASGOW_HASKELL__ < 704
-{-# LANGUAGE SafeImports #-}
-#endif
 #if __GLASGOW_HASKELL__ >= 704
 {-# LANGUAGE Unsafe #-}
 #endif
@@ -94,6 +91,12 @@ module LIO.TCB (-- * Basic Label Functions
                , catchP, handleP
                , onExceptionP, bracketP
                , evaluate
+               -- * Gates
+               -- $gates
+               , PrivDesc(..)
+               , Gate(..)
+               , mkGate, mkGateP
+               , callGate
                -- * Unsafe (TCB) Operations
                -- ** Basic Label Functions
                , PrivTCB, MintTCB(..)
@@ -108,6 +111,8 @@ module LIO.TCB (-- * Basic Label Functions
                -- ** Labeled Exceptions
                , catchTCB, OnExceptionTCB(..)
                , ioTCB, rtioTCB
+               -- ** Gates
+               , mkGateTCB, callGateTCB
                ) where
 
 import Prelude hiding (catch)
@@ -436,8 +441,7 @@ withPrivileges p m = do
   p0 <- getPrivileges
   setPrivileges p
   -- restore privileges even if an exception is thrown
-  a <- m `finallyTCB` (setPrivileges p0)
-  return a
+  m `finallyTCB` (setPrivileges p0)
 
 -- | Execute an 'LIO' action with the combination of the supplied
 -- privileges (usually passed to @...P@ functions) and current
@@ -1076,3 +1080,86 @@ instance (LabelState l p s) => OnExceptionTCB (LIO l p s) where
 instance (LabelState l p s) => MonadError IOException (LIO l p s) where
     throwError = throwIO
     catchError = catch
+
+---------------------------------------------------------------------
+-- Gates ------------------------------------------------------------
+---------------------------------------------------------------------
+
+{- $gates
+
+LIO provides a basic implementation of /gates/, useful in providing
+controlled RPC-like services where the client and service provider are
+in mutual distrust. 
+
+A service provider uses 'mkGate' to create a gate data type 'Gate l d
+a'.  The type parameter @l@ indicates the 'Label' type used to protect
+the gate computation; the label value @ is bounded by the current
+label and clearance at the time of creation.  The gate computation
+itself is of type @d -> a@, where @d@, an instance of 'PrivDesc'.
+Since gates are invoked with 'callGate', the service provider has the
+guarantee that the client (the callee) owns the privileges
+corresponding to the privilege description @d@. In effect, this allows
+a client to \"prove\" to the service provider that they own certain
+privileges without entrusting the service with its privileges.
+The gate computation can analyze this privilege description when
+determining the result.
+
+A client invokes a gate with 'callGate', which unlabels the gate
+computation and applies the gate computation to the description of the
+supplied privilege.
+
+-}
+
+-- | Class used to describe privileges in a meaningful manner.
+class (PrivTCB p, Show d) => PrivDesc p d | p -> d where
+  -- | Get privilege description
+  privDesc :: p -> d
+
+-- | A Gate is a wrapper for a 'Labeled' type.
+newtype Gate l d a = Gate (Labeled l (d -> a))
+  deriving (Typeable)
+
+-- | Create a gate with a label @l@ and underlying computation @g@.
+-- The label of the gate must be bounded by the current label and
+-- clearance.
+mkGate :: (LabelState l p s, PrivDesc p d)
+       => l                   -- ^ Label of gate
+       -> (d -> a)            -- ^ Gate omputation
+       -> LIO l p s (Gate l d a)
+mkGate = mkGateP noPrivs
+
+-- | Same as 'mkGate', but uses privileges when making the gate.
+mkGateP :: (LabelState l p s, PrivDesc p d)
+        => p                   -- ^ Privileges
+        -> l                   -- ^ Label of gate
+        -> (d -> a)            -- ^ Gate computation
+        -> LIO l p s (Gate l d a)
+mkGateP p l f = Gate <$> labelP p l f
+
+-- | Same as 'mkGate', but ignores IFC.
+mkGateTCB :: (LabelState l p s, PrivDesc p d)
+          => l            -- ^ Label of gate
+          -> (d -> a)     -- ^ Gate action
+          -> Gate l d a
+mkGateTCB l f = Gate (labelTCB l f)
+
+-- | Given a labeled gate and privilege, execute the gate computation.
+-- The current label is raised to the join of the gate and current
+-- label, clearance permitting. It is important to note that
+-- @callGate@ invokes the gate computation with the privilege
+-- description and /not/ the actual privilege.
+callGate :: (LabelState l p s, PrivDesc p d)
+         => Gate l d a   -- ^ Gate
+         -> p            -- ^ Privilege used to unlabel gate action
+         -> LIO l p s a
+callGate (Gate lf) p = withCombinedPrivs p $ \pAmp -> do
+  f <- unlabelP pAmp lf
+  return $ f (privDesc p)
+
+-- | Same as 'callGate', but does not raise label in accessing the
+-- gate computation.
+callGateTCB :: (LabelState l p s, PrivDesc p d)
+            => Gate l d a   -- ^ Gate
+            -> p            -- ^ Privilege used to unlabel gate action
+            -> a
+callGateTCB (Gate lf) p = unlabelTCB lf $ privDesc p

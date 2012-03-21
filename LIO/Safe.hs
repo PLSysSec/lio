@@ -29,6 +29,8 @@ module LIO.Safe ( Label(..)
                  , LabelFault(..)
                  , catchP, handleP, onExceptionP, bracketP
                  , evaluate
+                 , PrivDesc
+                 , Gate, mkGate, mkGateP, callGate
                  ) where
 
 import LIO.TCB ( Label(..)
@@ -53,4 +55,6 @@ import LIO.TCB ( Label(..)
                , LabelFault(..)
                , catchP, handleP, onExceptionP, bracketP
                , evaluate
+               , PrivDesc
+               , Gate, mkGate, mkGateP, callGate
                )
