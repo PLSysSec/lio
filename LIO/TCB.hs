@@ -1119,7 +1119,7 @@ class (PrivTCB p, Show d) => PrivDesc p d | p -> d where
 newtype Gate l d a = Gate (Labeled l (d -> a))
   deriving (Typeable)
 
--- | Create a gate with a label @l@ and underlying computation @g@.
+-- | Create a gate given a gate label and computation.
 -- The label of the gate must be bounded by the current label and
 -- clearance.
 mkGate :: (LabelState l p s, PrivDesc p d)
