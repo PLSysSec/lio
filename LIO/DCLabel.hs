@@ -19,14 +19,14 @@ module LIO.DCLabel ( -- * DCLabel export
                      -- * Renamed privileges
                    , DCPriv, DCPrivTCB
                      -- * Useful aliases for the LIO Monad
-                   , DCLabeled, DC, evalDC--, evalDCWithRoot 
+                   , DCLabeled, DC, evalDC, evalDCWithRoot, DCGate
                      -- * Public label
                    , lpub
                    )where
 
 import LIO.TCB
 
---import LIO.Handle (evalWithRoot)
+import LIO.Handle (evalWithRoot)
 
 import Data.Typeable
 
@@ -92,14 +92,20 @@ instance Priv DCLabel DCL.TCBPriv where
                                          | pr == DCL.noPriv      = l `lub` g
                                          | otherwise             = lr
 
+
+instance PrivDesc DCPrivTCB DCPriv where
+  privDesc = priv
+
 --
 -- Renaming
 --
 
 -- | A @DCLabel@ category set.
 type DCCatSet = DCL.Component
+
 -- | A @DCLabel@ (untrusted) privilege.
 type DCPriv = DCL.Priv
+
 -- | A @DCLabel@ privilege.
 type DCPrivTCB = DCL.TCBPriv
 
@@ -122,8 +128,11 @@ evalDC :: DC a -> IO (a, DCLabel)
 evalDC m = evalLIO m ()
 
 -- | Same as 'evalDC', but with support for filesystem.
--- evalDCWithRoot ::  FilePath -> Maybe DCLabel -> DC a -> IO (a, DCLabel)
--- evalDCWithRoot path ml act = evalWithRoot path ml act ()
+evalDCWithRoot ::  FilePath -> Maybe DCLabel -> DC a -> IO (a, DCLabel)
+evalDCWithRoot path ml act = evalWithRoot path ml act ()
+
+-- | A DC Label gate
+type DCGate = Gate DCLabel DCPriv
 
 -- | Label corresponding to public data.
 lpub :: DCLabel
