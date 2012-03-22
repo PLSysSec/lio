@@ -679,7 +679,6 @@ relabelP p' lbl (LabeledTCB la a) = withCombinedPrivs p' $ \p ->
 --  >       catch ( discard ltop $ do
 --  >                 secret <- readLIORef hRef
 --  >                 when (secret == guess) $ throwIO . userError $ "got it!"
---  >                 return ()
 --  >             ) (\(e :: IOError) -> return ())
 --  >       l <- getLabel
 --  >       when (l == lbot) $ do stash <- readLIORef lRef
@@ -703,12 +702,10 @@ relabelP p' lbl (LabeledTCB la a) = withCombinedPrivs p' $ \p ->
 -- low even though the 'catch' raised the current label when the
 -- secret was found (and thus exception was throw). As a consequence,
 -- 'toLabeled' catches all exceptions, and returns a 'Labeled'
--- 'Maybe'. All exceptions within the outer computation, including
--- IFC violation attempts, are collapsed to 'Nothing' and thus
--- cannot be used to divulge information. Conversely a
--- \"well-behaved\" computation returns 'Just' the result.
--- Of course, the label of the 'Maybe' is the supplied label and thus
--- the value must be 'unlabel'ed to observe the computation result.
+-- value that may have a labeled exception as wrapped by @throw@.
+-- All exceptions within the outer computation, including
+-- IFC violation attempts, are essentially rethrown when performing
+-- an 'unlabel'.
 --
 -- DEPRECATED: @toLabeled@ is susceptible to termination attacks.
 --
@@ -716,7 +713,7 @@ toLabeled :: (LabelState l p s)
           => l -- ^ Label of result and upper bound on
                --  inner-computations' observation
           -> LIO l p s a -- ^ Inner computation
-          -> LIO l p s (Labeled l (Maybe a))
+          -> LIO l p s (Labeled l a)
 toLabeled = toLabeledP noPrivs
 {-# DEPRECATED toLabeled "toLabeled is susceptible to termination attacks" #-}
 
@@ -726,16 +723,25 @@ toLabeled = toLabeledP noPrivs
 -- DEPRECATED: @toLabeledP@ is susceptible to termination attacks.
 --
 toLabeledP :: (LabelState l p s)
-           => p -> l -> LIO l p s a -> LIO l p s (Labeled l (Maybe a))
+           => p -> l -> LIO l p s a -> LIO l p s (Labeled l a)
 toLabeledP p' l m = withCombinedPrivs p' $ \p -> do
   aguardP p l
   save_s <- getTCB
-  res <- (Just <$> m) `catchTCB` const (return Nothing)
+  res <- (Right <$> m) `catchTCB` (return . Left . lubErr l)
   s <- getTCB
   let lastL = lioL s
   putTCB s { lioL = lioL save_s, lioC = lioC save_s, lioP = lioP save_s }
-  return . labelTCB l $ if leqp p lastL l then res else Nothing
+  return . labelTCB l $
+    if leqp p lastL l
+      then either E.throw id res
+      else let l' = lub lastL l
+           in E.throw . mkErr . lub l' $ either getELabel (const l') res
+    where mkErr le = LabeledExceptionTCB le $ toException LerrLow
+          lubErr lnew (LabeledExceptionTCB le e) =
+                  LabeledExceptionTCB (le `lub` lnew) e
+          getELabel (LabeledExceptionTCB le _) = le
 {-# DEPRECATED toLabeledP "toLabeledP is susceptible to termination attacks" #-}
+
 
 -- | Executes a computation that would raise the current label, but
 -- discards the result so as to keep the label the same.  Used when
