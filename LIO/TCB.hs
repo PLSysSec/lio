@@ -441,7 +441,7 @@ withPrivileges p m = do
   p0 <- getPrivileges
   setPrivileges p
   -- restore privileges even if an exception is thrown
-  m `finallyTCB` (setPrivileges p0)
+  m `finallyTCB` setPrivileges p0
 
 -- | Execute an 'LIO' action with the combination of the supplied
 -- privileges (usually passed to @...P@ functions) and current
@@ -544,7 +544,7 @@ ioTCB a = mkLIO $ \s -> do
 rtioTCB :: (LabelState l p s) => IO a -> LIO l p s a
 rtioTCB io = do
   l <- getLabel
-  ioTCB $ io `catch` (throwIO . (LabeledExceptionTCB l))
+  ioTCB $ io `catch` (throwIO . LabeledExceptionTCB l)
 
 ---------------------------------------------------------------------
 -- Labeled value ----------------------------------------------------
@@ -581,7 +581,7 @@ labelP p' l a = withCombinedPrivs p' $ \p -> getTCB >>= doit p
 
 -- | Trusted constructor that creates labeled values.
 labelTCB :: Label l => l -> a -> Labeled l a
-labelTCB l a = LabeledTCB l a
+labelTCB = LabeledTCB
 
 -- | Within the 'LIO' monad, this function takes a 'Labeled' and returns
 -- the value.  Thus, in the 'LIO' monad one can say:
@@ -638,11 +638,10 @@ untaintLabeledP p target lbld =
 -- with the current privileges permits it.
 relabelP :: (LabelState l p s)
         => p -> l -> Labeled l a -> LIO l p s (Labeled l a)
-relabelP p' lbl (LabeledTCB la a) = withCombinedPrivs p' $
-  \p -> do
-    if leqp p lbl la && leqp p la lbl then
-      return $ LabeledTCB lbl a
-      else throwIO LerrPriv
+relabelP p' lbl (LabeledTCB la a) = withCombinedPrivs p' $ \p ->
+   if leqp p lbl la && leqp p la lbl
+     then return $ LabeledTCB lbl a
+     else throwIO LerrPriv
 
 -- | @toLabeled@ is the dual of 'unlabel'.  It allows one to invoke
 -- computations that would raise the current label, but without
@@ -663,46 +662,80 @@ relabelP p' lbl (LabeledTCB la a) = withCombinedPrivs p' $
 -- one main use of clearance: to ensure that a @Labeled@ computed
 -- does not exceed a particular label.
 --
--- If an exception is thrown a a @toLabeled@ block, the join of
--- the exception label and supplied label will be used as the new
--- label.  If the current label of the inner computation is above
--- the supplied label, an exception (whose label will reflect this
--- observatoin) is throw by @toLabeled@.
+-- If an exception is thrown within a @toLabeled@ block, such that
+-- the outer context is withing a 'catch', which is futher within
+-- a @toLabeled@ block, infromation can be leaked. Consider the
+-- following program that uses 'DCLabel's. (Note that 'discard' is
+-- simply @toLabeled@ that throws throws the result away.)
 --
--- WARNING: @toLabeled@ is susceptible to termination attacks.
+--  > main = evalDC' $ do
+--  >   lRef <- newLIORef lbot ""
+--  >   hRef <- newLIORef ltop "secret" 
+--  >   -- brute force:
+--  >   forM_ ["fun", "secret"] $ \guess -> do
+--  >     stash <- readLIORef lRef
+--  >     writeLIORef lRef $ stash ++ "\n" ++ guess ++ ":"
+--  >     discard ltop $ do 
+--  >       catch ( discard ltop $ do
+--  >                 secret <- readLIORef hRef
+--  >                 when (secret == guess) $ throwIO . userError $ "got it!"
+--  >                 return ()
+--  >             ) (\(e :: IOError) -> return ())
+--  >       l <- getLabel
+--  >       when (l == lbot) $ do stash <- readLIORef lRef
+--  >                             writeLIORef lRef $ stash ++ "no!"
+--  >   readLIORef lRef
+--  >     where evalDC' act = do (r,l) <- evalDC act
+--  >                            putStrLn r
+--  >                            putStrLn $ "label = " ++ prettyShow l
+--
+--  The output of the program is:
+--
+--  > $ ./new
+--  > 
+--  > fun:no!
+--  > secret:
+--  > label = <True , False>
+--
+-- Note that the current label is 'lbot' (which in DCLabels is
+-- @<True , False>@), and the secret is leaked. The fundamental issue
+-- is that the outer 'discard' allows for the current label to remain
+-- low even though the 'catch' raised the current label when the
+-- secret was found (and thus exception was throw). As a consequence,
+-- 'toLabeled' catches all exceptions, and returns a 'Labeled'
+-- 'Maybe'. All exceptions within the outer computation, including
+-- IFC violation attempts, are collapsed to 'Nothing' and thus
+-- cannot be used to divulge information. Conversely a
+-- \"well-behaved\" computation returns 'Just' the result.
+-- Of course, the label of the 'Maybe' is the supplied label and thus
+-- the value must be 'unlabel'ed to observe the computation result.
+--
+-- DEPRECATED: @toLabeled@ is susceptible to termination attacks.
 --
 toLabeled :: (LabelState l p s)
           => l -- ^ Label of result and upper bound on
                --  inner-computations' observation
           -> LIO l p s a -- ^ Inner computation
-          -> LIO l p s (Labeled l a)
+          -> LIO l p s (Labeled l (Maybe a))
 toLabeled = toLabeledP noPrivs
-{-# WARNING toLabeled "toLabeled is susceptible to termination attacks" #-}
+{-# DEPRECATED toLabeled "toLabeled is susceptible to termination attacks" #-}
 
 -- | Same as 'toLabeled' but allows one to supply a privilege object
 -- when comparing the initial and final label of the computation.
 --
--- WARNING: @toLabeledP@ is susceptible to termination attacks.
+-- DEPRECATED: @toLabeledP@ is susceptible to termination attacks.
 --
 toLabeledP :: (LabelState l p s)
-           => p -> l -> LIO l p s a -> LIO l p s (Labeled l a)
+           => p -> l -> LIO l p s a -> LIO l p s (Labeled l (Maybe a))
 toLabeledP p' l m = withCombinedPrivs p' $ \p -> do
   aguardP p l
   save_s <- getTCB
-  --
-  res <- (Right <$> m) `catchTCB` (return . Left .  (lubErr l))
+  res <- (Just <$> m) `catchTCB` const (return Nothing)
   s <- getTCB
   let lastL = lioL s
   putTCB s { lioL = lioL save_s, lioC = lioC save_s, lioP = lioP save_s }
-  if leqp p lastL l
-    then either (ioTCB . throwIO) (return . LabeledTCB l) res
-    else let l' = lub lastL l
-         in ioTCB . throwIO . mkErr . (lub l') $ either getELabel (const l') res
-    where mkErr le = LabeledExceptionTCB le $ toException LerrLow
-          lubErr lnew (LabeledExceptionTCB le e) =
-                  LabeledExceptionTCB (le `lub` lnew) e
-          getELabel (LabeledExceptionTCB le _) = le
-{-# WARNING toLabeledP "toLabeledP is susceptible to termination attacks" #-}
+  return . labelTCB l $ if leqp p lastL l then res else Nothing
+{-# DEPRECATED toLabeledP "toLabeledP is susceptible to termination attacks" #-}
 
 -- | Executes a computation that would raise the current label, but
 -- discards the result so as to keep the label the same.  Used when
@@ -714,22 +747,19 @@ toLabeledP p' l m = withCombinedPrivs p' $ \p -> do
 --   discard ltop $ 'hputStrLn' log_handle \"Log message\"
 -- @
 --
--- to create a log message without affecting the current label.  (Of
--- course, if @log_handle@ is closed and this throws an exception, it
--- may not be possible to catch the exception within the 'LIO' monad
--- without sufficient privileges--see 'catchP'.)
+-- to create a log message without affecting the current label. 
 --
--- WARNING: discard is susceptible to termination attacks.
+-- DEPRECATED: discard is susceptible to termination attacks.
 --
 discard :: (LabelState l p s) =>  l -> LIO l p s a -> LIO l p s ()
 discard = discardP noPrivs
-{-# WARNING discard "discard is susceptible to termination attacks" #-}
+{-# DEPRECATED discard "discard is susceptible to termination attacks" #-}
 
 -- | Same as 'discard', but uses privileges when comparing initial and
 -- final label of the computation.
 discardP :: (LabelState l p s) => p -> l -> LIO l p s a -> LIO l p s ()
-discardP p l m = toLabeledP p l m >> return ()
-{-# WARNING discardP "discardP is susceptible to termination attacks" #-}
+discardP p l m = void $ toLabeledP p l m
+{-# DEPRECATED discardP "discardP is susceptible to termination attacks" #-}
 
 
 
