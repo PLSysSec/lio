@@ -261,7 +261,7 @@ prop_mask_preserves_taint wrapper = monadicDC $ do
 -- the count.
 prop_mask_correct :: Bool -> Property
 prop_mask_correct doRestore = monadicIO $ do
-  let count = 100000
+  let count = 1000000
   ref <- run $ newIORef 1
   run $ do
     tid <- forkIO $ (\(SomeException _) -> return ()) `handle` (void $ evalDC $ 
