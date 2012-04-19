@@ -47,7 +47,7 @@ Extra-Tmp-Files:
 
 Source-repository head
   Type:     git
-  Location: http://www.scs.stanford.edu/~deian/lio.git
+  Location: http://www.github.com/scslab/lio.git
 
 
 Library
