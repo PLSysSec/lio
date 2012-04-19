@@ -37,7 +37,6 @@ Extra-source-files:
     examples/LambdaChair/Main.hs
     examples/LambdaChair/Safe.hs
     examples/fsExample.hs
-    examples/maskExample.hs
     examples/waitAndCatch.hs
     configure.ac
     configure
