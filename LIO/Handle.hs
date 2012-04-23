@@ -71,6 +71,7 @@ import qualified System.IO as IO
 #endif
 
 import LIO.TCB
+import LIO.Handle.TCB
 import LIO.FS
 import Data.Serialize
 import qualified System.Directory as IO
@@ -129,13 +130,6 @@ instance HandleOps IO.Handle L.ByteString IO where
 --
 -- LIO Handle Operations
 --
-
--- | A labeled handle.
-data LHandle l = LHandleTCB l IO.Handle
-
--- | Get the label of a labeled handle.
-labelOfHandle :: Label l => LHandle l -> l
-labelOfHandle (LHandleTCB l _) = l
 
 instance (Serialize l, LabelState l p s)
           => DirectoryOps (LHandle l) (LIO l p s) where

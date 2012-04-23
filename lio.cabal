@@ -1,5 +1,5 @@
 Name:           lio
-Version:        0.1.3
+Version:        0.1.4
 build-type:     Simple
 License:        GPL
 License-File:   LICENSE
@@ -87,7 +87,8 @@ Library
     LIO.Concurrent.LMVar.TCB,
     -- Filesystem:
     LIO.FS,
-    LIO.Handle
+    LIO.Handle,
+    LIO.Handle.TCB
   if impl(ghc < 7.6)
     Other-Modules:
       System.Posix.Tmp
