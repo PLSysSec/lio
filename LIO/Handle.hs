@@ -40,10 +40,13 @@ module LIO.Handle (
                   , DirectoryOps(..)
                   , CloseOps(..)
                   , HandleOps(..)
+                  , StatOps(..)
+                  , BufferingOps(..)
                   , readFile, writeFile, writeFileL
                   , IOMode(..)
                   -- * LIO Handle
                   , LHandle, labelOfHandle 
+                  , BufferMode(..)
                   -- ** Privileged combinators
                   , getDirectoryContentsP
                   , createDirectoryP
@@ -51,32 +54,37 @@ module LIO.Handle (
                   , hCloseP
                   , hFlushP 
                   , hGetP
+                  , hGetLineP
                   , hGetNonBlockingP
                   , hGetContentsP
                   , hPutP
                   , hPutStrP
                   , hPutStrLnP
                   , readFileP, writeFileP, writeFileLP
+                  , hIsEOFP
+                  , hSetBufferingP, hGetBufferingP
+                  , hSetBinaryModeP
+                  , hIsOpenP
+                  , hIsClosedP
+                  , hIsReadableP
+                  , hIsWritableP
                   ) where
 
 
-#if __GLASGOW_HASKELL__ >= 702
-import safe Prelude hiding (catch, readFile, writeFile)
-import safe System.IO (IOMode(..))
-import safe qualified System.IO as IO
-#else
 import Prelude hiding (catch, readFile, writeFile)
-import System.IO (IOMode(..))
+import System.IO (IOMode(..), BufferMode(..))
 import qualified System.IO as IO
-#endif
+
+import Control.Monad
 
 import LIO.TCB
+import LIO.Handle.TCB
 import LIO.FS
 import Data.Serialize
 import qualified System.Directory as IO
 import System.FilePath
-import qualified Data.ByteString.Lazy as L
-import qualified Data.ByteString.Lazy.Char8 as LC
+import qualified Data.ByteString.Lazy.Char8 as L8
+import qualified Data.ByteString.Char8 as S8
 
 
 -- | Class used to abstract reading and creating directories, and
@@ -101,10 +109,25 @@ class (CloseOps h m) => HandleOps h b m where
   hGet            :: h -> Int -> m b
   hGetNonBlocking :: h -> Int -> m b
   hGetContents    :: h -> m b
+  hGetLine        :: h -> m b
   hPut            :: h -> b -> m ()
   hPutStr         :: h -> b -> m ()
   hPutStr         = hPut
   hPutStrLn       :: h -> b -> m ()
+
+-- | Class used to abstract status operations on handles.
+class (Monad m) => StatOps h m where
+  hIsEOF      :: h -> m Bool
+  hIsOpen     :: h -> m Bool
+  hIsClosed   :: h -> m Bool
+  hIsReadable :: h -> m Bool
+  hIsWritable :: h -> m Bool
+
+-- | Class used to abstract buffering operations on handles.
+class (Monad m) => BufferingOps h m where
+  hSetBuffering  :: h -> BufferMode -> m () 
+  hGetBuffering  :: h -> m BufferMode
+  hSetBinaryMode :: h -> Bool -> m ()
 
 --
 -- Standard IO Handle Operations
@@ -119,23 +142,39 @@ instance CloseOps IO.Handle IO where
   hClose = IO.hClose
   hFlush = IO.hFlush
 
-instance HandleOps IO.Handle L.ByteString IO where
-  hGet            = L.hGet
-  hGetNonBlocking = L.hGetNonBlocking
-  hGetContents    = L.hGetContents
-  hPut            = L.hPut
-  hPutStrLn       = LC.hPutStrLn
+instance HandleOps IO.Handle L8.ByteString IO where
+  hGet            = L8.hGet
+  hGetNonBlocking = L8.hGetNonBlocking
+  hGetContents    = L8.hGetContents
+  hGetLine  h     = (L8.fromChunks . (:[])) `liftM` S8.hGetLine h
+  hPut            = L8.hPut
+  hPutStrLn       = L8.hPutStrLn
+
+instance HandleOps IO.Handle S8.ByteString IO where
+  hGet            = S8.hGet
+  hGetNonBlocking = S8.hGetNonBlocking
+  hGetContents    = S8.hGetContents
+  hGetLine        = S8.hGetLine
+  hPut            = S8.hPut
+  hPutStrLn       = S8.hPutStrLn
+
+instance StatOps IO.Handle IO where
+  hIsEOF      = IO.hIsEOF      
+  hIsOpen     = IO.hIsOpen     
+  hIsClosed   = IO.hIsClosed   
+  hIsReadable = IO.hIsReadable 
+  hIsWritable = IO.hIsWritable 
+
+instance BufferingOps IO.Handle IO where
+  hSetBuffering  = IO.hSetBuffering
+  hGetBuffering  = IO.hGetBuffering
+  hSetBinaryMode = IO.hSetBinaryMode
+
+
 
 --
 -- LIO Handle Operations
 --
-
--- | A labeled handle.
-data LHandle l = LHandleTCB l IO.Handle
-
--- | Get the label of a labeled handle.
-labelOfHandle :: Label l => LHandle l -> l
-labelOfHandle (LHandleTCB l _) = l
 
 instance (Serialize l, LabelState l p s)
           => DirectoryOps (LHandle l) (LIO l p s) where
@@ -240,6 +279,7 @@ instance (LabelState l p s, CloseOps (LHandle l) (LIO l p s)
   hGet            = hGetP noPrivs
   hGetNonBlocking = hGetNonBlockingP noPrivs
   hGetContents    = hGetContentsP noPrivs
+  hGetLine        = hGetLineP noPrivs
   hPut            = hPutP noPrivs
   hPutStrLn       = hPutStrLnP noPrivs
 
@@ -279,6 +319,12 @@ hGetContentsP :: (LabelState l p s, HandleOps IO.Handle b IO)
               => p -> LHandle l -> LIO l p s b
 hGetContentsP p' (LHandleTCB l h) = withCombinedPrivs p' $ \p ->
   wguardP p l >> rtioTCB (hGetContents h)
+
+-- | Read the a line from a labeled handle.
+hGetLineP :: (LabelState l p s, HandleOps IO.Handle b IO)
+          => p -> LHandle l -> LIO l p s b
+hGetLineP p' (LHandleTCB l h) = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hGetLine h)
 
 -- | Output the given (Byte)String to the specified labeled handle.
 -- Privileges are used in the label comparisons and when raising
@@ -340,3 +386,67 @@ writeFileLP  :: (HandleOps IO.Handle b IO, LabelState l p s, Serialize l) =>
 writeFileLP p' l path contents = withCombinedPrivs p' $ \privs -> do
   bracketTCB (openFileP privs (Just l) path WriteMode) (hCloseP privs)
              (flip (hPutP privs) contents)
+
+instance (LabelState l p s) => StatOps (LHandle l) (LIO l p s) where
+  hIsEOF      = hIsEOFP noPrivs
+  hIsOpen     = hIsOpenP noPrivs
+  hIsClosed   = hIsClosedP noPrivs
+  hIsReadable = hIsReadableP noPrivs
+  hIsWritable = hIsWritableP noPrivs
+
+instance (LabelState l p s) => BufferingOps (LHandle l) (LIO l p s) where
+  hSetBuffering  = hSetBufferingP noPrivs
+  hGetBuffering  = hGetBufferingP noPrivs
+  hSetBinaryMode = hSetBinaryModeP noPrivs
+
+
+--
+-- Setting/getting handle status/setting
+--
+
+-- | Set the buffering mode
+hSetBufferingP  :: LabelState l p s
+                => p -> LHandle l -> BufferMode -> LIO l p s ()
+hSetBufferingP p' (LHandleTCB l h) m = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hSetBuffering h m)
+
+-- | Get the buffering mode
+hGetBufferingP  :: LabelState l p s => p -> LHandle l -> LIO l p s BufferMode
+hGetBufferingP p' (LHandleTCB l h)  = withCombinedPrivs p' $ \p ->
+  taintP p l >> rtioTCB (hGetBuffering h)
+
+-- | Select binary mode ('True') or text mode ('False')
+hSetBinaryModeP :: LabelState l p s
+                => p -> LHandle l -> Bool -> LIO l p s ()
+hSetBinaryModeP p' (LHandleTCB l h) m = withCombinedPrivs p' $ \p ->
+  wguardP p l >> rtioTCB (hSetBinaryMode h m)
+
+-- | End of file.
+hIsEOFP      :: LabelState l p s => p -> LHandle l -> LIO l p s Bool
+hIsEOFP p' (LHandleTCB l h)      = withCombinedPrivs p' $ \p ->
+   taintP p l >> rtioTCB (hIsEOF h)
+                                                                          
+-- | Is handle open.                                                      
+hIsOpenP     :: LabelState l p s => p ->
+   LHandle l -> LIO l p s Bool      
+hIsOpenP p' (LHandleTCB l h)     = withCombinedPrivs p' $ \p ->
+   taintP p l >> rtioTCB (hIsOpen h)
+                                                                          
+-- | Is handle closed.                                                    
+hIsClosedP   :: LabelState l p s => p ->
+   LHandle l -> LIO l p s Bool      
+hIsClosedP p' (LHandleTCB l h)   = withCombinedPrivs p' $ \p ->
+   taintP p l >> rtioTCB (hIsClosed h)
+                                                                          
+-- | Is handle readable.                                                  
+hIsReadableP :: LabelState l p s => p ->
+   LHandle l -> LIO l p s Bool      
+hIsReadableP p' (LHandleTCB l h) = withCombinedPrivs p' $ \p ->
+   taintP p l >> rtioTCB (hIsReadable h)
+                                                                          
+-- | Is handle writable.                                                  
+hIsWritableP :: LabelState l p s => p ->
+   LHandle l -> LIO l p s Bool      
+hIsWritableP p' (LHandleTCB l h) = withCombinedPrivs p' $ \p ->
+   taintP p l >> rtioTCB (hIsWritable h)
+
