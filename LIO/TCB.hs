@@ -1152,7 +1152,7 @@ class (PrivTCB p, Show d) => PrivDesc p d | p -> d where
   privDesc :: p -> d
 
 -- | A Gate is a wrapper for a 'Labeled' type.
-newtype Gate l d a = Gate (Labeled l (d -> a))
+newtype Gate l d a = GateTCB (Labeled l (d -> a))
   deriving (Typeable)
 
 -- | Create a gate given a gate label and computation.
@@ -1170,14 +1170,14 @@ mkGateP :: (LabelState l p s, PrivDesc p d)
         -> l                   -- ^ Label of gate
         -> (d -> a)            -- ^ Gate computation
         -> LIO l p s (Gate l d a)
-mkGateP p l f = Gate <$> labelP p l f
+mkGateP p l f = GateTCB <$> labelP p l f
 
 -- | Same as 'mkGate', but ignores IFC.
 mkGateTCB :: (LabelState l p s, PrivDesc p d)
           => l            -- ^ Label of gate
           -> (d -> a)     -- ^ Gate action
           -> Gate l d a
-mkGateTCB l f = Gate (labelTCB l f)
+mkGateTCB l f = GateTCB (labelTCB l f)
 
 -- | Given a labeled gate and privilege, execute the gate computation.
 -- The current label is raised to the join of the gate and current
@@ -1188,7 +1188,7 @@ callGate :: (LabelState l p s, PrivDesc p d)
          => Gate l d a   -- ^ Gate
          -> p            -- ^ Privilege used to unlabel gate action
          -> LIO l p s a
-callGate (Gate lf) p = withCombinedPrivs p $ \pAmp -> do
+callGate (GateTCB lf) p = withCombinedPrivs p $ \pAmp -> do
   f <- unlabelP pAmp lf
   return $ f (privDesc p)
 
@@ -1198,4 +1198,4 @@ callGateTCB :: (LabelState l p s, PrivDesc p d)
             => Gate l d a   -- ^ Gate
             -> p            -- ^ Privilege used to unlabel gate action
             -> a
-callGateTCB (Gate lf) p = unlabelTCB lf $ privDesc p
+callGateTCB (GateTCB lf) p = unlabelTCB lf $ privDesc p
