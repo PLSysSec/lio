@@ -1,5 +1,5 @@
 Name:           lio
-Version:        0.1.4
+Version:        0.9.0
 build-type:     Simple
 License:        GPL
 License-File:   LICENSE
@@ -29,86 +29,38 @@ Description:
         <http://www.scs.stanford.edu/~deian/dclabels/>.
 Cabal-Version:  >= 1.8
 
-Build-Type:     Configure
-Extra-source-files:
-    examples/LambdaChair/AliceCode.hs
-    examples/LambdaChair/BobCode.hs
-    examples/LambdaChair/LambdaChair.hs
-    examples/LambdaChair/Main.hs
-    examples/LambdaChair/Safe.hs
-    examples/fsExample.hs
-    examples/waitAndCatch.hs
-    configure.ac
-    configure
-    include/HsTmpConfig.h.in
-Extra-Tmp-Files:
-    include/HsTmpConfig.h
-
-Source-repository head
-  Type:     git
-  Location: http://www.github.com/scslab/lio.git
-
+Build-Type:     Simple
 
 Library
-  Build-Depends: base >= 4 && < 5,
-                 array >= 0.2 && < 1,
-                 bytestring >= 0.9 && < 1,
-                 containers >= 0.2 && < 1,
-                 directory >= 1.0 && < 2,
-                 filepath >= 1.1 && < 2,
-                 mtl >= 1.1.0.2 && < 3,
-                 old-time >= 1 && < 2,
-                 unix >= 2.5.0.0 && < 3,
-                 SHA >= 1.4.1.1 && < 2,
-                 time >= 1.1.4 && < 2,
-                 dclabel >= 0.0.4 && < 2,
-                 cereal >= 0.3.3 && < 0.4,
-                 base64-bytestring >= 0.1.1.0
+  Build-Depends: base,
+                 array,
+                 bytestring,
+                 containers,
+                 mtl,
+                 unix,
+                 dclabel,
+                 monadloc
 
-  ghc-options: -Wall -fno-warn-orphans
 
   Exposed-modules:
-    -- Core:
-    LIO,
-    LIO.Safe,
-    LIO.TCB,
-    LIO.MonadCatch,
-    LIO.MonadLIO,
-    -- Label formats:
-    LIO.DCLabel,
-    -- References:
-    LIO.LIORef,
-    LIO.LIORef.TCB,
-    LIO.LIORef.Safe,
-    -- Concurrency:
-    LIO.Concurrent,
-    LIO.Concurrent.LMVar,
-    LIO.Concurrent.LMVar.Safe,
-    LIO.Concurrent.LMVar.TCB,
-    -- Filesystem:
-    LIO.FS,
-    LIO.Handle,
-    LIO.Handle.TCB
-  if impl(ghc < 7.6)
-    Other-Modules:
-      System.Posix.Tmp
-    Include-Dirs: include
-    Includes: HsTmp.h
-    Install-Includes: HsTmp.h HsTmpConfig.h
-    C-Sources:	cbits/HsTmp.c
-
-test-suite tests
-  type: exitcode-stdio-1.0
-  hs-source-dirs: tests
-  main-is: Tests.hs
-
-  ghc-options:
-    -Wall -threaded -rtsopts
-
-  build-depends:
-    QuickCheck,
-    base,
-    dclabel,
-    lio,
-    test-framework,
-    test-framework-quickcheck2
+    -- * Top-level exporter
+    LIO
+    -- * Label definition
+    LIO.Label
+    -- * LIO monad defintiion
+    LIO.Monad
+    LIO.Monad.TCB
+    -- * LIO privileges
+    LIO.Privs
+    LIO.Privs.TCB
+    -- * Labeled exceptions
+    LIO.Exception
+    LIO.Exception.TCB
+    -- * LIO with DCLabels
+    LIO.DCLabel
+    -- * Guards
+    LIO.Guards
+    -- * Exceptions related
+    LIO.Exception.MonitorFailure
+  Other-modules:
+    LIO.Exception.Throw

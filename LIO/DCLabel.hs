@@ -1,139 +1,66 @@
-{-# LANGUAGE CPP #-}
-#if __GLASGOW_HASKELL__ >= 702
 {-# LANGUAGE Trustworthy #-}
-#endif
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
-{-| This module provides bindings for the @DCLabel@ module, with some 
-renaming to resolve name clashes. The delegation of privilege and 
-other trusted code is not exported by this module and code wishing to
-use this should import @DCLabel.TCB@.
+{-|
+
+This module provides bindings for the @DCLabel@ module.
+
 -}
 
-{-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 module LIO.DCLabel ( -- * DCLabel export
-  		     module DCLabel.Safe
-                   , DCCatSet
-                     -- * Renamed privileges
-                   , DCPriv, DCPrivTCB
+  		     module DCLabel
                      -- * Useful aliases for the LIO Monad
-                   , DCLabeled, DC, evalDC, evalDCWithRoot, DCGate
-                     -- * Public label
-                   , lpub
-                   )where
+                   , DC, evalDC, runDC
+                   ) where
 
-import LIO.TCB
+import           LIO.Label
+import           LIO.Monad
+import           LIO.Privs
+import           LIO.Privs.TCB
 
-import LIO.Handle (evalWithRoot)
-
-import Data.Typeable
-
-import DCLabel.Safe hiding ( Priv
-                           , bottom
-                           , top
-                           , join
-                           , meet)
-import qualified DCLabel.Core as DCL
+import           DCLabel hiding (canFlowTo)
+import qualified DCLabel as D
+import           DCLabel.Privs.TCB
 
 
-deriving instance Typeable DCL.Disj
-deriving instance Typeable DCL.Conj
-deriving instance Typeable DCL.Component
-deriving instance Typeable DCL.DCLabel
 
+--
+-- Label related instances
+--
 
 instance Label DCLabel where
-	lbot = DCL.bottom
-	ltop = DCL.top
-	lub  = DCL.join
-	glb  = DCL.meet
-	leq  = DCL.canflowto
+  bottom    = dcBot
+  top       = dcTop
+  join      = dcJoin
+  meet      = dcMeet
+  canFlowTo = D.canFlowTo
 
-instance PrivTCB DCL.TCBPriv
-
-instance MintTCB DCL.TCBPriv DCL.Priv where
-	mintTCB = DCL.createPrivTCB
-
-instance MintTCB DCL.TCBPriv DCL.Principal where
-	mintTCB p = DCL.createPrivTCB (newPriv p)
-
-instance Priv DCLabel DCL.TCBPriv where
-  	leqp = DCL.canflowto_p
-        {-
-        The implementation of lostar deserves an explanation. Firstly note
-        that the properties, for @r = lostar p l g@ that must be satisfied
-        are [the suffix \'s\' (\'i\')is used for seecrecy (resp. integrity):
-        1.) @leq g r    : (rs => gs)      and  (gi => ri)@
-        2.) @leqp p l r : (rs /\ p => ls) and  (li /\ p => ri)@
-        Finding the integrity component of @r@ is trivial: it's
-        simply the least upper bound of @gi@ and @li /\ p@.
-        Finding the secrecy component is a bit trickier. To do so, we first
-        find all the categories of @ls@ that are not implied by @p@ (this
-        gives us @rs'@), such that @rs' /\ p => ls@. Then, we need to find
-        the remaining categories in @gs@ that are not implied by @rs'@ (this
-        gives us @rs''@). Directly, @rs = rs' /\ rs''@.
-        -}
-        lostar p l g = 
-          let (ls, li) = (DCL.toLNF . secrecy $ l, DCL.toLNF . integrity $ l)
-              (gs, gi) = (DCL.toLNF . secrecy $ g, DCL.toLNF . integrity $ g)
-              lp       = DCL.toLNF . DCL.priv $ p
-              rs'      = c2l [c | c <- getCats ls
-                                , not (lp `DCL.implies` (c2l [c]))]
-              rs''     = c2l [c | c <- getCats gs
-                                , not (rs' `DCL.implies` (c2l [c]))]
-              rs       = rs' `DCL.and_component` rs''
-              ri       = (li `DCL.and_component` lp) `DCL.or_component` gi
-         in DCL.toLNF $ simpleNewLabel p (newDC rs ri)
-              where getCats = DCL.conj . DCL.component
-                    c2l = DCL.MkComponent . DCL.MkConj
-                    simpleNewLabel pr lr | pr == DCL.rootPrivTCB = g   
-                                         | pr == DCL.noPriv      = l `lub` g
-                                         | otherwise             = lr
-
-
-instance PrivDesc DCPrivTCB DCPriv where
-  privDesc = priv
 
 --
--- Renaming
+-- Privileges related instances
 --
 
--- | A @DCLabel@ category set.
-type DCCatSet = DCL.Component
+instance PrivTCB  DCPriv
+instance PrivDesc DCPriv DCPrivDesc where privDesc = unDCPriv
+instance MintTCB  DCPriv DCPrivDesc where mintTCB = DCPrivTCB
 
--- | A @DCLabel@ (untrusted) privilege.
-type DCPriv = DCL.Priv
-
--- | A @DCLabel@ privilege.
-type DCPrivTCB = DCL.TCBPriv
-
+instance Priv DCLabel DCPriv where
+  canFlowToP = D.canFlowToP
+  labelDiffP = undefined
 
 --
 -- LIO aliases
 --
 
-instance LabelState DCLabel DCPrivTCB () where
-
--- | The type for 'Labeled' values uinsg 'DCLabel' as the label.
-type DCLabeled a = Labeled DCLabel a
-
 -- | The monad for LIO computations using 'DCLabel' as the label.
-type DC = LIO DCLabel DCPrivTCB ()
+type DC = LIO DCLabel
 
--- | Runs a computation in the LIO Monad, returning both the
--- computation's result and the label of the result.
-evalDC :: DC a -> IO (a, DCLabel)
-evalDC m = evalLIO m ()
 
--- | Same as 'evalDC', but with support for filesystem.
-evalDCWithRoot ::  FilePath -> Maybe DCLabel -> DC a -> IO (a, DCLabel)
-evalDCWithRoot path ml act = evalWithRoot path ml act ()
+-- | Evaluate computation in the 'DC' monad.
+evalDC :: DC a -> IO a
+evalDC act = evalLIO act defaultState
 
--- | A DC Label gate
-type DCGate = Gate DCLabel DCPriv
-
--- | Label corresponding to public data.
-lpub :: DCLabel
-lpub = newDC (<>) (<>)
+-- | Evaluate computation in the 'DC' monad.
+runDC :: DC a -> IO (a, LIOState DCLabel)
+runDC act = runLIO act defaultState
