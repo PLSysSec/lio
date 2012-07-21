@@ -13,7 +13,7 @@ module LIO.Monad (
     LIOState(..), defaultState
   -- * LIO Monad
   , LIO, evalLIO, runLIO
-  , getLabel, getClearance
+  , getLabel, getClearance, getCallTrace 
   ) where
 
 import           LIO.Monad.TCB
@@ -57,7 +57,7 @@ runLIO act s = runStateT (unLIOTCB act) s
 defaultState :: Label l => LIOState l
 defaultState = LIOState { lioLabel = bottom
                         , lioClearance = top 
-                        , lioCallTrace = [] }
+                        , lioCallTrace = CallTrace [] }
 
 -- | Returns the current value of the thread's label.
 getLabel :: Label l => LIO l l
@@ -66,3 +66,7 @@ getLabel = lioLabel `liftM` getLIOStateTCB
 -- | Returns the current value of the thread's clearance.
 getClearance :: Label l => LIO l l
 getClearance = lioClearance `liftM` getLIOStateTCB
+
+-- | Get the current call trace
+getCallTrace :: Label l => LIO l CallTrace
+getCallTrace = lioCallTrace `liftM` getLIOStateTCB

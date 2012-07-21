@@ -9,27 +9,23 @@ Stability:      experimental
 Synopsis:       Labeled IO Information Flow Control Library
 Category:       Security
 Description:
-        The /Labeled IO/ (LIO) library provides information flow
-        control for incorporating untrusted code within Haskell
-        applications.  Most code should import module "LIO" and
-        whichever label type the application is using (e.g.,
-        "LIO.DCLabel").  The core functionality of the library is
-        documented in "LIO.TCB".  LIO was implemented by David
-        Mazieres (<http://www.scs.stanford.edu/~dm/>), Deian Stefan
-        (<http://www.scs.stanford.edu/~deian/>), Alejandro Russo
-        (<http://www.cse.chalmers.se/~russo/>) and John C. Mitchell
-        (<http://www.stanford.edu/~jcm/>).
+  The /Labeled IO/ (LIO) library provides information flow control for
+  incorporating untrusted code within Haskell applications.  Most code
+  should import module "LIO" and whichever label type the application
+  is using (e.g., "LIO.DCLabel"). All untrusted code should be
+  computations of type 'LIO', which trusted code can execute with
+  'evalLIO'.
 
-        The extended version of our paper, that includes the proofs
-        is available here:
-        <http://www.scs.stanford.edu/~deian/pubs/stefan:2011:flexible-ext.pdf>.
+  The extended version of our paper, that includes the proofs
+  is available here: <http://arxiv.org/abs/1207.1457>
 
-        The library depends on the @DCLabel@ module. You can read more on
-        DC Labels here:
-        <http://www.scs.stanford.edu/~deian/dclabels/>.
+  The library depends on the @DCLabel@ module. You can read more on
+  DC Labels here: <http://www.scs.stanford.edu/~deian/dclabels/>.
 Cabal-Version:  >= 1.8
-
 Build-Type:     Simple
+
+Extra-source-files:
+  ACKNOWLEDGEMENTS
 
 Library
   Build-Depends: base,

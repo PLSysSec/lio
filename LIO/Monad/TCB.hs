@@ -10,10 +10,12 @@ trusted state access/modifying functions. See "LIO.Monad" for a safe export of t
 
 module LIO.Monad.TCB (
   -- * LIO state
-    LIOState(..), CallTrace
+    LIOState(..), CallTrace(..)
   -- * LIO Monad
   , LIO(..)
   , getLIOStateTCB, putLIOStateTCB, updateLIOStateTCB 
+  -- * IO helpers
+  , ioTCB
   ) where
 
 import Control.Applicative
@@ -27,7 +29,14 @@ import LIO.Label
 --
 
 -- | Call trace for 'LIO' monad
-type CallTrace = [String]
+newtype CallTrace = CallTrace [String]
+  deriving Eq
+
+instance Show CallTrace where
+  show (CallTrace cs) = unlines . reverse $ cs
+
+instance Read CallTrace where
+  readsPrec _ str = [(CallTrace . reverse $ lines str, "")]
 
 -- | Internal state of an 'LIO' computation.
 data LIOState l = LIOState {
@@ -56,9 +65,10 @@ instance Label l => MonadLoc (LIO l) where
     s <- getLIOStateTCB 
     let l = show . lioLabel $ s
         c = show . lioClearance $ s
-        t = lioCallTrace s
-        s' = s { lioCallTrace = ( loc ++ "; Current label = "     ++ l
-                                      ++ "; Current clearance = " ++ c) : t }
+        (CallTrace t) = lioCallTrace s
+        s' = s { lioCallTrace = CallTrace $
+                  ( loc ++ ";\n\t Label = "     ++ l
+                        ++ "; Clearance = " ++ c) : t }
     putLIOStateTCB s'
     act
 
@@ -78,3 +88,12 @@ updateLIOStateTCB :: Label l => (LIOState l -> LIOState l) -> LIO l ()
 updateLIOStateTCB f = do
   s <- getLIOStateTCB
   putLIOStateTCB $! f s
+
+-- | Lifts an 'IO' computation into the 'LIO' monad.  Note that exceptions thrown
+-- within the 'IO' computation cannot directly be caught within the 'LIO'
+-- computation.  Thus, you will generally want to use 'rtioTCB' exported by
+-- "LIO.Exception.TCB" instead of 'ioTCB'.
+ioTCB :: Label l => IO a -> LIO l a
+ioTCB a = LIOTCB . StateT $! \s -> do
+  r <- a
+  return (r, s)

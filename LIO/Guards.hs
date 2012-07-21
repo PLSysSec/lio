@@ -1,4 +1,4 @@
--- {-# OPTIONS_GHC -F -pgmF MonadLoc #-}
+{-# OPTIONS_GHC -F -pgmF MonadLoc #-}
 {-# LANGUAGE Trustworthy #-}
 
 {- |
@@ -79,7 +79,7 @@ taintP p newl = do
   c <- getClearance
   l <- getLabel
   let l' = labelDiffP p newl l
-  unless (not $! l' `canFlowTo` c) $! throwLIO ClearanceViolation
+  unless (l' `canFlowTo` c) $! throwLIO ClearanceViolation
   updateLIOStateTCB $ \s -> s { lioLabel = l' }
 
 --
@@ -91,8 +91,9 @@ taintP p newl = do
 -- object labeled @l@ for which the write has no observable
 -- side-effects.  If @l'@ is the current label, then this function
 -- ensures that @l' ``canFlowTo`` l@. If the condition does not hold
--- 'CanFlowToViolation' will be thrown.
-guardWrite :: Priv l p => l -> LIO l ()
+-- 'CanFlowToViolation' will be thrown. Note taht @l@ must be below the
+-- clearance, otherwise 'ClearanceViolation' will be thrown.
+guardWrite :: Label l => l -> LIO l ()
 guardWrite = guardWriteP NoPrivs
 
 -- | Like 'guardWrite', but takes privilege argument to be more
@@ -100,7 +101,9 @@ guardWrite = guardWriteP NoPrivs
 guardWriteP :: Priv l p => p -> l -> LIO l ()
 guardWriteP p newl = do
   l <- getLabel
-  unless (canFlowToP p newl l) $! throwLIO CanFlowToViolation
+  c <- getClearance
+  unless (canFlowToP p l newl) $! throwLIO CanFlowToViolation
+  unless (newl `canFlowTo` c)  $! throwLIO ClearanceViolation
 
 -- | Use @guardWrite@ in any (trusted) code before writing to an
 -- object labeled @l@ for which a write implies a read. Dually, use 

@@ -9,6 +9,7 @@ relies on "LIO.Guards" which, in turn, relies on the use of 'throwLIO.
 -}
 
 module LIO.Exception.Throw ( throwLIO ) where
+
 import           LIO.Label
 import           LIO.Monad
 import           LIO.Exception.TCB 
@@ -19,4 +20,5 @@ import           Control.Exception
 throwLIO :: (Exception e, Label l) => e -> LIO l a
 throwLIO e = do
   l <- getLabel
-  unlabeledThrowTCB $! LabeledExceptionTCB l (toException e)
+  t <- getCallTrace 
+  unlabeledThrowTCB $! LabeledExceptionTCB l t (toException e)

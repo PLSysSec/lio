@@ -1,4 +1,4 @@
--- {-# OPTIONS_GHC -F -pgmF MonadLoc #-}
+{-# OPTIONS_GHC -F -pgmF MonadLoc #-}
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -43,7 +43,7 @@ catchLIOP :: (Exception e, Priv l p)
           -> LIO l a
 catchLIOP p act handler = do 
   clr <- getClearance
-  act `catchTCB` \se@(LabeledExceptionTCB l seInner) -> 
+  act `catchTCB` \se@(LabeledExceptionTCB l _ seInner) -> 
     case fromException seInner of
      Just e | l `canFlowTo` clr -> taintP p l >> handler e
      _                          -> unlabeledThrowTCB se
