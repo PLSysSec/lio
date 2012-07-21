@@ -1,67 +1,49 @@
-{-# OPTIONS_GHC -F -pgmF MonadLoc #-}
-{-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE Safe #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{- | 
 
-module LIO.Exception (
-  -- * LIO exceptions
-    LabeledException
-  -- * Throw and catch
-  , throwLIO
-  , catchLIOP, catchLIO
-  -- * LIO Monad
-  , tryLIO
-  -- * Exceptions thrown by LIO
-  , MonitorFailure(..), VMonitorFailure(..)
-  ) where
+This module exports two exception types that the @lio@ library throws
+before an IFC violation can take place. 'MonitorFailure' should be
+used when the reason for failure is sufficiently described by the
+type. Otherwise, 'VMonitorFailure' (i.e., \"Verbose\"-'MonitorFailure')
+should be used to further describe the error.
 
-import           LIO.Label
-import           LIO.Monad
-import           LIO.Privs
-import           LIO.Guards
-import           LIO.Exception.Throw
-import           LIO.Exception.MonitorFailure
-import           LIO.Exception.TCB 
+-}
+
+module LIO.Exception ( MonitorFailure(..)
+                     , VMonitorFailure(..)
+                     ) where
+
+import           Data.Typeable
 import           Control.Exception
-import           Control.Monad
-import           Control.Monad.Loc
 
---
--- Exceptions
---
+-- | Exceptions thrown when some IFC restriction is about to be
+-- violated.
+data MonitorFailure = ClearanceViolation
+                    -- ^ Current label would exceed clearance, or
+                    -- object label is above clearance.
+                    | CurrentLabelViolation
+                    -- ^ Clearance would be below current label, or
+                    -- object label is not above current label.
+                    | InsufficientPrivs
+                    -- ^ Insufficient privileges. Thrown when lowering
+                    -- the current label or raising the clearance
+                    -- cannot be accomplished with the supplied
+                    -- privileges.
+                    | CanFlowToViolation
+                    -- ^ Generic can-flow-to failure, use with
+                    -- 'VMonitorFailure'
+                    deriving (Show, Typeable)
 
+instance Exception MonitorFailure
 
--- | Catches an exception, so long as the label at the point where the
--- exception was thrown can flow to the label at which @catchLIOP@ is
--- invoked, modulo the privileges specified.  Note that the handler
--- raises the current label to the joint of the current label and
--- exception label.
-catchLIOP :: (Exception e, Priv l p)
-          => p
-          -> LIO l a
-          -> (e -> LIO l a)
-          -> LIO l a
-catchLIOP p act handler = do 
-  clr <- getClearance
-  act `catchTCB` \se@(LabeledExceptionTCB l _ seInner) -> 
-    case fromException seInner of
-     Just e | l `canFlowTo` clr -> taintP p l >> handler e
-     _                          -> unlabeledThrowTCB se
+-- | Verbose version of 'MonitorFailure' also carrying around a
+-- detailed message.
+data VMonitorFailure = VMonitorFailure { monitorFailure :: MonitorFailure
+                                       , monitorMessage :: String }
+                    deriving Typeable
 
--- | Same as 'catchLIOP' but does not use privileges when \"tainting\"
--- by exception label.
-catchLIO :: (Exception e, Label l)
-         => LIO l a
-         -> (e -> LIO l a)
-         -> LIO l a
-catchLIO = catchLIOP NoPrivs 
+instance Show VMonitorFailure where
+  show m = (show $ monitorFailure m) ++ ": " ++ (monitorMessage m)
 
--- | Similar to 'evalLIO', but catches any exceptions thrown by
--- untrusted code instead of propagating them.
-tryLIO :: Label l
-       => LIO l a
-        -- ^ LIO computation that may throw an exception
-       -> LIOState l
-        -- ^ Initial state
-       -> IO (Either (LabeledException l) a, LIOState l)
-tryLIO act = runLIO (Right `liftM` act `catchTCB` (return . Left))
+instance Exception VMonitorFailure

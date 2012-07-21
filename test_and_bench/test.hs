@@ -17,8 +17,7 @@ import qualified Test.HUnit as HU
 import DCLabel hiding (canFlowTo)
 import LIO
 import LIO.DCLabel
-import LIO.Monad.TCB
-import LIO.Exception.TCB
+import LIO.TCB
 
 import Data.Set hiding (map)
 import Data.Serialize
@@ -26,7 +25,11 @@ import Data.Typeable
 
 import Control.Monad hiding (join)
 import Control.Monad.Loc
-import Control.Exception
+import Control.Exception hiding ( throwIO
+                                , catch 
+                                , finally
+                                , onException
+                                , bracket)
 
 import DCLabel.Instances -- DCLabel instances
 import Instances -- LIO instances
@@ -63,6 +66,16 @@ tests = [
                      test_throwB_catchLIOA 
       , testProperty "catchLIO does not untaint computation"
                      prop_catch_preserves_taint
+      , testCase     "onException executes final action"
+                     test_onException_executes_final_action
+      , testCase     "finally executes final action (noException)" $
+                     test_finally_executes_final_action (return ())
+      , testCase     "finally executes final action (throwLIO A)" $
+                     test_finally_executes_final_action (throwLIO A)
+      , testCase     "bracket executes final action (noException)" $
+                     test_bracket_executes_final_action (return ())
+      , testCase     "bracket executes final action (throwLIO A)" $
+                     test_bracket_executes_final_action (throwLIO A)
   ]
   , testGroup "Guards" [
         testProperty "Alloc guard fails if argument above clerance" $
@@ -71,18 +84,12 @@ tests = [
                      prop_guard_fail_if_label_above_clearance taint
       , testProperty "Write guard fails if argument above clerance" $
                      prop_guard_fail_if_label_above_clearance guardWrite
-      , testProperty "Read/Write guard fails if argument above clerance" $
-                     prop_guard_fail_if_label_above_clearance guardReadWrite
       , testProperty "Alloc guard fails if argument not above current label" $
                      prop_guard_fail_if_label_below_current guardAlloc
       , testProperty "Write guard fails if argument not above current label" $
                      prop_guard_fail_if_label_below_current guardWrite
-      , testProperty "Read/Write guard fails if argument not above current label" $
-                     prop_guard_fail_if_label_below_current guardReadWrite
       , testProperty "Taint raises current label" $
                      prop_guard_raises_label taint
-      , testProperty "Read/write guard raises current label" $
-                     prop_guard_raises_label guardReadWrite
     ]
   ]
 
@@ -129,9 +136,9 @@ test_throwA_catchLIOA = do
 test_throwB_catchLIOA :: Assertion
 test_throwB_catchLIOA = do
   evalDC $ (throwLIO B `catchLIO`(\(_ :: A) -> return ())) `catchTCB`
-            (\(LabeledExceptionTCB _ _ se) -> case fromException se of
-                                                (Just B) -> return ()
-                                                _ -> ioTCB $ assertFailure "mismatch")
+            (\(LabeledExceptionTCB _ se) -> case fromException se of
+                                              (Just B) -> return ()
+                                              _ -> ioTCB $ assertFailure "mismatch")
 
 -- | throw and catch type correctness
 test_throwA_catchLIOSomeException :: Assertion
@@ -148,6 +155,30 @@ prop_catch_preserves_taint = monadicDC $ do
                     ) (\(SomeException _) -> getLabel)
   l'' <- run $ getLabel
   Q.assert $ l == l' && l == l''
+
+-- | onException executes final action
+test_onException_executes_final_action :: Assertion
+test_onException_executes_final_action = do
+  (res, _) <- tryDC $ throwLIO A `onException` throwLIO B
+  case res of
+    (Left (LabeledExceptionTCB _ x)) | fromException x == Just B -> return ()
+    _ -> assertFailure "should have thrown B"
+
+-- | finally executes final action
+test_finally_executes_final_action :: DC () -> Assertion
+test_finally_executes_final_action act = do
+  (res, _) <- tryDC $ act `finally` throwLIO B
+  case res of
+    (Left (LabeledExceptionTCB _ x)) | fromException x == Just B -> return ()
+    _ -> assertFailure "should have thrown B"
+
+-- | bracket executes final action
+test_bracket_executes_final_action :: DC () -> Assertion
+test_bracket_executes_final_action act = do
+  (res, _) <- tryDC $ bracket (return ()) (const $ throwLIO B) (const act)
+  case res of
+    (Left (LabeledExceptionTCB _ x)) | fromException x == Just B -> return ()
+    _ -> assertFailure "should have thrown B"
 
 --
 -- Guards

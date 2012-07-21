@@ -46,9 +46,8 @@ lioActs = [ return . DCAction $ return ()
           , catchAllAct
           , catchNoneAct
           , withRandomL guardAlloc
-          , withRandomL guardWrite
           , withRandomL taint
-          , withRandomL guardReadWrite
+          , withRandomL guardWrite
           ] 
   where throwAct = do
           let ez = [toException A, toException B,toException C,toException D]
