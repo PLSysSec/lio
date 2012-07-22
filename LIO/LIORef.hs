@@ -67,7 +67,7 @@ readLIORefP p lr = do
 -- | Write a new value into a labeled reference. A write succeeds if
 -- the current label can-flow-to the label of the reference, and the
 -- label of the reference can-flow-to the current clearance.
-writeLIORef :: Priv l p => LIORef l a -> a -> LIO l ()
+writeLIORef :: Label l => LIORef l a -> a -> LIO l ()
 writeLIORef = writeLIORefP NoPrivs
 
 -- | Same as 'writeLIORef' except @writeLIORefP@ takes a set of
@@ -104,7 +104,11 @@ modifyLIORefP p lr f = do
 
 -- | Atomically modifies the contents of an 'LIORef'. It is required
 -- that the label of the reference be above the current label, but
--- below the current clearance. 
+-- below the current clearance. Moreover, since this function can be
+-- used to directly read the value of the stored reference, the
+-- computation is \"tainted\" by the reference label (i.e., the
+-- current label is raised to the 'join' of the current and reference
+-- labels).
 atomicModifyLIORef :: Label l => LIORef l a -> (a -> (a, b)) -> LIO l b
 atomicModifyLIORef = atomicModifyLIORefP NoPrivs
 
@@ -112,5 +116,5 @@ atomicModifyLIORef = atomicModifyLIORefP NoPrivs
 -- a set of privileges which are accounted for in label comparisons.
 atomicModifyLIORefP :: Priv l p => p -> LIORef l a -> (a -> (a, b)) -> LIO l b
 atomicModifyLIORefP p lr f = do
-  guardAllocP p $! labelOf lr 
+  guardWriteP p $! labelOf lr 
   atomicModifyLIORefTCB lr f

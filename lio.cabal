@@ -46,6 +46,7 @@ Library
     -- * Core library
     LIO.Core
     LIO.Exception
+    LIO.TCB
     -- * Labeled values
     LIO.Labeled
     LIO.Labeled.TCB

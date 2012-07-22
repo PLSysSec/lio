@@ -19,11 +19,14 @@ module LIO.DCLabel (
   , DC, evalDC, runDC, tryDC
   -- ** Exceptions
   , DCLabeledException
-  -- ** Labeled valuedj
+  -- ** Labeled values
   , DCLabeled
+  -- ** Labeled references
+  , DCRef
   ) where
 
 import           LIO
+import           LIO.LIORef
 import           LIO.Labeled.TCB
 import           LIO.Privs.TCB
 
@@ -71,6 +74,9 @@ type DCLabeled = Labeled DCLabel
 instance LabeledFunctor DCLabel where
   lFmap lv f = let s = dcSecrecy . labelOf $ lv
                in label (dcLabel s dcTrue) $ f (unlabelTCB lv)
+
+-- | DC Labeled 'LIORef's
+type DCRef = LIORef DCLabel
 
 --
 -- DC monad
