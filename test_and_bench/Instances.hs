@@ -1,6 +1,7 @@
-{-# OPTIONS_GHC -F -pgmF MonadLoc #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE RankNTypes #-}
 
@@ -8,6 +9,7 @@
 module Instances {-()-} where
 
 import Data.Typeable
+import Data.IORef
 
 import Control.Monad
 import Control.Monad.Loc
@@ -18,9 +20,13 @@ import Test.QuickCheck.Instances
 import DCLabel.Instances
 
 import LIO
+import LIO.LIORef
+import LIO.LIORef.TCB (newLIORefTCB, unlabelLIORefTCB)
 import LIO.TCB (showTCB)
 import LIO.Labeled.TCB
 import LIO.DCLabel
+
+import System.IO.Unsafe
 
 instance (Show a, Label l) => Show (Labeled l a) where
   show = showTCB
@@ -48,6 +54,17 @@ data DCAction = forall a. (Show a, Arbitrary a) => DCAction (DC a)
 instance Show DCAction where
   show = error "No Show instance for DCAction"
 
+instance Arbitrary a => Arbitrary (DCRef a) where
+  arbitrary = do
+    l <- arbitrary
+    a <- arbitrary
+    return . unsafePerformIO . evalDC $ newLIORefTCB l a
+
+instance Show a => Show (DCRef a) where
+  show lr = let v = unsafePerformIO . readIORef $ unlabelLIORefTCB lr
+                l = labelOf lr
+            in "DCRef { label = "++ show l ++", value = "++ show v ++" }"
+
 
 -- random dc actions
 lioActs :: [Gen DCAction]
@@ -62,6 +79,10 @@ lioActs = [ return . DCAction $ return ()
           , withRandomL guardWrite
           , labelAct
           , unlabelAct
+          , newLIORefAct
+          , writeLIORefAct
+          , modifyLIORefAct
+          , atomicModifyLIORefAct
           ] 
   where throwAct = do
           let ez = [toException A, toException B,toException C,toException D]
@@ -88,6 +109,22 @@ lioActs = [ return . DCAction $ return ()
         unlabelAct = do
           lv <- arbitrary :: Gen (DCLabeled Int)
           return . DCAction $ unlabel lv
+        newLIORefAct = do
+          i <- arbitrary :: Gen Int
+          withRandomL (\l -> newLIORef l i)
+        readLIORefAct = do
+          lv <- arbitrary :: Gen (DCRef Int)
+          return . DCAction $ readLIORef lv
+        writeLIORefAct = do
+          i <- arbitrary :: Gen Int
+          lv <- arbitrary :: Gen (DCRef Int)
+          return . DCAction $ writeLIORef lv i
+        modifyLIORefAct = do
+          lv <- arbitrary :: Gen (DCRef Int)
+          return . DCAction $ modifyLIORef lv id
+        atomicModifyLIORefAct = do
+          lv <- arbitrary :: Gen (DCRef Int)
+          return . DCAction $ atomicModifyLIORef lv (\i -> (i,i))
 
 instance Arbitrary DCAction where
   arbitrary = oneof lioActs

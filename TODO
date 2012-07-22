@@ -3,8 +3,15 @@
 |                         TASKS                           |PRIORITY|DIFFICULTY|
 |                                                         |        |          |
 |=========================================================|========|==========|
-|- Implement labelDiffP for DCLabel (i.e., lostar)        |  High  |   Easy   |
+|- Port over LIO.Concurrent                               |  High  | 2-3 hr   |
+|_________________________________________________________|________|__________|
+|- Port over LIO.FS                                       |  High  | 2-4 hr   |
+|_________________________________________________________|________|__________|
+|- Implement labelDiffP for DCLabel (i.e., lostar)        |  High  |   1 hr   |
 |_________________________________________________________|________|__________|
 |- Add maskTCB (mask for LIO), from which we can implement|        |          |
-|  finallyTCB and bracketTCB.                             |  Low   |   Easy   |
+|  finallyTCB and bracketTCB.                             |  Low   |   1 hr   |
+|_________________________________________________________|________|__________|
+|- Write test cases for all the ...P functions            |        |          |
+|                                                         |  Med   |   2 hr   |
 |_________________________________________________________|________|__________|
