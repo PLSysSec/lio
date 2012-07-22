@@ -4,6 +4,7 @@ module LIO (
     module LIO.Label
   , module LIO.Core
   , module LIO.Exception
+  , module LIO.MonadLIO
   , module LIO.Labeled
   , module LIO.Privs
   , module LIO.Gate
@@ -12,6 +13,7 @@ module LIO (
 import           LIO.Label
 import           LIO.Core
 import           LIO.Exception
+import           LIO.MonadLIO
 import           LIO.Labeled
 import           LIO.Privs
 import           LIO.Gate
