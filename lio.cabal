@@ -53,6 +53,8 @@ Library
     -- * Labeled IORefs
     LIO.LIORef
     LIO.LIORef.TCB
+    -- * Gates
+    LIO.Gate
     -- * LIO privileges
     LIO.Privs
     LIO.Privs.TCB

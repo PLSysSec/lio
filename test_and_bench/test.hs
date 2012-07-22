@@ -19,6 +19,7 @@ import LIO
 import LIO.Labeled.TCB (labelTCB)
 import LIO.DCLabel
 import LIO.LIORef
+import LIO.Privs.TCB (mintTCB)
 import LIO.TCB
 
 import Data.Set hiding (map)
@@ -136,6 +137,10 @@ tests = [
                      prop_guard_fail_if_label_below_current guardWrite
       , testProperty "Taint raises current label" $
                      prop_guard_raises_label taint
+    ]
+  , testGroup "Gates" [
+        testProperty  "callGate correct" $
+                      callGate_correct
     ]
   ]
 
@@ -334,3 +339,17 @@ prop_guard_raises_label act = monadicDC $ do
   run $ act lres
   l2    <- run getLabel
   Q.assert $ l2 == lres
+
+--
+-- Gates
+--
+
+-- | Calling gate with right privilege returns True, and False
+-- otherwise.
+callGate_correct :: Property
+callGate_correct = forAll arbitrary $ \(d1 :: DCPrivDesc) ->
+                   forAll arbitrary $ \(d2 :: DCPrivDesc) ->
+  let p1 = mintTCB d1
+      p2 = mintTCB d2
+      f = gate $ \d -> if d == privDesc p1 then True else False
+  in p1 /= p2 ==> callGate f p1 && (not $ callGate f p2)

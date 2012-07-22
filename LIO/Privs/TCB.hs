@@ -41,13 +41,13 @@ class PrivTCB p
 -- privilege. This is generally a good idea even if the constructor is
 -- not made available, since code can (usually) cache such privilege 
 -- descriptions.
-class (PrivTCB p, Show d) => PrivDesc p d | p -> d where
+class (PrivTCB p, Show d) => PrivDesc p d | p -> d, d -> p where
   -- | Retrive privilege description
   privDesc :: p -> d
 
 -- | Class used for converting privilege descriptions to privileges by
 -- code that is in the TCB.
-class (PrivDesc p d) => MintTCB p d | p -> d where
+class (PrivDesc p d) => MintTCB p d where
   -- |A function that mints new privilege values
   -- in a way that only privileged code should be allowed to do
   mintTCB :: d -> p
