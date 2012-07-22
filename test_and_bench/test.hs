@@ -7,7 +7,7 @@ module Main {-(main) -} where
 import Test.Framework (Test, defaultMain, testGroup)
 import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.Framework.Providers.HUnit (testCase)
-import Test.QuickCheck
+import Test.QuickCheck hiding (label)
 import Test.QuickCheck.Instances
 import Test.QuickCheck.Monadic
 import qualified Test.QuickCheck.Monadic as Q
@@ -20,7 +20,6 @@ import LIO.DCLabel
 import LIO.TCB
 
 import Data.Set hiding (map)
-import Data.Serialize
 import Data.Typeable
 
 import Control.Monad hiding (join)
@@ -50,8 +49,10 @@ main = defaultMain tests
 tests :: [Test]
 tests = [
     testGroup "General" [
-         testProperty "Current label always flows to clearance" 
-                       prop_guard_curLabel_flowsTo_curClearance 
+        testProperty "Current label always flows to clearance" 
+                     prop_guard_curLabel_flowsTo_curClearance 
+      , testProperty "unlabel raises current label"
+                      prop_label_unlabel
     ]
   , testGroup "Exceptions" [
         testProperty "catchTCB catches all exceptions"
@@ -106,6 +107,16 @@ prop_guard_curLabel_flowsTo_curClearance = monadicDC $ do
   l2 <- run getLabel
   c2 <- run getClearance
   Q.assert $ l2 `canFlowTo` c2
+
+-- | Check that the current label is raised when unlabeling a labeled value
+prop_label_unlabel :: Property
+prop_label_unlabel = monadicDC $ do
+  l    <- pick (arbitrary :: Gen DCLabel)
+  x    <- pick (arbitrary :: Gen Int)
+  lx   <- run $ label l x
+  x'   <- run $ unlabel lx
+  lbl1 <- run $ getLabel
+  Q.assert $ lbl1 == l && x' == x
 
 --
 -- Exceptions

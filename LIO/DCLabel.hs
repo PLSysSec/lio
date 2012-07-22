@@ -19,9 +19,12 @@ module LIO.DCLabel (
   , DC, evalDC, runDC, tryDC
   -- ** Exceptions
   , DCLabeledException
+  -- ** Labeled valuedj
+  , DCLabeled
   ) where
 
 import           LIO
+import           LIO.Labeled.TCB
 import           LIO.Privs.TCB
 
 import           DCLabel hiding (canFlowTo)
@@ -61,6 +64,13 @@ instance Priv DCLabel DCPriv where
 
 -- | DC Labeled exceptions.
 type DCLabeledException = LabeledException DCLabel
+
+-- | DC Labeled values.
+type DCLabeled = Labeled DCLabel
+
+instance LabeledFunctor DCLabel where
+  lFmap lv f = let s = dcSecrecy . labelOf $ lv
+               in label (dcLabel s dcTrue) $ f (unlabelTCB lv)
 
 --
 -- DC monad

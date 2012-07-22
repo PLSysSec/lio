@@ -1,13 +1,15 @@
 {-# LANGUAGE Safe #-}
 {- | 
 
-This module exports the type class that very label format must
+This module exports the type class that every label format must
 implement. Labels must form a bounded lattice and be instances of
-'Show' and 'Typeable'.
+'Show' and 'Typeable'. The class 'LabelOf' is additionally used to
+get the type of labeled objects.
 
 -}
 
-module LIO.Label ( Label(..) ) where
+module LIO.Label ( Label(..)
+                 , LabelOf(..) ) where
 
 import Data.Typeable
 
@@ -30,3 +32,10 @@ class (Eq l, Show l, Typeable l) => Label l where
   meet :: l -> l -> l
   -- | Can-flow-to relation
   canFlowTo :: l -> l -> Bool
+
+
+-- | Generic class used to ge tht type of labeled objects.
+class LabelOf t where
+  -- | Get the label of a type kinded @* -> *@
+  labelOf :: Label l => t l a -> l
+  

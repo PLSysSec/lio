@@ -36,6 +36,8 @@ Library
                  monadloc
 
 
+  Ghc-options: -Wall -Werror -fno-warn-orphans
+
   Exposed-modules:
     -- * Top-level exporter
     LIO
@@ -44,6 +46,9 @@ Library
     -- * Core library
     LIO.Core
     LIO.Exception
+    -- * Labeled values
+    LIO.Labeled
+    LIO.Labeled.TCB
     -- * LIO privileges
     LIO.Privs
     LIO.Privs.TCB

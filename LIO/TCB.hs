@@ -30,15 +30,18 @@ module LIO.TCB (
   , unlabeledThrowTCB, catchTCB
   -- * Executing IO actions
   , ioTCB, rethrowIoTCB
+  -- * Trusted 'Show' and 'Read'
+  , ShowTCB(..), ReadTCB(..)
   ) where
 
-import           Data.IORef
 import           Data.Typeable
 
 import           Control.Applicative
 import           Control.Monad.State.Strict
 import           Control.Exception (Exception, SomeException)
 import qualified Control.Exception as E
+
+import           Text.Read (minPrec)
 
 import           LIO.Label
 
@@ -93,7 +96,7 @@ updateLIOStateTCB f = do
 --
 
 -- | A labeled exception is simply an exception associated with a label.
-data LabeledException l = LabeledExceptionTCB l SomeException
+data LabeledException l = LabeledExceptionTCB !l SomeException
   deriving (Show, Typeable)
 
 instance Label l => Exception (LabeledException l)
@@ -138,3 +141,30 @@ rethrowIoTCB :: Label l => IO a -> LIO l a
 rethrowIoTCB io = do
   l <- lioLabel `liftM` getLIOStateTCB
   ioTCB $ io `E.catch` (E.throwIO . LabeledExceptionTCB l)
+
+
+--
+-- Trusted 'Show' and 'Read'
+--
+
+-- | It would be a security issue to make certain objects a member of
+-- the 'Show' class, but nonetheless it is useful to be able to
+-- examine such objects when debugging.  The 'showTCB' method can be used
+-- to examine such objects.
+class ShowTCB a where
+    showTCB :: a -> String
+
+-- | It is useful to have the dual of 'ShowTCB', @ReadTCB@, that allows
+-- for the reading of strings that were created using 'showTCB'. Only
+-- @readTCB@ (corresponding to 'read') and @readsPrecTCB@ (corresponding
+-- to 'readsPrec') are implemented.
+class ReadTCB a where
+  -- | Trusted 'readsPrec'
+  readsPrecTCB :: Int -> ReadS a
+  -- | Trusted 'read'
+  readTCB :: String -> a
+  readTCB str = check $ readsPrecTCB minPrec str
+    where check []                          = error "readTCB: no parse"
+          check [(x,rst)] | all (==' ') rst = x
+                         | otherwise        = error "readTCB: no parse"
+          check _                           = error "readTCB: ambiguous parse"
