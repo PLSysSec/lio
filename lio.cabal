@@ -49,6 +49,9 @@ Library
     -- * Labeled values
     LIO.Labeled
     LIO.Labeled.TCB
+    -- * Labeled IORefs
+    LIO.LIORef
+    LIO.LIORef.TCB
     -- * LIO privileges
     LIO.Privs
     LIO.Privs.TCB

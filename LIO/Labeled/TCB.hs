@@ -12,9 +12,10 @@ trusted functions for creating and reading labeled values. See
 
 -}
 
-module LIO.Labeled.TCB ( Labeled(..)
-                       , labelTCB
-                       ) where
+module LIO.Labeled.TCB (
+    Labeled(..)
+  , labelTCB
+  ) where
 
 import           Data.Typeable
 import           LIO.Label

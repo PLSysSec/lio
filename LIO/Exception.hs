@@ -10,9 +10,10 @@ should be used to further describe the error.
 
 -}
 
-module LIO.Exception ( MonitorFailure(..)
-                     , VMonitorFailure(..)
-                     ) where
+module LIO.Exception (
+    MonitorFailure(..)
+  , VMonitorFailure(..)
+  ) where
 
 import           Data.Typeable
 import           Control.Exception
