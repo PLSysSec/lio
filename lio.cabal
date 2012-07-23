@@ -59,5 +59,10 @@ Library
     -- * LIO privileges
     LIO.Privs
     LIO.Privs.TCB
+    -- * Concurrency
+    LIO.Concurrent
+    LIO.Concurrent.TCB
+    LIO.Concurrent.LMVar
+    LIO.Concurrent.LMVar.TCB
     -- * LIO with DCLabels
     LIO.DCLabel
