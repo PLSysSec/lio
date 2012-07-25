@@ -42,7 +42,7 @@ upperBound = lub
 -- does not imply /greatest/ lower bound it is not a method of
 -- 'Label'.
 lowerBound :: Label l => l -> l -> l
-lowerBound = lub
+lowerBound = glb
 
 -- | Generic class used to ge tht type of labeled objects.
 class LabelOf t where

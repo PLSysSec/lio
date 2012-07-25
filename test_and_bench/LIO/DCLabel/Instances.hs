@@ -1,13 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Instances for "QuickCheck"\'s 'Arbitrary' class.
-module DCLabel.Instances () where
+module LIO.DCLabel.Instances () where
 
 import Control.Monad (liftM)
 import Test.QuickCheck
 import Test.QuickCheck.Instances
-import DCLabel.Core
-import DCLabel.Privs.TCB
+import LIO.DCLabel.Core
+import LIO.DCLabel.Privs.TCB
 import Data.Set hiding (map)
 import qualified Data.ByteString.Char8 as S8
 

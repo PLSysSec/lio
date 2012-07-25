@@ -32,8 +32,7 @@ Library
                  containers,
                  mtl,
                  unix,
-                 dclabel,
-                 monadloc
+                 cereal >= 0.3.3 && < 0.4
 
 
   Ghc-options: -Wall -Werror -fno-warn-orphans
@@ -63,5 +62,52 @@ Library
     LIO.Concurrent.TCB
     LIO.Concurrent.LMVar
     LIO.Concurrent.LMVar.TCB
-    -- * LIO with DCLabels
+    -- * DCLabels
     LIO.DCLabel
+    LIO.DCLabel.Core
+    LIO.DCLabel.Privs
+    LIO.DCLabel.Privs.TCB
+    LIO.DCLabel.Serialize
+    LIO.DCLabel.DSL
+
+test-suite lio_test
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test_and_bench
+  main-is: lio_test.hs
+
+  ghc-options:
+    -threaded -rtsopts
+
+  build-depends:
+    QuickCheck,
+    HUnit,
+    quickcheck-instances,
+    test-framework,
+    test-framework-quickcheck2,
+    test-framework-hunit,
+    base,
+    lio,
+    containers,
+    bytestring,
+    cereal
+
+test-suite dclabel_test
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test_and_bench
+  main-is: dclabel_test.hs
+
+  ghc-options:
+    -threaded -rtsopts
+
+  build-depends:
+    QuickCheck,
+    HUnit,
+    quickcheck-instances,
+    test-framework,
+    test-framework-quickcheck2,
+    test-framework-hunit,
+    base,
+    lio,
+    containers,
+    bytestring,
+    cereal

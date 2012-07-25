@@ -14,7 +14,7 @@ import qualified Test.QuickCheck.Monadic as Q
 import Test.HUnit hiding (Test)
 import qualified Test.HUnit as HU
 
-import DCLabel hiding (canFlowTo)
+import LIO.DCLabel
 import LIO
 import LIO.Labeled.TCB (labelTCB)
 import LIO.DCLabel
@@ -26,15 +26,14 @@ import Data.Set hiding (map)
 import Data.Typeable
 
 import Control.Monad
-import Control.Monad.Loc
 import Control.Exception hiding ( throwIO
                                 , catch 
                                 , finally
                                 , onException
                                 , bracket)
 
-import DCLabel.Instances -- DCLabel instances
-import Instances -- LIO instances
+import LIO.DCLabel.Instances -- DCLabel instances
+import LIO.Instances -- LIO instances
 
 import System.IO.Unsafe
 

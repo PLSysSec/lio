@@ -5,16 +5,29 @@
 {-|
 
 /Disjunction Category Labels/ ('DCLabel's) are a label format that
-encode secrecy and integrity using propositional logic.  This module
-provides bindings for the "DCLabel" module and types that make it
-easier and cleaner to write "LIO"+"DCLabel" code.
+encode secrecy and integrity using propositional logic.  This exports
+label operators and instances for the "LIO". The label format is
+documented in "LIO.DCLabel.Core", privileges are described in
+"LIO.DCLabel.Privs", and a domain specific language for constructing
+labels is presented in "LIO.DCLabel.DSL".
 
 -}
 
 module LIO.DCLabel (
-  -- * Aliases for the LIO 
-  module DCLabel
-  -- ** DC monad
+  -- ** Principals
+    Principal, principal
+  -- ** Clauses
+  , Clause, clause
+  -- ** Components
+  , Component, dcTrue, dcFalse, dcFormula
+  , isTrue, isFalse
+  -- ** Labels
+  , DCLabel, dcSecrecy, dcIntegrity, dcLabel, dcPub
+  -- ** Privileges
+  , module LIO.DCLabel.Privs
+  -- ** DSL
+  , module LIO.DCLabel.DSL
+  -- * Synonyms for "LIO"
   -- $dcMonad
   , DCState, defaultState
   , DC, evalDC, runDC, tryDC, paranoidDC
@@ -26,45 +39,19 @@ module LIO.DCLabel (
   , DCRef
   ) where
 
+import           Control.Exception
+
 import           LIO
 import           LIO.LIORef
 import           LIO.Labeled.TCB
-import           LIO.Privs.TCB
 
-import           DCLabel hiding (canFlowTo)
-import qualified DCLabel as D
-import           DCLabel.Privs.TCB
-
-import           Control.Exception
-
-
+import           LIO.DCLabel.Core
+import           LIO.DCLabel.Privs
+import           LIO.DCLabel.DSL
+import           LIO.DCLabel.Serialize ()
 
 --
--- Label related instances
---
-
-instance Label DCLabel where
-  bottom    = dcBot
-  top       = dcTop
-  lub       = dcJoin
-  glb       = dcMeet
-  canFlowTo = D.canFlowTo
-
-
---
--- Privileges related instances
---
-
-instance PrivTCB  DCPriv
-instance PrivDesc DCPriv DCPrivDesc where privDesc = unDCPriv
-instance MintTCB  DCPriv DCPrivDesc where mintTCB = DCPrivTCB
-
-instance Priv DCLabel DCPriv where
-  canFlowToP = D.canFlowToP
-  labelDiffP = error "TODO: implement labelDiffP"
-
---
--- LIO aliases
+-- LIO synonyms
 --
 
 
@@ -75,8 +62,8 @@ type DCLabeledException = LabeledException DCLabel
 type DCLabeled = Labeled DCLabel
 
 instance LabeledFunctor DCLabel where
-  lFmap lv f = let s = dcSecrecy . labelOf $ lv
-               in label (dcLabel s dcTrue) $ f (unlabelTCB lv)
+  lFmap lv f = let l = labelOf lv `upperBound` dcPub
+               in label l $ f (unlabelTCB lv)
 
 -- | DC Labeled 'LIORef's
 type DCRef = LIORef DCLabel
@@ -101,10 +88,9 @@ should be public, i.e., 'dcPub'.
 type DCState = LIOState DCLabel
 
 -- | Default, starting state for a 'DC' computation. The current label
--- is public (i.e., 'dcPub') and the current clearance is top (i.e.,
--- 'dcTop').
+-- is public (i.e., 'dcPub') and the current clearance is 'top'.
 defaultState :: DCState
-defaultState = LIOState { lioLabel = dcPub, lioClearance = dcTop }
+defaultState = LIOState { lioLabel = dcPub, lioClearance = top }
 
 -- | The monad for LIO computations using 'DCLabel' as the label.
 type DC = LIO DCLabel

@@ -6,18 +6,17 @@
 {-# LANGUAGE RankNTypes #-}
 
 -- | Instances for "QuickCheck"\'s 'Arbitrary' class.
-module Instances {-()-} where
+module LIO.Instances {-()-} where
 
 import Data.Typeable
 import Data.IORef
 
 import Control.Monad
-import Control.Monad.Loc
 import Control.Exception hiding (onException)
 
 import Test.QuickCheck hiding (label)
 import Test.QuickCheck.Instances
-import DCLabel.Instances
+import LIO.DCLabel.Instances
 
 import LIO
 import LIO.LIORef
