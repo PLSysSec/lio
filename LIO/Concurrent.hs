@@ -8,6 +8,7 @@ module LIO.Concurrent (
   , forkLIO, lForkP, lFork
   -- * Waiting on threads
   , lWaitP, lWait
+  , trylWaitP, trylWait
   -- * EXPERIMENTAL: Forcing computations
   , ForcedTermination(..)
   , lForce, lForceP
@@ -120,6 +121,22 @@ lWaitP p m = do
   case v of
     Right x -> return x
     Left e  -> unlabeledThrowTCB e
+
+-- | Same as 'lWait', but does not block waiting for result.
+trylWait :: Label l => LabeledResult l a -> LIO l (Maybe a)
+trylWait = trylWaitP NoPrivs
+
+-- | Same as 'trylWait', but uses priviliges in label checks and raises.
+trylWaitP :: Priv l p => p -> LabeledResult l a -> LIO l (Maybe a)
+trylWaitP p m = do
+  let mvar = lresResultTCB m
+  mv <- tryTakeLMVarP p mvar
+  case mv of
+    Just v -> do putLMVarP p mvar v
+                 case v of
+                   Right x -> return $! Just x
+                   Left e  -> unlabeledThrowTCB e
+    _ -> return Nothing
 
 --
 -- Forcing computations
