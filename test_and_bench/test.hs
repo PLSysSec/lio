@@ -25,7 +25,7 @@ import LIO.TCB
 import Data.Set hiding (map)
 import Data.Typeable
 
-import Control.Monad hiding (join)
+import Control.Monad
 import Control.Monad.Loc
 import Control.Exception hiding ( throwIO
                                 , catch 
@@ -38,9 +38,15 @@ import Instances -- LIO instances
 
 import System.IO.Unsafe
 
+-- | Evaluate LIO computation with starting label bottom
+-- and clearance top
+doEval :: DC a -> IO a
+doEval act = evalLIO act $ LIOState { lioLabel = bottom
+                                    , lioClearance = top }
+
 monadicDC :: PropertyM DC a -> Property
 monadicDC (MkPropertyM m) =
- property $ unsafePerformIO `liftM` evalDC `liftM` m f
+ property $ unsafePerformIO `liftM` doEval `liftM` m f
   where f = const . return . return .  property $ True
 
 
@@ -208,7 +214,7 @@ prop_fail_write_ref_above_clearance act = monadicDC $ do
   pre . not $ ldata `canFlowTo` newc
   lref  <- run $ newLIORef ldata ()
   -- reset clearance from top:
-  run $ lowerClearance newc
+  run $ setClearance newc
   res <- run $ ( act lref >> return False) `catchTCB` (\_ -> return True)
   Q.assert res
 
@@ -248,12 +254,12 @@ prop_catchLIO_catchAll = monadicDC $ do
 -- | throw and catch type correctness
 test_throwA_catchLIOA :: Assertion
 test_throwA_catchLIOA = do
-  evalDC $ throwLIO A `catchLIO`(\(_ :: A) -> return ())
+  doEval $ throwLIO A `catchLIO`(\(_ :: A) -> return ())
 
 -- | throw A and catch B should fail
 test_throwB_catchLIOA :: Assertion
 test_throwB_catchLIOA = do
-  evalDC $ (throwLIO B `catchLIO`(\(_ :: A) -> return ())) `catchTCB`
+  doEval $ (throwLIO B `catchLIO`(\(_ :: A) -> return ())) `catchTCB`
             (\(LabeledExceptionTCB _ se) -> case fromException se of
                                               (Just B) -> return ()
                                               _ -> ioTCB $ assertFailure "mismatch")
@@ -261,7 +267,7 @@ test_throwB_catchLIOA = do
 -- | throw and catch type correctness
 test_throwA_catchLIOSomeException :: Assertion
 test_throwA_catchLIOSomeException = do
-  evalDC $ throwLIO A `catchLIO`(\(_ :: SomeException) -> return ())
+  doEval $ throwLIO A `catchLIO`(\(_ :: SomeException) -> return ())
 
 -- | Taint within catch does not get ignored
 prop_catch_preserves_taint :: Property 
@@ -334,7 +340,7 @@ prop_guard_raises_label act = monadicDC $ do
   ldata <- pick arbitrary
   l1    <- run getLabel
   c     <- run getClearance
-  let lres = ldata `join` l1
+  let lres = ldata `upperBound` l1
   pre $ lres `canFlowTo` c
   run $ act lres
   l2    <- run getLabel

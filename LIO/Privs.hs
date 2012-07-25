@@ -55,7 +55,7 @@ class (Label l, PrivTCB p, Monoid p) => Priv l p where
     -- | Roughly speaking, @L_r = labelDiffP p L L_g@ computes how close
     -- one can come to downgrading data labeled @L@ to the goal label
     -- @L_g@, given privileges @p@.  When @p == 'noPrivs'@, the resulting
-    -- label @L_r == L ``join``L_g@.  If @p@ contains all possible
+    -- label @L_r == L ``upperBound``L_g@.  If @p@ contains all possible
     -- privileges, then @L_r == L_g@.
     --
     -- More specifically, @L_r@ is the greatest lower bound of the
@@ -92,4 +92,4 @@ instance Monoid NoPrivs where
 
 instance Label l => Priv l NoPrivs where
   canFlowToP _ l1 l2 = l1 `canFlowTo` l2
-  labelDiffP _ l lg = l `join` lg
+  labelDiffP _ l lg = l `upperBound` lg

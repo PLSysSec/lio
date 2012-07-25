@@ -1,6 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE MultiParamTypeClasses,
+             TypeSynonymInstances #-}
 
 {-|
 
@@ -16,7 +16,8 @@ module LIO.DCLabel (
   module DCLabel
   -- ** DC monad
   -- $dcMonad
-  , DC, evalDC, runDC, tryDC
+  , DCState, defaultState
+  , DC, evalDC, runDC, tryDC, paranoidDC
   -- ** Exceptions
   , DCLabeledException
   -- ** Labeled values
@@ -34,6 +35,8 @@ import           DCLabel hiding (canFlowTo)
 import qualified DCLabel as D
 import           DCLabel.Privs.TCB
 
+import           Control.Exception
+
 
 
 --
@@ -43,8 +46,8 @@ import           DCLabel.Privs.TCB
 instance Label DCLabel where
   bottom    = dcBot
   top       = dcTop
-  join      = dcJoin
-  meet      = dcMeet
+  lub       = dcJoin
+  glb       = dcMeet
   canFlowTo = D.canFlowTo
 
 
@@ -93,18 +96,33 @@ clearance to values other than 'bottom' and 'top' as set by
 should be public, i.e., 'dcPub'.
 -}
 
+
+-- | 'LIOState' with underlying label being 'DCLabel
+type DCState = LIOState DCLabel
+
+-- | Default, starting state for a 'DC' computation. The current label
+-- is public (i.e., 'dcPub') and the current clearance is top (i.e.,
+-- 'dcTop').
+defaultState :: DCState
+defaultState = LIOState { lioLabel = dcPub, lioClearance = dcTop }
+
 -- | The monad for LIO computations using 'DCLabel' as the label.
 type DC = LIO DCLabel
+
 
 -- | Evaluate computation in the 'DC' monad.
 evalDC :: DC a -> IO a
 evalDC act = evalLIO act defaultState
 
 -- | Evaluate computation in the 'DC' monad.
-runDC :: DC a -> IO (a, LIOState DCLabel)
+runDC :: DC a -> IO (a, DCState)
 runDC act = runLIO act defaultState
 
 -- | Similar to 'evalLIO', but catches any exceptions thrown by
--- untrusted code instead of propagating them.
-tryDC :: DC a -> IO (Either DCLabeledException a, LIOState DCLabel)
+-- untrusted code with 'throwLIO'.
+tryDC :: DC a -> IO (Either DCLabeledException a, DCState)
 tryDC act = tryLIO act defaultState
+
+-- | Similar to 'evalLIO', but catches all exceptions.
+paranoidDC :: DC a -> IO (Either SomeException (a, DCState))
+paranoidDC act = paranoidLIO act defaultState

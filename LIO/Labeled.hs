@@ -27,9 +27,8 @@ module LIO.Labeled (
 import           LIO.Label
 import           LIO.Core
 import           LIO.Privs
-import           LIO.Exception
 import           LIO.Labeled.TCB
-import           Control.Monad hiding (join)
+import           Control.Monad
 
 -- | Returns label of a 'Labeled' type.
 instance LabelOf Labeled where
@@ -101,8 +100,8 @@ relabelLabeledP p newl lv = do
           canFlowToP p origl newl) $ throwLIO InsufficientPrivs
   return . labelTCB newl $! unlabelTCB lv
 
--- | Raises the label of a 'Labeled' to the 'join' of it's current label
--- and the value supplied.  The label supplied must be bounded by the
+-- | Raises the label of a 'Labeled' to the 'upperBound' of it's current
+-- label and the value supplied.  The label supplied must be bounded by the
 -- current label and clearance, though the resulting label may not be if the
 -- 'Labeled' is already above the current thread's clearance.
 taintLabeled :: Label l => l -> Labeled l a -> LIO l (Labeled l a)
@@ -115,7 +114,7 @@ taintLabeled = taintLabeledP NoPrivs
 taintLabeledP :: Priv l p => p -> l -> Labeled l a -> LIO l (Labeled l a)
 taintLabeledP p l lv = do
   guardAllocP p l
-  return . labelTCB (l `join` labelOf lv) $! unlabelTCB lv
+  return . labelTCB (l `upperBound` labelOf lv) $! unlabelTCB lv
 
 -- | Downgrades the label of a 'Labeled' as much as possible given the
 -- current privilege.

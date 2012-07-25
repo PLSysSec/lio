@@ -15,13 +15,12 @@ module LIO.Concurrent (
 
 import Data.Typeable
 
-import Control.Monad hiding (join)
+import Control.Monad
 import Control.Concurrent
 import Control.Exception (toException, Exception)
 
 import LIO.Label
 import LIO.Core
-import LIO.Exception
 import LIO.Labeled
 import LIO.Labeled.TCB
 import LIO.Privs
@@ -85,7 +84,7 @@ lForkP p l act = do
     res      <- (Right `liftM` act) `catchTCB` (return . Left . taintError)
     endLabel <- getLabel
     putLMVarTCB mv $! 
-      let le = endLabel `join` l
+      let le = endLabel `upperBound` l
           m = "End label does not flow to specified upper bound"
           e = VMonitorFailure { monitorFailure = CanFlowToViolation
                               , monitorMessage = m }
@@ -96,7 +95,7 @@ lForkP p l act = do
     where -- raise the label of the exception to the join of the
           -- exception label and supplied lForkP upper bound
           taintError (LabeledExceptionTCB le e) =
-            LabeledExceptionTCB (le `join` l) e
+            LabeledExceptionTCB (le `upperBound` l) e
 
 --
 -- Wait

@@ -1,5 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ScopedTypeVariables,
+             DeriveDataTypeable #-}
 
 {- | 
 
@@ -10,26 +11,30 @@ module LIO.Core (
   -- * LIO monad
     LIO
   -- ** Execute LIO actions
-  , evalLIO, runLIO, tryLIO
+  , evalLIO, runLIO, tryLIO, paranoidLIO
   -- ** Internal state
-  , LIOState(..), defaultState
+  , LIOState(..)
   -- *** Current label
-  , getLabel, setLabelP
+  , getLabel, setLabel, setLabelP
   -- *** Current clerance
-  , getClearance, lowerClearance, setClearanceP
+  , getClearance, setClearance, setClearanceP
   -- * Exceptions
   -- $exceptions
   , LabeledException
   -- ** Throwing exceptions
-  , throwLIO, throwIO
+  , throwLIO
   -- ** Catching exceptions
-  , catchLIO, catch, catchLIOP
+  , catchLIO, catchLIOP
   -- ** Utilities
   -- $utils
   , onException, onExceptionP
   , finally, finallyP
   , bracket, bracketP
   , evaluate
+  -- ** Exceptions thrown by LIO
+  -- $lioExceptions
+  , MonitorFailure(..)
+  , VMonitorFailure(..)
   -- * Guards
   -- $guards
   -- ** Allocate/write-only
@@ -40,12 +45,12 @@ module LIO.Core (
   , guardWrite, guardWriteP
   ) where
 
-import           Prelude hiding ( catch )
+import           Prelude hiding (catch)
+import           Data.Typeable
+
 import           Control.Monad.State.Strict
 import qualified Control.Exception as E
-import           Control.Exception hiding ( throwIO
-                                          , catch
-                                          , finally
+import           Control.Exception hiding ( finally
                                           , onException
                                           , bracket
                                           , evaluate )
@@ -53,7 +58,6 @@ import           Control.Exception hiding ( throwIO
 import           LIO.TCB
 import           LIO.Label
 import           LIO.Privs
-import           LIO.Exception
 
 --
 -- Execute LIO actions
@@ -74,7 +78,7 @@ evalLIO :: Label l
         -> LIOState l
         -- ^ Initial state
         -> IO a
-evalLIO act s = evalStateT (unLIOTCB act) s
+evalLIO act s = fst `liftM` runLIO act s
 
 -- | Execute an 'LIO' action, returning the final state.
 -- See 'evalLIO'.
@@ -86,8 +90,18 @@ runLIO :: Label l
        -> IO (a, LIOState l)
 runLIO act s = runStateT (unLIOTCB act) s
 
--- | Similar to 'evalLIO', but catches any exceptions thrown by
--- untrusted code instead of propagating them.
+-- | Similar to 'evalLIO', but catches all exceptions, including
+-- language level exceptions.
+paranoidLIO :: Label l
+            => LIO l a
+             -- ^ LIO computation that may throw an exception
+            -> LIOState l
+             -- ^ Initial state
+            -> IO (Either SomeException (a, LIOState l))
+paranoidLIO act s = (Right `liftM` runLIO act s) `catch` (return . Left)
+
+-- | Similar to 'evalLIO', but catches all exceptions exceptions
+-- thrown with 'throwLIO'.
 tryLIO :: Label l
        => LIO l a
         -- ^ LIO computation that may throw an exception
@@ -100,15 +114,15 @@ tryLIO act = runLIO (Right `liftM` act `catchTCB` (return . Left))
 -- Internal state
 --
 
--- | Default 'LIO' state with the current label set to 'bottom' and
--- clearance set to 'top'.
-defaultState :: Label l => LIOState l
-defaultState = LIOState { lioLabel = bottom
-                        , lioClearance = top }
-
 -- | Returns the current value of the thread's label.
 getLabel :: Label l => LIO l l
 getLabel = lioLabel `liftM` getLIOStateTCB
+
+
+-- | Raise the current label to the provided label, which must be
+-- between the current label and clearance. See 'taint'.
+setLabel :: Label l => l -> LIO l ()
+setLabel = taint
 
 -- | If the current label is @oldLabel@ and the current clearance is
 -- @clearance@, this function allows code to raise the current label to
@@ -127,11 +141,11 @@ getClearance = lioClearance `liftM` getLIOStateTCB
 -- | Lower the current clearance. The new clerance must be between
 -- the current label and clerance. One cannot raise the current label
 -- or create object with labels higher than the current clearance.
-lowerClearance :: Label l => l -> LIO l ()
-lowerClearance = setClearanceP NoPrivs
+setClearance :: Label l => l -> LIO l ()
+setClearance = setClearanceP NoPrivs
 
 -- | Raise the current clearance (undoing the effects of
--- 'lowerClearance') by exercising privileges. If the current label is
+-- 'setClearance') by exercising privileges. If the current label is
 -- @l@ and current clearance is @c@, then @setClearanceP p cnew@
 -- succeeds only if the new clearance is can flow to the current
 -- clearance (modulo privileges), i.e., @'canFlowToP' p cnew c@ must
@@ -151,7 +165,7 @@ setClearanceP p cnew = do
 
 {- $exceptions
 
-   We must re-define the 'throwIO' and 'catch' functions to work in
+   We must define 'throwIO'- and 'catch'-like functions to work in
    the 'LIO' monad.  A complication is that exceptions could
    potentially leak information.  For instance, one might examine a
    secret bit, and throw an exception when the bit is 1 but not 0.
@@ -169,8 +183,8 @@ setClearanceP p cnew = do
    exceptions from within the 'LIO' monad and catch them within the
    'IO' monad.  Of course, code in the 'IO' monad must be careful not
    to let the 'LIO' code exploit it to exfiltrate information.  Hence,
-   we recommend the use of 'tryLIO' to execute 'LIO' actions as to
-   prevent accidental, but unwanted crashes.
+   we recommend the use of 'paranoidLIO' to execute 'LIO' actions as
+   to prevent accidental, but unwanted crashes.
 
    Wherever possible, code should use the 'catchLIOP' and
    'onExceptionP' variants that use whatever privilege is available to
@@ -200,10 +214,6 @@ throwLIO e = do
   l <- getLabel
   unlabeledThrowTCB $! LabeledExceptionTCB l (toException e)
 
--- | For compatability we define 'throwIO' as 'throwLIO'
-throwIO :: (Exception e, Label l) => e -> LIO l a
-throwIO = throwLIO
-
 --
 -- Catching exceptions
 --
@@ -212,8 +222,8 @@ throwIO = throwLIO
 -- | Catches an exception, so long as the label at the point where the
 -- exception was thrown can flow to the label at which @catchLIOP@ is
 -- invoked, modulo the privileges specified.  Note that the handler
--- raises the current label to the joint of the current label and
--- exception label.
+-- raises the current label to the join ('upperBound') of the current
+-- label and exception label.
 catchLIOP :: (Exception e, Priv l p)
           => p
           -> LIO l a
@@ -233,13 +243,6 @@ catchLIO :: (Exception e, Label l)
          -> (e -> LIO l a)
          -> LIO l a
 catchLIO = catchLIOP NoPrivs 
-
--- | For compatability we define 'catch' as 'catchLIO'
-catch :: (Exception e, Label l)
-      => LIO l a
-      -> (e -> LIO l a)
-      -> LIO l a
-catch = catchLIO
 
 --
 -- Utilities
@@ -278,7 +281,7 @@ onExceptionP :: Priv l p
 onExceptionP p act1 act2 = 
     catchLIOP p act1 (\(e :: SomeException) -> do
                        void act2
-                       throwIO e )
+                       throwLIO e )
 
 -- | Execute a computation and a finalizer, which is executed even if
 -- an exception is raised in the first computation.
@@ -338,6 +341,51 @@ bracketP p first third second = do
 evaluate :: Label l => a -> LIO l a
 evaluate = rethrowIoTCB . E.evaluate
 
+--
+-- Exceptions thrown by LIO
+--
+
+{- $lioExceptions
+
+Library functions throw an exceptions before an IFC violation can take
+place. 'MonitorFailure' should be used when the reason for failure is
+sufficiently described by the type. Otherwise, 'VMonitorFailure'
+(i.e., \"Verbose\"-'MonitorFailure') should be used to further
+describe the error.
+
+-}
+
+-- | Exceptions thrown when some IFC restriction is about to be
+-- violated.
+data MonitorFailure = ClearanceViolation
+                    -- ^ Current label would exceed clearance, or
+                    -- object label is above clearance.
+                    | CurrentLabelViolation
+                    -- ^ Clearance would be below current label, or
+                    -- object label is not above current label.
+                    | InsufficientPrivs
+                    -- ^ Insufficient privileges. Thrown when lowering
+                    -- the current label or raising the clearance
+                    -- cannot be accomplished with the supplied
+                    -- privileges.
+                    | CanFlowToViolation
+                    -- ^ Generic can-flow-to failure, use with
+                    -- 'VMonitorFailure'
+                    deriving (Show, Typeable)
+
+instance Exception MonitorFailure
+
+-- | Verbose version of 'MonitorFailure' also carrying around a
+-- detailed message.
+data VMonitorFailure = VMonitorFailure { monitorFailure :: MonitorFailure
+                                       , monitorMessage :: String }
+                    deriving Typeable
+
+instance Show VMonitorFailure where
+  show m = (show $ monitorFailure m) ++ ": " ++ (monitorMessage m)
+
+instance Exception VMonitorFailure
+
 
 --
 -- Guards
@@ -355,8 +403,8 @@ evaluate = rethrowIoTCB . E.evaluate
      that @ldata ``canFlowTo`` lcurrent@.  This check is performed by
      the 'taint' function, so named because it \"taints\" the current
      'LIO' context by raising @lcurrent@ until @ldata ``canFlowTo``
-     lcurrent@.  (Specifically, it does this by computing the 'join'
-     (least upper bound) of the two labels.) However, this is done
+     lcurrent@.  (Specifically, it does this by computing the
+     least 'upperBound' of the two labels.) However, this is done
      only if the new @lcurrent ``canFlowTo`` ccurrent@.
 
    * When /creating/ or /allocating/ objects, it is permissible for

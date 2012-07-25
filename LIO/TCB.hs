@@ -1,7 +1,5 @@
 {-# LANGUAGE Unsafe #-}
-{-# LANGUAGE DeriveFunctor,
-             RankNTypes,
-             GeneralizedNewtypeDeriving,
+{-# LANGUAGE GeneralizedNewtypeDeriving,
              DeriveDataTypeable #-}
 
 {- | 
