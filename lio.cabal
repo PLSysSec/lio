@@ -26,13 +26,12 @@ Extra-source-files:
   ACKNOWLEDGEMENTS
 
 Library
-  Build-Depends: base,
-                 array,
-                 bytestring,
-                 containers,
-                 mtl,
-                 unix,
-                 cereal >= 0.3.3 && < 0.4
+  Build-Depends:
+    base         >= 4.5 && < 5.0,
+    transformers >= 0.2.2 && < 1.0,
+    containers   >= 0.4.2.1 && < 1.0,
+    bytestring   >= 0.9.2.1 && < 1.0,
+    cereal       >= 0.3.5.1 && < 0.4
 
 
   Ghc-options: -Wall -Werror -fno-warn-orphans

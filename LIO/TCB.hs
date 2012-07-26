@@ -35,7 +35,10 @@ module LIO.TCB (
 import           Data.Typeable
 
 import           Control.Applicative
-import           Control.Monad.State.Strict
+import           Control.Monad
+import           Control.Monad.Trans.State.Strict
+import           Control.Monad.Trans.Class (lift)
+import           Control.Monad.IO.Class (liftIO)
 import           Control.Exception (Exception, SomeException)
 import qualified Control.Exception as E
 

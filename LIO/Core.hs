@@ -48,7 +48,8 @@ module LIO.Core (
 import           Prelude hiding (catch)
 import           Data.Typeable
 
-import           Control.Monad.State.Strict
+import           Control.Monad
+import           Control.Monad.Trans.State.Strict
 import qualified Control.Exception as E
 import           Control.Exception hiding ( finally
                                           , onException
