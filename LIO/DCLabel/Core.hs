@@ -95,7 +95,13 @@ principal = Principal
 -- | A clause or disjunction category is a set of 'Principal's.
 -- Logically the set corresponds to a disjunction of the principals.
 newtype Clause = Clause { unClause :: Set Principal }
-  deriving (Eq, Ord, Typeable)
+  deriving (Eq, Typeable)
+
+instance Ord Clause where
+  (Clause c1) <= (Clause c2) =
+    case () of
+      _ | Set.size c1 == Set.size c2 -> c1 <= c2
+      _ -> Set.size c1 < Set.size c2
 
 instance Show Clause where
   show c = let ps = map show . Set.toList $! unClause c
