@@ -10,6 +10,7 @@ module LIO.Instances {-()-} where
 
 import Data.Typeable
 import Data.IORef
+import Control.Concurrent.MVar
 
 import Control.Monad
 import Control.Exception hiding (onException)
@@ -24,6 +25,8 @@ import LIO.LIORef.TCB (newLIORefTCB, unlabelLIORefTCB)
 import LIO.TCB (showTCB)
 import LIO.Labeled.TCB
 import LIO.DCLabel
+import LIO.Concurrent.LMVar
+import LIO.Concurrent.LMVar.TCB (newLMVarTCB, unlabelLMVarTCB)
 
 import System.IO.Unsafe
 
@@ -63,6 +66,17 @@ instance Show a => Show (DCRef a) where
   show lr = let v = unsafePerformIO . readIORef $ unlabelLIORefTCB lr
                 l = labelOf lr
             in "DCRef { label = "++ show l ++", value = "++ show v ++" }"
+
+instance Arbitrary a => Arbitrary (LMVar DCLabel a) where
+  arbitrary = do
+    l <- arbitrary
+    a <- arbitrary
+    return . unsafePerformIO . evalDC $ newLMVarTCB l a
+
+instance Show a => Show (LMVar DCLabel a) where
+  show lr = let v = unsafePerformIO . tryTakeMVar $ unlabelLMVarTCB lr
+                l = labelOf lr
+            in "LMVar { label = "++ show l ++", value = "++ show v ++" }"
 
 
 -- random dc actions

@@ -18,13 +18,16 @@ import LIO.DCLabel
 import LIO
 import LIO.Labeled.TCB (labelTCB)
 import LIO.DCLabel
+import LIO.DCLabel.Privs.TCB (allPrivTCB)
 import LIO.LIORef
+import LIO.LIORef.TCB
 import LIO.Privs.TCB (mintTCB)
 import LIO.TCB
 
 import Data.Set hiding (map)
 import Data.Typeable
 
+import Control.Concurrent
 import Control.Monad
 import Control.Exception hiding ( throwIO
                                 , catch 
@@ -34,6 +37,9 @@ import Control.Exception hiding ( throwIO
 
 import LIO.DCLabel.Instances -- DCLabel instances
 import LIO.Instances -- LIO instances
+import LIO.Concurrent
+import LIO.Concurrent.LMVar
+import LIO.Concurrent.LMVar.TCB
 
 import System.IO.Unsafe
 
@@ -61,8 +67,8 @@ tests = [
                      prop_guard_curLabel_flowsTo_curClearance 
     ]
   , testGroup "Labeled" [
-        testProperty "unlabel raises current label"
-                      prop_label_unlabel
+        testProperty "unlabel raises current label" $
+                      prop_gen_raises_label label $ Left (liftJust unlabel)
       , testProperty "label fails if label is above clearance" $
                      prop_guard_fail_if_label_above_clearance $
                      \l -> void $ label l ()
@@ -74,36 +80,106 @@ tests = [
                      \l -> unlabel (labelTCB l ())
     ]
   , testGroup "LIORef" [
-        testProperty "readIORef raises current label"
-                      prop_newIORef_readIORef
-      , testProperty "atomicModifyIORef raises current label"
-                      prop_atomicModifyIORef_readIORef
-      , testProperty "newLIORef fails if label is above clearance" $
-                     prop_guard_fail_if_label_above_clearance $
-                     \l -> void $ newLIORef l ()
+        testProperty "readLIORef raises current label" $
+                      prop_gen_raises_label newLIORef $ Left (liftJust readLIORef)
+      , testProperty "atomicModifyIORef raises current label" $
+                      prop_gen_raises_label newLIORef $
+                        Right (\r v -> void $ atomicModifyLIORef r (const (v, v)))
+
       , testProperty "newLIORef fails if label is not above current label" $
                      prop_guard_fail_if_label_below_current $
                      \l -> void $ newLIORef l ()
-      , testProperty "writeIORef fails if label of ref is above clearance" $
-                     prop_fail_write_ref_above_clearance $
-                     \r -> writeLIORef r ()
-      , testProperty "writeIORef fails if label of ref is below current label" $
-                     prop_fail_write_ref_below_current_label $
-                     \r -> writeLIORef r ()
-      , testProperty "modifyIORef fails if label of ref is above clearance" $
-                     prop_fail_write_ref_above_clearance $
-                     \r -> modifyLIORef r id
-      , testProperty "modifyORef fails if label of ref is below current label" $
-                     prop_fail_write_ref_below_current_label $
-                     \r -> modifyLIORef r id
-      , testProperty ("atomicModifyORef fails if label of ref is " ++
-                      "above clearance") $
-                     prop_fail_write_ref_above_clearance  $
-                     \r -> atomicModifyLIORef r (\v -> (v, v))
-      , testProperty ("atomicModifyORef fails if label of ref is " ++
-                      "below current label") $
-                     prop_fail_write_ref_below_current_label $
-                     \r -> atomicModifyLIORef r (\v -> (v, v))
+      , testProperty "writeLIORef fails if label of ref is below current label" $
+                     prop_guard_fail_if_label_below_current $
+                     \l -> newLIORefTCB l () >>= \v -> void $ writeLIORef v ()
+      , testProperty "modifyLIORef fails if label of ref is below current label" $
+                     prop_guard_fail_if_label_below_current $
+                     \l -> newLIORefTCB l () >>= \v -> void $ modifyLIORef v id
+      , testProperty "atomicModifyLIORef fails if label of ref is below current label" $
+                     prop_guard_fail_if_label_below_current $
+                     \l -> newLIORefTCB l () >>= \v -> void $ atomicModifyLIORef v (const ((), ()))
+
+      , testProperty "newLIORef fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> void $ newLIORef l ()
+      , testProperty "writeLIORef fails if label of ref is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> newLIORefTCB l () >>= \v -> void $ writeLIORef v ()
+      , testProperty "modifyLIORef fails if label of ref is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> newLIORefTCB l () >>= \v -> void $ modifyLIORef v id
+      , testProperty "atomicModifyLIORef fails if label of ref is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> newLIORefTCB l () >>= \v -> void $ atomicModifyLIORef v (const ((), ()))
+    ]
+  , testGroup "LMVar" [
+        testProperty "takeLMVar raises current label" $
+                      prop_gen_raises_label newLMVar (Left $ liftJust takeLMVar)
+      , testProperty "tryTakeLMVar raises current label" $
+                      prop_gen_raises_label newLMVar (Left tryTakeLMVar)
+      , testProperty "putLMVar raises current label" $
+                      prop_gen_raises_label (\l _-> newEmptyLMVar l) $ Right putLMVar
+      , testProperty "readLMVar raises current label" $
+                      prop_gen_raises_label newLMVar (Left $ liftJust readLMVar)
+
+      , testProperty "newLMVar fails if label is not above current label" $
+                     prop_guard_fail_if_label_below_current $
+                     \l -> void $ newLMVar l ()
+      , testProperty "newEmptyLMVar fails if label is not above current label" $
+                     prop_guard_fail_if_label_below_current $
+                     \l -> void $ newEmptyLMVar l
+      , testProperty "takeLMVar fails if label is below current label" $ 
+                     prop_guard_fail_if_label_below_current $
+                     \l -> newLMVarTCB l () >>= \v -> void $ takeLMVar v
+      , testProperty "readLMVar fails if label is below current label" $ 
+                     prop_guard_fail_if_label_below_current $
+                     \l -> newLMVarTCB l () >>= \v -> void $ readLMVar v
+      , testProperty "putLMVar fails if label is below current label" $ 
+                     prop_guard_fail_if_label_below_current $
+                     \l -> newEmptyLMVarTCB l >>= \v -> void $ putLMVar v ()
+
+      , testProperty "newEmptyLMVar fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> void $ newEmptyLMVar l
+      , testProperty "newLMVar fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> void $ newLMVar l ()
+      , testProperty "takeLMVar fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> newLMVarTCB l () >>= \v -> void $ takeLMVar v
+      , testProperty "tryTakeLMVar fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> newLMVarTCB l () >>= \v -> void $ tryTakeLMVar v
+      , testProperty "readLMVar fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> newLMVarTCB l () >>= \v -> void $ readLMVar v
+      , testProperty "putLMVar fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> newEmptyLMVarTCB l >>= \v -> void $ putLMVar v ()
+      , testProperty "tryPutLMVar fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> newEmptyLMVarTCB l >>= \v -> void $ tryPutLMVar v ()
+    ]
+  , testGroup "LabeledResult" [
+        testProperty "lWait raises current label" $
+                      prop_gen_raises_label (\l v -> lFork l (return v))
+                                            (Left $ liftJust lWait)
+      , testProperty "trylWait raises current label" $
+                      prop_gen_raises_label (\l v -> lFork l (return v))
+                                            (Left $ \v -> (ioTCB $ threadDelay 5000) >> trylWait v)
+
+      , testProperty "lFork fails if label is below current label" $ 
+                     prop_guard_fail_if_label_below_current $
+                     \l -> void . lFork l $ return ()
+      , testProperty "lWait fails if label is below current label" $ 
+                     prop_guard_fail_if_label_below_current $
+                     \l -> lForkP allPrivTCB l (return ()) >>= \v -> void $ lWait v
+      , testProperty "lFork fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> void . lFork l $ return ()
+      , testProperty "lWait fails if label is above clearance" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> lForkP allPrivTCB l (return ()) >>= \v -> void $ lWait v
     ]
   , testGroup "Exceptions" [
         testProperty "catchTCB catches all exceptions"
@@ -148,6 +224,7 @@ tests = [
                       callGate_correct
     ]
   ]
+    where liftJust f x = Just `liftM` f x
 
 
 -- | Current label always flows to current clearance
@@ -164,72 +241,27 @@ prop_guard_curLabel_flowsTo_curClearance = monadicDC $ do
   Q.assert $ l2 `canFlowTo` c2
 
 --
--- Labeled
+-- General
 --
 
--- | Check that the current label is raised when unlabeling a labeled value
-prop_label_unlabel :: Property
-prop_label_unlabel = monadicDC $ do
-  l    <- pick (arbitrary :: Gen DCLabel)
-  x    <- pick (arbitrary :: Gen Int)
-  lx   <- run $ label l x
-  x'   <- run $ unlabel lx
+-- | Check that the current label is raised when reading/writing
+-- labeled object
+prop_gen_raises_label :: (LabelOf t)
+                        => (DCLabel -> Int -> DC (t DCLabel Int)) -- constructor
+                        -> Either (t DCLabel Int -> DC (Maybe Int)) -- reader
+                                  (t DCLabel Int -> Int -> DC ())   -- writer
+                        -> Property
+prop_gen_raises_label constr rw = monadicDC $ do
+  l    <- pick arbitrary
+  x    <- pick arbitrary
+  lx   <- run $ constr l x
+  x'   <- run $ case rw of
+                  Left reader -> reader lx
+                  Right writer -> writer lx x >> return (Just x) 
   lbl1 <- run $ getLabel
-  Q.assert $ lbl1 == l && x' == x
+  Q.assert $ lbl1 == l && x' == Just x
 
---
--- LIORef
---
 
--- | Check that the current label is raised when reading LIORef
-prop_newIORef_readIORef :: Property
-prop_newIORef_readIORef = monadicDC $ do
-  l    <- pick (arbitrary :: Gen DCLabel)
-  x    <- pick (arbitrary :: Gen Int)
-  lx   <- run $ newLIORef l x
-  x'   <- run $ readLIORef lx
-  lbl1 <- run $ getLabel
-  Q.assert $ lbl1 == l && x' == x
-
--- | Check that the current label is raised when atomically modifying LIORef
-prop_atomicModifyIORef_readIORef :: Property
-prop_atomicModifyIORef_readIORef = monadicDC $ do
-  l    <- pick (arbitrary :: Gen DCLabel)
-  x    <- pick (arbitrary :: Gen Int)
-  lx   <- run $ newLIORef l x
-  x'   <- run $ atomicModifyLIORef lx (\v -> (v, v))
-  lbl1 <- run $ getLabel
-  Q.assert $ lbl1 == l && x' == x
-
--- | Fail writing/modifying a reference whose label is not below
--- current clearance
-prop_fail_write_ref_above_clearance :: (DCRef () -> DC ()) -> Property
-prop_fail_write_ref_above_clearance act = monadicDC $ do
-  ldata <- pick arbitrary
-  newc  <- pick arbitrary
-  l     <- run getLabel
-  c     <- run getClearance
-  pre $ l `canFlowTo` newc
-  pre . not $ ldata `canFlowTo` newc
-  lref  <- run $ newLIORef ldata ()
-  -- reset clearance from top:
-  run $ setClearance newc
-  res <- run $ ( act lref >> return False) `catchTCB` (\_ -> return True)
-  Q.assert res
-
--- | Fail writing/modifying a reference whose label is not above the
--- current label
-prop_fail_write_ref_below_current_label :: (DCRef () -> DC ()) -> Property
-prop_fail_write_ref_below_current_label act = monadicDC $ do
-  l      <- run getLabel
-  c      <- run getClearance
-  lref   <- run $ newLIORef l ()
-  newl   <- pick arbitrary
-  pre $ newl `canFlowTo` c 
-  pre . not $ newl `canFlowTo` l -- new label is "above" current label
-  run $ taint newl
-  res <- run $ ( act lref >> return False) `catchTCB` (\_ -> return True)
-  Q.assert res
 --
 -- Exceptions
 --

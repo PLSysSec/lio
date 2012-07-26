@@ -16,9 +16,10 @@ import LIO.DCLabel.Instances
 
 
 -- Reduction function toLNF does not modify the semantics of the label
-prop_dcReduce :: Component -> Bool
-prop_dcReduce l = let l' = dcReduce l 
-                  in  l `dcImplies` l' && l' `dcImplies` l 
+prop_dcReduce :: Property
+prop_dcReduce = forAll arbitrary $ \l ->
+  let l' = dcReduce l 
+  in  l `dcImplies` l' && l' `dcImplies` l 
 
 -- Idempotenncy of dcReduce
 prop_dcReduce_idem :: Property
