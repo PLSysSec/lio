@@ -14,6 +14,9 @@ This module exports
 
 * Combinators for executing 'IO' actions.
 
+The documentation and external, safe 'LIO' interface is provided in
+"LIO.Core".
+
 -}
 
 module LIO.TCB (
@@ -52,8 +55,8 @@ import           LIO.Label
 
 -- | Internal state of an 'LIO' computation.
 data LIOState l = LIOState {
-    lioLabel     :: !l         -- ^ Current label
-  , lioClearance :: !l         -- ^ Current clearance
+    lioLabel     :: !l         -- ^ Current label.
+  , lioClearance :: !l         -- ^ Current clearance.
   } deriving (Eq, Show, Read)
 
 -- | The @LIO@ monad is a state monad, with 'IO' as the underlying monad,
@@ -65,9 +68,6 @@ data LIOState l = LIOState {
 -- we need a way to prevent certain computations from reading overly
 -- sensitive data. This is the role of the current clearance: it imposes
 -- an upper bound on the current label.
---
--- Finally, to improve debugging and present meaningful error messages
--- the underlying state keeps a call trace (using @monadloc@).
 newtype LIO l a = LIOTCB { unLIOTCB :: StateT (LIOState l) IO a }
   deriving (Functor, Applicative, Monad)
 

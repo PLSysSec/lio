@@ -1,6 +1,19 @@
 {-# LANGUAGE Unsafe #-}
--- |This module implements labeled IORefs.  The interface is analogous
--- to "Data.IORef", but the operations take place in the LIO monad.
+{- |
+
+This module implements the core of labeled 'IORef's in the 'LIO ad.
+to "Data.IORef", but the operations take place in the 'LIO' monad.  The
+types and functions exported by this module are strictly TCB and do
+not perform any information flow checks. The external, safe interface
+is provided and documented in "LIO.LIORef".
+
+
+Different from many labeled objects (e.g., files or MVars), references
+are uni-directional. This means that reading from a reference can be
+done without being able to write to it; and writing to a refernece can
+be done without raising the current label, as if also performing a read.
+
+-}
 module LIO.LIORef.TCB (
   LIORef(..)
   -- * Basic Functions
@@ -19,18 +32,19 @@ import LIO.TCB
 import Data.IORef
 
 
--- | An @LIORef@ is an @IORef@ with an associated, static label. 
--- The restriction of an immutable label come from the fact that it
--- is possible to leak information  through the label itself.
--- Hence, LIO is /flow-insensitive/. Of course, you can create an
--- @LIORef@ of 'Labeled' to get a limited form of flow-sensitivity.
+-- | An @LIORef@ is an @IORef@ with an associated, fixed label.  The
+-- restriction to an immutable label come from the fact that it is
+-- possible to leak information through the label itself, if we wish to
+-- allow @LIORef@ to be an instance of 'LabelOf'.  Of course, you can
+-- create an @LIORef@ of 'Labeled' to get a limited form of
+-- flow-sensitivity.
 data LIORef l a = LIORefTCB { labelOfLIORef :: !l
                             -- ^ Label of the labeled 'IORef'.
                             , unlabelLIORefTCB :: (IORef a)
-                            -- ^ Access the underlying 'IORef',
-                            -- ignoring IFC.
+                            -- ^ Access the underlying 'IORef', ignoring IFC.
                             }
 
+-- | Get the label of an 'LIORef'.
 instance LabelOf LIORef where
   labelOf = labelOfLIORef
 
@@ -38,7 +52,8 @@ instance LabelOf LIORef where
 -- Create labeled 'IORef's
 --
 
--- | Trusted constructor that creates labeled references.
+-- | Trusted constructor that creates labeled references with the
+-- given label without any IFC checks.
 newLIORefTCB :: Label l => l -> a -> LIO l (LIORef l a)
 newLIORefTCB l a = do
   ior <- ioTCB $! newIORef a

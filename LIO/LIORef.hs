@@ -1,8 +1,16 @@
 {-# LANGUAGE Trustworthy #-}
+{- |
 
--- |This module exports the safe subset of the "LIO.LIORef.TCB" module.
--- It is important that untrusted code be limited to this subset; information
--- flow can easily be violated if the TCB functions are exported.
+Mutable reference in the 'LIO' monad. As with other objects in LIO,
+mutable references have an associated label that is used to impose
+restrictions on its operations. In fact, labeled references
+('LIORef's) are solely labeled 'IORef's with read and write access
+restricted according to the label. This module is analogous to
+"Data.IORef", but the operations take place in the 'LIO' monad.
+
+-}
+
+
 module LIO.LIORef (
     LIORef
   -- * Basic Functions
@@ -26,7 +34,8 @@ import LIO.LIORef.TCB
 
 -- | To create a new reference the label of the reference must be
 -- below the thread's current clearance and above the current label.
--- If this is the case, the reference is built.
+-- If this is the case, the reference is built. Otherwise an exception
+-- will be thrown by the underlying 'guardAlloc' guard.
 newLIORef :: Label l
           => l                  -- ^ Label of reference
           -> a                  -- ^ Initial value
@@ -45,11 +54,11 @@ newLIORefP p l a = do
 -- Read 'LIORef's
 --
 
--- | Read the value of a labeled refernce. A read succeeds only if the
+-- | Read the value of a labeled reference. A read succeeds only if the
 -- label of the reference is below the current clearance. Moreover,
 -- the current label is raised to the join of the current label and
--- the reference label. To avoid failures use 'labelOfLIORef' to check
--- that a read will suceed.
+-- the reference label. To avoid failures (introduced by the 'taint'
+---guard) use 'labelOf' to check that a read will succeed.
 readLIORef :: Label l => LIORef l a -> LIO l a
 readLIORef = readLIORefP NoPrivs
 
@@ -66,7 +75,8 @@ readLIORefP p lr = do
 
 -- | Write a new value into a labeled reference. A write succeeds if
 -- the current label can-flow-to the label of the reference, and the
--- label of the reference can-flow-to the current clearance.
+-- label of the reference can-flow-to the current clearance. Otherwise,
+-- an exception is raised by the underlying 'guardAlloc' guard.
 writeLIORef :: Label l => LIORef l a -> a -> LIO l ()
 writeLIORef = writeLIORefP NoPrivs
 
@@ -83,11 +93,13 @@ writeLIORefP p lr a = do
 --
 
 -- | Mutate the contents of a labeled reference. For the mutation to
--- succeed it must be that the current label can-flow-to the label of
--- the reference, and the label of the reference can-flow-to the
--- current clearance. Note that because a modifer is provided, the
--- reference contents are not observable by the outer computation and
--- so it is not required that the current label be raised.
+-- succeed it must be that the current label can flow to the label of the
+-- reference, and the label of the reference can flow to the current
+-- clearance. Note that because a modifier is provided, the reference
+-- contents are not observable by the outer computation and so it is not
+-- required that the current label be raised. It is, however, required
+-- that the label of the reference be bounded by the current label and
+-- clearance (as checked by the underlying 'guardAlloc' guard).
 modifyLIORef :: Label l
              =>  LIORef l a            -- ^ Labeled reference
              -> (a -> a)               -- ^ Modifier
@@ -108,7 +120,9 @@ modifyLIORefP p lr f = do
 -- used to directly read the value of the stored reference, the
 -- computation is \"tainted\" by the reference label (i.e., the
 -- current label is raised to the 'join' of the current and reference
--- labels).
+-- labels). These checks and label raise are done by 'guardWrite',
+-- which will raise an exception if any of the IFC conditions cannot
+-- be satisfied.
 atomicModifyLIORef :: Label l => LIORef l a -> (a -> (a, b)) -> LIO l b
 atomicModifyLIORef = atomicModifyLIORefP NoPrivs
 

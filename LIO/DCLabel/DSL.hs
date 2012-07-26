@@ -7,9 +7,10 @@
   specific language to create 'Component's and privilage descriptions
   from conjunctions of principal disjunctions.
   
-  A 'Component'/'DCPrivDesc' is created using the ('\/') and ('/\') operators.
-  The disjunction operator ('\/') is used to create a 'Clause' from
-  'Principal's, ByteStrings, or a disjunctive sub-expression. For example:
+  A 'Component' or 'DCPrivDesc' is created using the ('\/') and ('/\')
+  operators.  The disjunction operator ('\/') is used to create a
+  'Clause' from 'Principal's, ByteStrings, or a disjunctive
+  sub-expression. For example:
 
   @
      p1 = 'principal' \"p1\"

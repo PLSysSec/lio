@@ -78,8 +78,9 @@ type S8 = S8.ByteString
 -- | A @Principal@ is a simple string representing a source of
 -- authority. Any piece of code can create principals, regardless of how
 -- untrusted it is.
-newtype Principal = Principal { principalName :: S8 }
-  deriving (Eq, Ord, Typeable)
+newtype Principal = Principal { principalName :: S8 
+                                -- ^ Get the principal name.
+                              } deriving (Eq, Ord, Typeable)
 
 instance Show Principal where
   show = S8.unpack . principalName
@@ -94,8 +95,9 @@ principal = Principal
 
 -- | A clause or disjunction category is a set of 'Principal's.
 -- Logically the set corresponds to a disjunction of the principals.
-newtype Clause = Clause { unClause :: Set Principal }
-  deriving (Eq, Typeable)
+newtype Clause = Clause { unClause :: Set Principal
+                          -- ^ Get underlying principal-set.
+                        } deriving (Eq, Typeable)
 
 instance Ord Clause where
   (Clause c1) <= (Clause c2) =
@@ -117,7 +119,9 @@ clause = Clause
 -- @False@, while @DCFormula Set.empty@ corresponds to logical @True@.
 data Component = DCFalse
                  -- ^ Logical @False@
-               | DCFormula { unDCFormula :: !(Set Clause) }
+               | DCFormula { unDCFormula :: !(Set Clause) 
+                              -- ^ Get underlying clause-set.
+                           }
                  -- ^ Conjunction of disjunction categories
   deriving (Eq, Typeable)
 
@@ -161,8 +165,10 @@ isFalse = (== dcFalse)
 
 -- | A @DCLabel@ is a pair of secrecy and integrity 'Component's.
 data DCLabel = DCLabel { dcSecrecy   :: !Component
-                       , dcIntegrity :: !Component }
-  deriving (Eq, Typeable)
+                         -- ^ Extract secrecy component of a label
+                       , dcIntegrity :: !Component
+                         -- ^ Extract integrity component of a label
+                       } deriving (Eq, Typeable)
 
 instance Show DCLabel where 
   show l = let s = dcSecrecy l

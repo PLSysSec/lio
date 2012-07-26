@@ -2,8 +2,9 @@
 
 {- |
 
-This module exports labeled results which are used by the safe
-functions of "LIO.Concurrent".
+This module exports 'LabeledResult's which are effectively thread exit
+results protected by a label. See "LIO.Concurrent" for a description
+of the concurrency abstractions of LIO.
 
 -}
 
@@ -16,9 +17,9 @@ import LIO.Core
 import LIO.Concurrent.LMVar
 import Control.Concurrent
 
--- | A labeled thread result is simply a wrapper for a labeled MVar. A
--- thread can observe the result of another thread, only after raising
--- its label to the label of the result.
+-- | A labeled thread result is simply a wrapper for a 'LMVar'. A thread
+-- can observe the result of another thread, only after raising its label
+-- to the label of the result.
 data LabeledResult l a = LabeledResultTCB {
     lresThreadIdTCB :: ThreadId 
     -- ^ Thread executing the computation

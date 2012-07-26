@@ -1,12 +1,21 @@
 {-# LANGUAGE Trustworthy #-}
-{-
+{- |
 
-This module implements labeled @MVar@s.  The interface is analogous to
-"Control.Concurrent.MVar", but the operations take place in the LIO
-monad.  Moreover, taking and putting @MVars@ calls a write guard
-@wguard@ as every read implies a write and vice versa. This module
-exports only the safe subset (non-TCB) of the @LMVar@ module trusted
-code can import "LIO.Concurrent.LMVar.TCB". 
+This module implements labeled 'MVar's.  The interface is analogous to
+"Control.Concurrent.MVar", but the operations take place in the 'LIO'
+monad.  A labeled MVar, of type @'LMVar' l a@, is a mutable location
+that can be in of of two states; an 'LMVar' can be empty, or it can be
+full (with a value of tye @a@). The location is protected by a label
+of type 'l'.  As in the case of @LIORef@s (see "LIO.LIORef"), this
+label is fixed and does not change according to the content placed
+into the location.  Different from @LIORef@s, taking and putting
+'LMVars' calls the write guard 'guardWrite' to enforce sound
+information flow control.
+
+'LMVar's can be used to build synchronization primitives and
+communication channels ('LMVar's themselves are single-place
+channels).  We refer to "Control.Concurrent.MVar" for the full
+documentation on MVars.
 
 -}
 
@@ -38,17 +47,18 @@ import LIO.Concurrent.LMVar.TCB
 -- Creating labeled 'MVar's
 --
 
--- | Create a new labeled MVar, in an empty state. Note that the
--- supplied label must be above the current label and below the current
--- clearance.
+-- | Create a new labeled MVar, in an empty state. Note that the supplied
+-- label must be above the current label and below the current clearance.
+-- An exception will be thrown by the underlying 'guardAlloc' if this is
+-- not the case.
 newEmptyLMVar :: Label l
               => l                    -- ^ Label of @LMVar@
               -> LIO l (LMVar l a)    -- ^ New mutable location
 newEmptyLMVar = newEmptyLMVarP NoPrivs
 
--- | Same as 'newEmptyLMVar' except it takes a set of
--- privileges which are accounted for in comparing the label of
--- the MVar to the current label and clearance.
+-- | Same as 'newEmptyLMVar' except it takes a set of privileges which
+-- are accounted for in comparing the label of the MVar to the current
+-- label and clearance.
 newEmptyLMVarP :: Priv l p => p -> l -> LIO l (LMVar l a)
 newEmptyLMVarP p l = do
   guardAllocP p l
@@ -76,13 +86,15 @@ newLMVarP p l a = do
 --
 
 -- | Return contents of the 'LMVar'. Note that a take consists of a read
--- and a write, since it observes whether or not the 'LMVar' is full,
--- and thus the current label must be the same as that of the
--- 'LMVar' (of course, this is not the case when using privileges).
--- Hence, if the label of the 'LMVar' is below the current clearance,
--- we raise the current label to the join of the current label and the
--- label of the MVar and read the contents of the @MVar@. If the
--- 'LMVar' is empty, @takeLMVar@ blocks.
+-- and a write, since it observes whether or not the 'LMVar' is full, and
+-- thus the current label must be the same as that of the 'LMVar' (of
+-- course, this is not the case when using privileges).  Hence, if the
+-- label of the 'LMVar' is below the current clearance, we raise the
+-- current label to the join of the current label and the label of the
+-- MVar and read the contents of the @MVar@. The underlying guard
+-- 'guardWrite' will throw an exception if any of the IFC checks fail.
+-- If the Finally, like 'MVars' if the 'LMVar' is empty, @takeLMVar@
+-- blocks.
 takeLMVar :: Label l => LMVar l a -> LIO l a
 takeLMVar = takeLMVarP NoPrivs
 
@@ -94,11 +106,13 @@ takeLMVarP p m = do
   takeLMVarTCB m
 
 -- | Non-blocking version of 'takeLMVar'. It returns @Nothing@ if the
--- 'LMVar' is empty, otherwise it returns @Just@ value, emptying the 'LMVar'.
+-- 'LMVar' is empty, otherwise it returns @Just@ value, emptying the
+-- 'LMVar'.
 tryTakeLMVar :: Label l => LMVar l a -> LIO l (Maybe a)
 tryTakeLMVar = tryTakeLMVarP NoPrivs
 
--- | Same as 'tryTakeLMVar', but uses priviliges when raising current label.
+-- | Same as 'tryTakeLMVar', but uses priviliges when raising current
+-- label.
 tryTakeLMVarP :: Priv l p => p -> LMVar l a -> LIO l (Maybe a)
 tryTakeLMVarP p m = do
   guardWriteP p (labelOf m)
@@ -108,13 +122,14 @@ tryTakeLMVarP p m = do
 -- Put 'LMVar'
 --
 
--- | Puts a value into an 'LMVar'. Note that a put consists of a read
--- and a write, since it observes whether or not the 'LMVar' is empty,
--- and so the current label must be the same as that of the 'LMVar'
--- (of course, this is not the case when using privileges). As in the
--- 'takeLMVar' case, if the label of the 'LMVar' is below the current
--- clearance, we raise the current label to the join of the current
--- label and the label of the MVar and put the value into the @MVar@.
+-- | Puts a value into an 'LMVar'. Note that a put consists of a read and
+-- a write, since it observes whether or not the 'LMVar' is empty, and so
+-- the current label must be the same as that of the 'LMVar' (of course,
+-- this is not the case when using privileges). As in the 'takeLMVar'
+-- case, if the label of the 'LMVar' is below the current clearance, we
+-- raise the current label to the join of the current label and the label
+-- of the MVar and put the value into the @MVar@.  Moreover if these IFC
+-- restrictions fail, the underlying 'guardWrite' throws an exception.
 -- If the 'LMVar' is full, @putLMVar@ blocks.
 putLMVar :: Label l
          => LMVar l a   -- ^ Source 'LMVar'
@@ -162,10 +177,11 @@ readLMVarP p m = do
 --
 
 -- | Takes a value from an 'LMVar', puts a new value into the 'LMvar',
--- and returns the taken value.  Like the other 'LMVar' operations it
--- is required that the label of the 'LMVar' be above the current label
--- and below the current clearance. Moreover, the current label is raised
--- to accommodate for the observation. This operation is atomic iff
+-- and returns the taken value.  Like the other 'LMVar' operations it is
+-- required that the label of the 'LMVar' be above the current label and
+-- below the current clearance. Moreover, the current label is raised to
+-- accommodate for the observation. The underlying 'guardWrite' throws an
+-- exception if this cannot be accomplished. This operation is atomic iff
 -- there is no other thread calling 'putLMVar' for this 'LMVar'.
 swapLMVar :: Label l
           => LMVar l a          -- ^ Source @LMVar@
@@ -188,7 +204,8 @@ swapLMVarP p m x = do
 -- function succeeds if the label of the 'LMVar' is below the current
 -- clearance -- the current label is raised to the join of the 'LMVar'
 -- label and the current label. Note that this function only returns a
--- snapshot of the state.
+-- snapshot of the state and does not modify it -- hence the
+-- underlying guard is 'taint' and not 'guardWrite'.
 isEmptyLMVar :: Label l => LMVar l a -> LIO l Bool
 isEmptyLMVar = isEmptyLMVarP NoPrivs
 

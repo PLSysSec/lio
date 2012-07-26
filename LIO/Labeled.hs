@@ -1,13 +1,24 @@
 {-# LANGUAGE Trustworthy #-}
 {- |
 
-A data structure 'Labeled' (labeled value) protects access to pure
-values.  Without the appropriate privileges, one cannot produce a pure
-value that depends on a secret 'Labeled', or conversely produce a
-high-integrity 'Labeled' based on pure data.  This module exports safe
-functions for creating ('label', 'labelP') labeled values, using the
-values protected by 'Labeled' ('unlabel', 'unlabelP') and relabeling
-labeled values ('relabelLabeledP', 'taintLabeled', etc.).
+A data type 'Labeled' protects access to pure values (hence, we refer
+to values of type @'Label' a@ as /labeled values/).  The role of
+labeled values is to allow users to associate heterogeneous labels (see
+"LIO.Label") with values. Although LIO\'s current label protects all
+values in scope with the current label, 'Labeled' values allow for
+more fine grained protection. Moreover, trusted code may easily
+inspect 'Labeled' values, for instance, when inserting values into a
+database.
+
+Without the appropriate privileges, one cannot produce a pure
+/unlabeled/ value that depends on a secret 'Labeled' value, or
+conversely produce a high-integrity 'Labeled' value based on pure
+data.  This module exports functions for creating labeled values
+('label'), using the values protected by 'Labeled' by unlabeling them
+('unlabel'), and changing the value of a labeled value without
+inspection ('relabelLabeledP', 'taintLabeled', 'untaintLabeled').  A
+'Functor'-like class ('LabeledFunctor') on 'Labeled' is also defined
+in this module.
 
 -}
 
@@ -21,6 +32,7 @@ module LIO.Labeled (
   , relabelLabeledP
   , taintLabeled, taintLabeledP , untaintLabeled, untaintLabeledP
   -- * Labeled functor
+  -- $functor
   , LabeledFunctor(..)
   ) where
 
@@ -41,7 +53,8 @@ instance LabelOf Labeled where
 -- | Function to construct a 'Labeled' from a label and pure value.  If
 -- the current label is @lcurrent@ and the current clearance is
 -- @ccurrent@, then the label @l@ specified must satisfy @lcurrent
--- ``canFlowTo`` l && l ``canFlowTo`` ccurrent@.
+-- ``canFlowTo`` l && l ``canFlowTo`` ccurrent@. Otherwise an
+-- exception is thrown (see 'guardAlloc').
 label :: Label l => l -> a -> LIO l (Labeled l a)
 label = labelP NoPrivs
 
@@ -50,7 +63,7 @@ label = labelP NoPrivs
 -- @lcurrent@ and the current clearance is @ccurrent@, then the privilege
 -- @p@ and label @l@ specified must satisfy @canFlowTo p lcurrent l@ and
 -- @l ``canFlowTo`` ccurrent@.  Note that privilege is not used to bypass
--- the clearance.  You must use 'raiseClearanceP' to raise the clearance
+-- the clearance.  You must use 'setClearanceP' to raise the clearance
 -- first if you wish to create an 'Labeled' at a higher label than the
 -- current clearance.
 labelP :: Priv l p => p -> l -> a -> LIO l (Labeled l a)
@@ -63,14 +76,14 @@ labelP p l a = do
 --
 
 -- | Within the 'LIO' monad, this function takes a 'Labeled' and returns
--- the value.  Thus, in the 'LIO' monad one can say:
+-- the underlying value.  Thus, in the 'LIO' monad one can say:
 --
 -- > x <- unlabel (xv :: Labeled SomeLabelType Int)
 --
--- And now it is possible to use the value of @x@, which is the pure
--- value of what was stored in @xv@.  Of course, @unlabel@ also raises
--- the current label.  If raising the label would exceed the current
--- clearance, then @unlabel@ throws 'ClearanceViolation'.
+-- And now it is possible to use the value of @x :: Int@, which is the
+-- pure value of what was stored in @xv@.  Of course, @unlabel@ also
+-- raises the current label.  If raising the label would exceed the
+-- current clearance, then @unlabel@ throws 'ClearanceViolation'.
 -- However, you can use 'labelOf' to check if 'unlabel' will succeed
 -- without throwing an exception.
 unlabel :: Label l => Labeled l a -> LIO l a
@@ -93,6 +106,13 @@ unlabelP p lv = do
 -- privilege privileges permits it. It must be that the original
 -- label and new label are equal, modulo the supplied privileges. In
 -- other words the label remains in the same congruence class.
+--
+-- Consequently @relabelP p l lv@ throws an 'InsufficientPrivs'
+-- exception if
+--
+-- @'canFlowToP' p l ('labelOf' lv) && 'canFlowToP' p ('labelOf' lv) l@
+--
+-- does not hold.
 relabelLabeledP :: Priv l p => p -> l -> Labeled l a -> LIO l (Labeled l a)
 relabelLabeledP p newl lv = do
   let origl = labelOf lv
@@ -101,9 +121,11 @@ relabelLabeledP p newl lv = do
   return . labelTCB newl $! unlabelTCB lv
 
 -- | Raises the label of a 'Labeled' to the 'upperBound' of it's current
--- label and the value supplied.  The label supplied must be bounded by the
--- current label and clearance, though the resulting label may not be if the
--- 'Labeled' is already above the current thread's clearance.
+-- label and the value supplied.  The label supplied must be bounded by
+-- the current label and clearance, though the resulting label may not be
+-- if the 'Labeled' is already above the current thread's clearance. If
+-- the supplied label is not bounded then @taintLabeled@ will throw an
+-- exception (see 'guardAlloc').
 taintLabeled :: Label l => l -> Labeled l a -> LIO l (Labeled l a)
 taintLabeled = taintLabeledP NoPrivs
 
@@ -128,6 +150,26 @@ untaintLabeledP p target lv =
   relabelLabeledP p (labelDiffP p (labelOf lv) target) lv
 
 
+{- $functor
+
+Making 'Labeled' an instance of 'Functor' is problematic because:
+
+1. 'fmap' would have type @Labeled l a -> (a -> b) -> Labeled b@ and thus 
+    creating /new/ labeled values above the current clearance or below
+    the current label would be feasible (given one such value).
+2. 'LIO' is polymorphic in the label type and thus 'fmap' would is
+   susceptible to /refinement attacks/. Superficially if the label type
+   contains an integrity component (see for example "LIO.DCLabel")
+   then @fmap (\ -> 3) lv@ would produce a high-integrity labeled @3@
+   if @lv@ is a high-integrity labeled value without any any authority
+   or /endorsement/.
+
+As a result, we provide a class 'LabeledFunctor' that export 'lFmap'
+(labeled 'lFmap') that addressed the above issues. Firstly, each newly
+created value is in the 'LIO' monad and secondly each label format
+implementation must produce their own definition of 'lFmap' such that
+the end label protects the computation result accordingly.
+-}
 
 -- | IFC-aware functor instance. Since certain label formats may contain
 -- integrity information, this is provided as a class rather than a

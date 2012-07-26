@@ -4,7 +4,66 @@
 
 {- | 
 
-LIO core
+This module implements the core of the Labeled IO (LIO) library for
+information flow control (IFC) in Haskell.  It provides a monad,
+'LIO', that is intended to be used as a replacement for the 'IO' monad
+in untrusted code.  The idea is for untrusted code to provide a
+computation in the 'LIO' monad, which trusted code can then safely
+execute through using 'evalLIO'-like functions. Though, usually a
+wrapper function is employed depending on the type of /labels/ used by
+an application.  For example, with "LIO.DCLabel" trusted code would
+'evalDC' to execute an untrusted computation.
+
+Labels are a way of describing who can observe and modify data. (A
+detailed consideration of labels is given in "LIO.Label".) LIO
+associates a /current label/ with every 'LIO' computation. The current
+label effectively tracks the sensitivity of all the data that the
+computation has observed.  For example, if the computation has read a
+\"secret\" mutable refernce (see "LIO.LIORef") and then the result of
+a \"top-secret\" thread (see "LIO.Concurrent") then the current label
+will be at least \"top-secret\". The role of the current label is
+two-fold. First, the current label protects all the data in scope --
+it is the label associated with any /unlabeled/ data. For example, the
+current label is the label on contants such as @3@ or @\"tis a
+string\"@. More interestingly, consider reading a \"secret\" file:
+
+> bs <- readFile "/secret/file.txt"
+
+Though the label in the file store may be \"secret\", @bs@ has type
+@ByteString@, which is not explicitly labeled. Hence, to protect the
+contents (@bs@) the current label must be at least \"secret\" before
+executing @readFile@.  More generally, if the current label is
+@L_cur@, then it is only permissible to read data labeled @L_r@ if
+@L_r ``canFlowTo`` L_cur@.  Note that, rather than throw an exception,
+reading data will often just increase the current label to ensure that
+@L_r ``canFlowTo`` L_cur@ using 'taint'.
+
+Second, the current label prevents inforation leaks into public
+channels. Specifically, it is only permissible to modify, or write
+to, data labeled @L_w@ when @L_cur``canFlowTo`` L_w@. Thus, it the
+following attempt to leak the secret @bs@ would fail:
+
+> writeFile "/public/file.txt" bs
+
+In addition to the current label, the LIO monad keeps a second label,
+the current /clearance/ (accessible via the 'getClearance' function).
+The clearance can be used to enforce a \"need-to-know\" policy since
+it represents the highest value the current label can be raised to.
+In other words, if the current clearance is @L_clear@ then the
+computation cannot create, read or write to objects labeled @L@ such
+that @L ``canFlowTo`` L_clear@ does not hold.
+
+This module exports the 'LIO' monad, functions to access the internal
+state (e.g., 'getLabel' and 'getClearance'), functions for raising and
+catching exceptions, and IFC guards.  Exceptions are core to LIO since
+they provide a way to deal with potentially-misbehaving untrusted
+code. Specifically, when a computation is about to violate IFC (as
+@writeFile@ above), an exception is raised. Guards provide a useful
+abstraction for dealing with labeled objects; they should be used
+before performing a read-only, write-only, or read-write operation on
+a labeled object. The remaining core, but not all, abstractions are
+exported by "LIO".
+
 -}
 
 module LIO.Core (
@@ -178,6 +237,9 @@ setClearanceP p cnew = do
    Arbitrary code can use 'throwLIO' to throw an exception that will
    be labeled with the current label, while 'catchLIO' can be used to
    catch exceptions (whose label flows to the current clearance).
+   Wherever possible, code should use the 'catchLIOP' and
+   'onExceptionP' variants that use privileges to downgrade the
+   exception. 
 
    If an exception is uncaught in the 'LIO' monad, the 'evalLIO'
    function will re-throw the exception, so that it is okay to throw
@@ -187,11 +249,6 @@ setClearanceP p cnew = do
    we recommend the use of 'paranoidLIO' to execute 'LIO' actions as
    to prevent accidental, but unwanted crashes.
 
-   Wherever possible, code should use the 'catchLIOP' and
-   'onExceptionP' variants that use whatever privilege is available to
-   downgrade the exception.  Privileged code that must always run some
-   cleanup function can use the 'onExceptionTCB' and 'bracketTCB'
-   functions to run the cleanup code on all exceptions.
 
    /Note/:  Do not use 'throw' (as opposed to 'throwLIO') within the
    'LIO' monad.  Because 'throw' can be invoked from pure code, it has
@@ -220,11 +277,8 @@ throwLIO e = do
 --
 
 
--- | Catches an exception, so long as the label at the point where the
--- exception was thrown can flow to the label at which @catchLIOP@ is
--- invoked, modulo the privileges specified.  Note that the handler
--- raises the current label to the join ('upperBound') of the current
--- label and exception label.
+-- | Same as 'catchLIO' but does not use privileges when raising the
+-- current label to the join of the current label and exception label.
 catchLIOP :: (Exception e, Priv l p)
           => p
           -> LIO l a
@@ -237,8 +291,10 @@ catchLIOP p act handler = do
      Just e | l `canFlowTo` clr -> taintP p l >> handler e
      _                          -> unlabeledThrowTCB se
 
--- | Same as 'catchLIOP' but does not use privileges when \"tainting\"
--- by exception label.
+-- | Catches an exception, so long as the label at the point where the
+-- exception was thrown can flow to the clearance at which @catchLIO@ is
+-- invoked. Note that the handler raises the current label to the join
+-- ('upperBound') of the current label and exception label.
 catchLIO :: (Exception e, Label l)
          => LIO l a
          -> (e -> LIO l a)
@@ -273,7 +329,7 @@ onException = onExceptionP NoPrivs
 -- | Privileged version of 'onExceptionP'.  'onException' cannot run its
 -- handler if the label was raised in the computation that threw the
 -- exception.  This variant allows privileges to be supplied, so as to
--- catch exceptions thrown with a raised label.
+-- catch exceptions thrown with a \"higher\" label.
 onExceptionP :: Priv l p
              => p       -- ^ Privileges to downgrade exception
              -> LIO l a -- ^ The computation to run
@@ -304,8 +360,7 @@ finallyP p act1 act2 = do
   void act2
   return r
 
--- | Like standard 'bracket', but with privileges to downgrade exception.
--- The @bracket@ function is used in patterns where you acquire a
+-- | The @bracket@ function is used in patterns where you acquire a
 -- resource, perform a computation on it, and then release the resource.
 -- The function releases the resource even if an exception is raised in
 -- the computation. An example of its use case is file handling:
@@ -315,8 +370,9 @@ finallyP p act1 act2 = do
 -- >    (\handle -> {- close file -} )
 -- >    (\handle -> {- computation on handle -})
 --
--- Note: @bracket@ does not use mask and thus asynchronous may leave
+-- Note: @bracket@ does not use 'mask' and thus asynchronous may leave
 -- the resource unreleased if the thread is killed in during release.
+-- An interface for arbitrarily killing threads is not provided by LIO.
 bracket :: Label l
         => LIO l a           -- ^ Computation to run first
         -> (a -> LIO l c)    -- ^ Computation to run last
@@ -324,8 +380,8 @@ bracket :: Label l
         -> LIO l b
 bracket = bracketP NoPrivs
 
--- | Like standard 'bracket', but with privileges to downgrade
--- exception.
+-- | Like 'bracket', but uses privileges to downgrade the label of any
+-- raised exception.
 bracketP :: Priv l p
          => p                 -- ^ Priviliges used to downgrade
          -> LIO l a           -- ^ Computation to run first
@@ -379,7 +435,10 @@ instance Exception MonitorFailure
 -- | Verbose version of 'MonitorFailure' also carrying around a
 -- detailed message.
 data VMonitorFailure = VMonitorFailure { monitorFailure :: MonitorFailure
-                                       , monitorMessage :: String }
+                                       -- ^ Generic monitor failure.
+                                       , monitorMessage :: String
+                                       -- ^ Detailed message of failure.
+                                       }
                     deriving Typeable
 
 instance Show VMonitorFailure where

@@ -3,12 +3,10 @@
 
 {- |
 
-A data structure 'Labeled' (labeled value) protects access to pure
-values.  Without the appropriate privileges, one cannot produce a
-pure value that depends on a secret 'Labeled', or conversely produce a
-high-integrity 'Labeled' based on pure data.  This module exports
-trusted functions for creating and reading labeled values. See
-"LIO.Labeled" for the general API.
+This is the TCB-restricted version of "LIO.Labeled", which documents
+the implementation of 'Labeled' values and their use. It provides
+functions for labeling ('labelTCB') and unlabeling ('unlabelTCB')
+labeled values without imposing any information flow restrictions.
 
 -}
 
@@ -21,7 +19,14 @@ import           Data.Typeable
 import           LIO.Label
 import           LIO.TCB
 
--- | @Labeled@ is a type representing labeled data.  
+-- | @Labeled l a@ is a value that associates a label of type @l@ with
+-- a value of type @a@. Labeled values allow users to label data with
+-- a label other than the current label. In an embedded setting this
+-- is akin to having first class labeled values. Note that 'Labeled'
+-- is an instance of 'LabelOf', which effectively means that the label
+-- of a 'Labeled' value is usually just protected by the current
+-- label. (Of course if you have a nested labeled value then the label
+-- on the inner labeled value's label is the outer label.)
 data Labeled l t = LabeledTCB { labelOfLabeled :: !l
                               -- ^ Label of 'Labeled' valued
                               , unlabelTCB     :: !t 
@@ -34,10 +39,11 @@ data Labeled l t = LabeledTCB { labelOfLabeled :: !l
 labelTCB :: Label l => l -> a -> Labeled l a
 labelTCB = LabeledTCB
 
-
+-- | Trusted 'Show' instance.
 instance (Label l, Show a) => ShowTCB (Labeled l a) where
     showTCB (LabeledTCB l t) = show t ++ " {" ++ show l ++ "}"
 
+-- | Trusted 'Read' instance.
 instance (Label l, Read l, Read a) => ReadTCB (Labeled l a) where
   readsPrecTCB _ str = do (val, str1) <- reads str
                           ("{", str2) <- lex str1

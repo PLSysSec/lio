@@ -1,16 +1,13 @@
 {-# LANGUAGE Unsafe #-}
 {-|
-This module provides an implementation for labeled MVars.  A labeled
-MVar, of type @'LMVar' l a@, is a mutable location that can be in of
-of two states; an 'LMVar' can be empty, or it can be full (with a
-value of tye @a@). The location is protected by a label of type 'l'.
-As in the case of @LIORef@s (see "LIO.LIORef"), this label is static
-and does not change according to the content placed into the location.
 
-'LMVar's can be used to build synchronization primitives and
-communication channels ('LMVar's themselves are single-place
-channels).  We refer to "Control.Concurrent.MVar" for the full
-documentation on MVars.
+This module implements the core of labeled 'MVars's in the 'LIO ad.
+to "Control.Concurrent.MVar", but the operations take place in the
+'LIO' monad.  The types and functions exported by this module are
+strictly TCB and do not perform any information flow checks. The
+external, safe interface is provided and documented in
+"LIO.Concurrent.LMVar".
+
 -}
 module LIO.Concurrent.LMVar.TCB (
     LMVar(..)
@@ -37,9 +34,9 @@ import LIO.TCB
 -- | An @LMVar@ is a labeled synchronization variable (an 'MVar') that
 -- can be used by concurrent threads to communicate.
 data LMVar l a = LMVarTCB { labelOfLMVar :: !l
-                            -- ^ Label of MVar
+                            -- ^ Label of MVar.
                           , unlabelLMVarTCB :: MVar a
-                            -- ^ Access the underlying 'MVar'
+                            -- ^ Access the underlying 'MVar', ignoring IFC.
                           }
 
 instance LabelOf LMVar where

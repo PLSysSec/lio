@@ -60,18 +60,18 @@ import           LIO.DCLabel.Serialize ()
 -- | DC Labeled exceptions.
 type DCLabeledException = LabeledException DCLabel
 
--- | DC Labeled values.
+-- | DC 'Labeled' values.
 type DCLabeled = Labeled DCLabel
 
 instance LabeledFunctor DCLabel where
   lFmap lv f = let l = labelOf lv `upperBound` dcPub
                in label l $ f (unlabelTCB lv)
 
--- | DC Labeled 'LIORef's
+-- | DC Labeled 'LIORef's.
 type DCRef = LIORef DCLabel
 
 
--- | DC Gate
+-- | DC 'Gate'.
 type DCGate = Gate DCPrivDesc
 
 --
@@ -87,10 +87,11 @@ that any *real* application set the initial current label and
 clearance to values other than 'bottom' and 'top' as set by
 'defaultState', respectively. In most cases the initial current label
 should be public, i.e., 'dcPub'.
+
 -}
 
 
--- | 'LIOState' with underlying label being 'DCLabel
+-- | 'LIOState' with underlying label being 'DCLabel'
 type DCState = LIOState DCLabel
 
 -- | Default, starting state for a 'DC' computation. The current label
