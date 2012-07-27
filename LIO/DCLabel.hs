@@ -37,6 +37,8 @@ module LIO.DCLabel (
   , DCLabeled
   -- ** Labeled references
   , DCRef
+  -- ** Gates
+  , DCGate
   ) where
 
 import           Control.Exception
@@ -67,6 +69,10 @@ instance LabeledFunctor DCLabel where
 
 -- | DC Labeled 'LIORef's
 type DCRef = LIORef DCLabel
+
+
+-- | DC Gate
+type DCGate = Gate DCPrivDesc
 
 --
 -- DC monad

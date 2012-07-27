@@ -33,9 +33,8 @@
   more tightly than ('/\').
 
   Given two 'Component's, one for secrecy and one for integrity, you
-  can create a 'DCLabel' with 'dcLabel'. Given a 'Component' you can
-  create a 'DCPrivDesc' using 'dcPrivDesc'. Finally, given a 'DCPriv'
-  and 'DCPrivDesc' you can create a new minted privilege with
+  can create a 'DCLabel' with 'dcLabel'.  Given a 'DCPriv' and
+  'DCPrivDesc' you can create a new minted privilege with
   'dcDelegatePriv'.
   
   
@@ -69,6 +68,7 @@ module LIO.DCLabel.DSL (
   , everybody, anybody
   ) where
 
+import           LIO.DCLabel.Privs
 import           LIO.DCLabel.Core
 import qualified Data.Set as Set
 import qualified Data.ByteString.Char8 as S8
@@ -79,6 +79,9 @@ type S8 = S8.ByteString
 class ToComponent a where
   -- | Convert to 'Component'
   toComponent :: a -> Component
+  -- | Trivial synonym for 'toComponent'. Convert to a 'DCPrivDesc'.
+  dcPrivDesc :: a -> DCPrivDesc
+  dcPrivDesc = toComponent
 
 -- | Identity of 'Component'.
 instance ToComponent Component where
