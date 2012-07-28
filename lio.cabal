@@ -50,6 +50,9 @@ Description:
 
 Extra-source-files:
   ACKNOWLEDGEMENTS
+  examples/dclabel.hs
+  examples/gate.hs
+  examples/waitAndCatch.hs
 
 Library
   Build-Depends:
@@ -113,8 +116,7 @@ test-suite lio_test
     base,
     lio,
     containers,
-    bytestring,
-    cereal
+    bytestring
 
 test-suite dclabel_test
   type: exitcode-stdio-1.0
@@ -134,5 +136,23 @@ test-suite dclabel_test
     base,
     lio,
     containers,
+    bytestring,
+    cereal
+
+benchmark dclabel_bench
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test_and_bench
+  main-is: dclabel_bench.hs
+
+  ghc-options:
+    -O2 -threaded -rtsopts
+
+  build-depends:
+    base,
+    QuickCheck,
+    quickcheck-instances,
+    containers,
+    criterion,
+    lio,
     bytestring,
     cereal
