@@ -27,7 +27,7 @@ import LIO.TCB
 import Data.Set hiding (map)
 import Data.Typeable
 
-import Control.Concurrent
+import Control.Concurrent hiding (threadDelay)
 import Control.Monad
 import Control.Exception hiding ( throwIO
                                 , catch 
@@ -65,6 +65,10 @@ tests = [
     testGroup "General" [
         testProperty "Current label always flows to clearance" 
                      prop_guard_curLabel_flowsTo_curClearance 
+      , testCase "paranoidDC catches exceptions thrown by 'throw'"
+                 test_paranoidDC_catch_throw 
+      , testCase "paranoidDC catches 'undefined'"
+                 test_paranoidDC_catch_undefined
     ]
   , testGroup "Labeled" [
         testProperty "unlabel raises current label" $
@@ -166,7 +170,7 @@ tests = [
                                             (Left $ liftJust lWait)
       , testProperty "trylWait raises current label" $
                       prop_gen_raises_label (\l v -> lFork l (return v))
-                                            (Left $ \v -> (ioTCB $ threadDelay 5000) >> trylWait v)
+                                            (Left $ \v -> (threadDelay 5000) >> trylWait v)
 
       , testProperty "lFork fails if label is below current label" $ 
                      prop_guard_fail_if_label_below_current $
@@ -227,6 +231,10 @@ tests = [
     where liftJust f x = Just `liftM` f x
 
 
+--
+-- General
+--
+
 -- | Current label always flows to current clearance
 prop_guard_curLabel_flowsTo_curClearance :: Property
 prop_guard_curLabel_flowsTo_curClearance = monadicDC $ do
@@ -240,9 +248,21 @@ prop_guard_curLabel_flowsTo_curClearance = monadicDC $ do
   c2 <- run getClearance
   Q.assert $ l2 `canFlowTo` c2
 
---
--- General
---
+-- | paranoidDC catches exceptions thrown by 'throw'
+test_paranoidDC_catch_throw :: Assertion
+test_paranoidDC_catch_throw = do
+  res <- paranoidDC (throw A)
+  case res of
+    Left se -> HU.assert $ fromException se == Just A
+    _ -> assertFailure "did not catch exception"
+
+-- | paranoidDC catches 'undefined'
+test_paranoidDC_catch_undefined :: Assertion
+test_paranoidDC_catch_undefined = do
+  res <- paranoidDC undefined
+  case res of
+    Left _ -> return ()
+    _ -> assertFailure "did not catch exception"
 
 -- | Check that the current label is raised when reading/writing
 -- labeled object

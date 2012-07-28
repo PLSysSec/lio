@@ -85,7 +85,7 @@ newtype Principal = Principal { principalName :: S8
 instance Show Principal where
   show = S8.unpack . principalName
 
--- | Principal constructor
+-- | Principal constructor.
 principal :: S8 -> Principal
 principal = Principal
 
