@@ -47,8 +47,8 @@ import           LIO.DCLabel.Privs.TCB
 -- | Privileges can be combined using 'mappend'
 instance Monoid DCPriv where
   mempty = noPriv
-  mappend p1 p2 = DCPrivTCB . dcReduce $!
-                      unDCPriv p1 `dcAnd` unDCPriv p2
+  mappend p1 p2 = mintTCB . dcReduce $!
+                      privDesc p1 `dcAnd` privDesc p2
 
 instance Priv DCLabel DCPriv where
   canFlowToP p l1 l2 | pd == dcTrue = canFlowTo l1 l2
@@ -57,7 +57,21 @@ instance Priv DCLabel DCPriv where
         s2 = dcReduce $ dcSecrecy l2   `dcAnd` pd
     in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
       where pd = privDesc p
-  labelDiffP = error "TODO"
+  partDowngradeP p la lg | p == noPriv     = la `upperBound` lg
+                         | p == allPrivTCB = lg
+                         | otherwise        = 
+    let sa  = dcSecrecy $ la
+        ia  = dcIntegrity la
+        sg  = dcSecrecy   lg
+        ig  = dcIntegrity lg
+        pd  = privDesc    p
+        sa' = dcFormula . Set.filter (f pd) $ unDCFormula sa
+        sr  = if isFalse sa 
+                then sa
+                else sa' `dcAnd` sg
+        ir  = (pd `dcAnd` ia) `dcOr` ig
+    in dcLabel sr ir
+      where f pd c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
 
 --
 -- Helpers
@@ -66,13 +80,13 @@ instance Priv DCLabel DCPriv where
 -- | The empty privilege, or no privileges, corresponds to logical
 -- @True@.
 noPriv :: DCPriv
-noPriv = DCPrivTCB dcTrue
+noPriv = mintTCB dcTrue
 
 -- | Given a privilege and a privilege description turn the privilege
 -- description into a privilege (i.e., mint). Such delegation succeeds
 -- only if the supplied privilege implies the privilege description.
 dcDelegatePriv :: DCPriv -> DCPrivDesc -> Maybe DCPriv
-dcDelegatePriv p pd = let c  = unDCPriv $! p
+dcDelegatePriv p pd = let c  = privDesc $! p
                       in if c `dcImplies` pd
                            then Just $! mintTCB pd
                            else Nothing

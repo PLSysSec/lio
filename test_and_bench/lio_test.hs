@@ -224,8 +224,12 @@ tests = [
                      prop_guard_raises_label taint
     ]
   , testGroup "Gates" [
-        testProperty  "callGate correct" $
+        testProperty  "callGate correct"
                       callGate_correct
+    ]
+  , testGroup "Privs" [
+        testProperty  "partDowngradeP correct"
+                      prop_partDowngradeP_correct 
     ]
   ]
     where liftJust f x = Just `liftM` f x
@@ -410,3 +414,24 @@ callGate_correct = forAll arbitrary $ \(d1 :: DCPrivDesc) ->
       p2 = mintTCB d2
       f = gate $ \d -> if d == privDesc p1 then True else False
   in p1 /= p2 ==> callGate f p1 && (not $ callGate f p2)
+
+--
+-- partDowngradeP
+--
+
+{- | Test partDowngradeP
+lr = partDowngradeP p li lg satisfies:
+   - canflowto lg lr
+   - canflowto_p p li lr
+   - lr is the greatest lower bound
+-}
+prop_partDowngradeP_correct :: DCPriv -> DCLabel -> DCLabel -> Property
+prop_partDowngradeP_correct p li lg = 
+  let lr = partDowngradeP p li lg 
+  in forAll (arbitrary :: Gen DCLabel) $ \lr' -> 
+   	canFlowTo lg lr &&
+   	canFlowToP p li lr &&
+	not ( canFlowTo  lg lr'   &&
+              canFlowToP p li lr' &&
+	      lr' /= lr &&
+	      canFlowTo lr' lr)

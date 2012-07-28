@@ -147,7 +147,7 @@ untaintLabeled = untaintLabeledP NoPrivs
 -- downgrading the label of the labeled value.
 untaintLabeledP :: Priv l p => p -> l -> Labeled l a -> LIO l (Labeled l a)
 untaintLabeledP p target lv =
-  relabelLabeledP p (labelDiffP p (labelOf lv) target) lv
+  relabelLabeledP p (partDowngradeP p (labelOf lv) target) lv
 
 
 {- $functor
