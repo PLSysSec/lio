@@ -223,6 +223,22 @@ tests = [
       , testProperty "Taint raises current label" $
                      prop_guard_raises_label taint
     ]
+  , testGroup "LIO state" [
+        testProperty "Trying to set label above clerance fails" $
+                     prop_guard_fail_if_label_above_clearance setLabel
+      , testProperty "Trying to set label below current label fails" $
+                     prop_guard_fail_if_label_below_current   setLabel
+      , testProperty "Trying to set clearance above clerance fails" $
+                     prop_guard_fail_if_label_above_clearance setClearance
+      , testProperty "Trying to set clearance below current label fails" $
+                     prop_guard_fail_if_label_below_current setClearance
+      , testProperty "withClearance set above clerance fails" $
+                     prop_guard_fail_if_label_above_clearance $
+                     \l -> withClearance l (return ())
+      , testProperty "withClearance set below current label fails" $
+                     prop_guard_fail_if_label_below_current $
+                     \l -> withClearance l (return ())
+  ]
   , testGroup "Gates" [
         testProperty  "callGate correct"
                       callGate_correct

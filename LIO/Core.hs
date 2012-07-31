@@ -77,6 +77,7 @@ module LIO.Core (
   , getLabel, setLabel, setLabelP
   -- *** Current clerance
   , getClearance, setClearance, setClearanceP
+  , withClearance 
   -- * Exceptions
   -- $exceptions
   , LabeledException
@@ -182,7 +183,7 @@ getLabel = lioLabel `liftM` getLIOStateTCB
 -- | Raise the current label to the provided label, which must be
 -- between the current label and clearance. See 'taint'.
 setLabel :: Label l => l -> LIO l ()
-setLabel = taint
+setLabel = setLabelP NoPrivs
 
 -- | If the current label is @oldLabel@ and the current clearance is
 -- @clearance@, this function allows code to raise the current label to
@@ -218,6 +219,23 @@ setClearanceP p cnew = do
   unless (canFlowToP p cnew c) $! throwLIO InsufficientPrivs
   unless (l `canFlowTo` cnew)  $! throwLIO CurrentLabelViolation
   updateLIOStateTCB $ \s -> s { lioClearance = cnew }
+
+-- | Lowers the clearance of a computation, then restores the clearance
+-- to its previous value.  Useful to wrap around a computation if you
+-- want to be sure you can catch exceptions thrown by it.  If
+-- @withClearance@ is given a label that can't flow to the current
+-- clearance, then the clearance is lowered to the greatest lower bound
+-- of the label supplied and the current clearance.
+-- 
+-- Note that if the computation inside @withClearance@ acquires any
+-- 'Priv's, it may still be able to raise its clearance above the
+-- supplied argument using 'setClearanceP'.
+withClearance :: Label l => l -> LIO l a -> LIO l a
+withClearance l act = do
+  guardAlloc l
+  c <- getClearance
+  updateLIOStateTCB $ \s -> s { lioClearance = l }
+  act `finally` (updateLIOStateTCB $ \s -> s { lioClearance = c  })
 
 --
 -- Exceptions
