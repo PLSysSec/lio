@@ -5,11 +5,7 @@
 |=========================================================|========|==========|
 |- Test the LIO.Concurrent force                          |  Med   |   1 hr   |
 |_________________________________________________________|________|__________|
-|- Port over LIO.FS                                       |  Med   | 2-4 hr   |
+|- Test LIO.FS                                            |  Med   |   1 hr   |
 |_________________________________________________________|________|__________|
-|- Add maskTCB (mask for LIO), from which we can implement|        |          |
-|  finallyTCB and bracketTCB.                             |  Low   |   1 hr   |
-|_________________________________________________________|________|__________|
-|- Write test cases for all the ...P functions            |        |          |
-|                                                         |  Med   |   2 hr   |
+|- Write test cases for all the ...P functions            |  Med   |   2 hr   |
 |_________________________________________________________|________|__________|
