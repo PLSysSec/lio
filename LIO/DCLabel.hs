@@ -1,5 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE MultiParamTypeClasses,
+             ConstraintKinds,
              TypeSynonymInstances #-}
 
 {-|
@@ -31,6 +32,7 @@ module LIO.DCLabel (
   -- $dcMonad
   , DCState, defaultState
   , DC, evalDC, runDC, tryDC, paranoidDC
+  , MonadDC, MonadDCP
   -- ** Exceptions
   , DCLabeledException
   -- ** Labeled values
@@ -90,6 +92,11 @@ should be public, i.e., 'dcPub'.
 
 -}
 
+-- | Type synonym for 'MonadLIO'.
+type MonadDC m = MonadLIO DCLabel m
+
+-- | Type synonym for 'MonadLIOP'.
+type MonadDCP m = MonadLIOP DCLabel DCPriv m
 
 -- | 'LIOState' with underlying label being 'DCLabel'
 type DCState = LIOState DCLabel

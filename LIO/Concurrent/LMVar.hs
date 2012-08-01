@@ -1,4 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE ConstraintKinds,
+             FlexibleContexts #-}
 {- |
 
 This module implements labeled 'MVar's.  The interface is analogous to
@@ -38,10 +40,10 @@ module LIO.Concurrent.LMVar (
   , isEmptyLMVar, isEmptyLMVarP
   ) where
 
-import LIO.Label
-import LIO.Core
-import LIO.Privs
-import LIO.Concurrent.LMVar.TCB
+import           LIO.Label
+import           LIO.Core
+import           LIO.Privs
+import           LIO.Concurrent.LMVar.TCB
 
 --
 -- Creating labeled 'MVar's
@@ -51,15 +53,15 @@ import LIO.Concurrent.LMVar.TCB
 -- label must be above the current label and below the current clearance.
 -- An exception will be thrown by the underlying 'guardAlloc' if this is
 -- not the case.
-newEmptyLMVar :: Label l
-              => l                    -- ^ Label of @LMVar@
-              -> LIO l (LMVar l a)    -- ^ New mutable location
+newEmptyLMVar :: MonadLIO l m
+              => l                -- ^ Label of @LMVar@
+              -> m (LMVar l a)    -- ^ New mutable location
 newEmptyLMVar = newEmptyLMVarP NoPrivs
 
 -- | Same as 'newEmptyLMVar' except it takes a set of privileges which
 -- are accounted for in comparing the label of the MVar to the current
 -- label and clearance.
-newEmptyLMVarP :: Priv l p => p -> l -> LIO l (LMVar l a)
+newEmptyLMVarP :: MonadLIOP l p m => p -> l -> m (LMVar l a)
 newEmptyLMVarP p l = do
   guardAllocP p l
   newEmptyLMVarTCB l
@@ -76,7 +78,7 @@ newLMVar = newLMVarP NoPrivs
 -- | Same as 'newLMVar' except it takes a set of privileges which are
 -- accounted for in comparing the label of the MVar to the current label
 -- and clearance.
-newLMVarP :: Priv l p => p -> l -> a -> LIO l (LMVar l a)
+newLMVarP :: MonadLIOP l p m => p -> l -> a -> m (LMVar l a)
 newLMVarP p l a = do
   guardAllocP p l
   newLMVarTCB l a
@@ -95,12 +97,12 @@ newLMVarP p l a = do
 -- 'guardWrite' will throw an exception if any of the IFC checks fail.
 -- If the Finally, like 'MVars' if the 'LMVar' is empty, @takeLMVar@
 -- blocks.
-takeLMVar :: Label l => LMVar l a -> LIO l a
+takeLMVar :: MonadLIO l m => LMVar l a -> m a
 takeLMVar = takeLMVarP NoPrivs
 
 -- | Same as 'takeLMVar' except @takeLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
-takeLMVarP :: Priv l p => p -> LMVar l a -> LIO l a
+takeLMVarP :: MonadLIOP l p m => p -> LMVar l a -> m a
 takeLMVarP p m = do
   guardWriteP p (labelOf m)
   takeLMVarTCB m
@@ -108,12 +110,12 @@ takeLMVarP p m = do
 -- | Non-blocking version of 'takeLMVar'. It returns @Nothing@ if the
 -- 'LMVar' is empty, otherwise it returns @Just@ value, emptying the
 -- 'LMVar'.
-tryTakeLMVar :: Label l => LMVar l a -> LIO l (Maybe a)
+tryTakeLMVar :: MonadLIO l m => LMVar l a -> m (Maybe a)
 tryTakeLMVar = tryTakeLMVarP NoPrivs
 
 -- | Same as 'tryTakeLMVar', but uses priviliges when raising current
 -- label.
-tryTakeLMVarP :: Priv l p => p -> LMVar l a -> LIO l (Maybe a)
+tryTakeLMVarP :: MonadLIOP l p m => p -> LMVar l a -> m (Maybe a)
 tryTakeLMVarP p m = do
   guardWriteP p (labelOf m)
   tryTakeLMVarTCB m
@@ -139,18 +141,18 @@ putLMVar = putLMVarP NoPrivs
 
 -- | Same as 'putLMVar' except @putLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
-putLMVarP :: Priv l p => p -> LMVar l a -> a -> LIO l ()
+putLMVarP :: MonadLIOP l p m => p -> LMVar l a -> a -> m ()
 putLMVarP p m a = do
   guardWriteP p (labelOf m)
   putLMVarTCB m a
 
 -- | Non-blocking version of 'putLMVar'. It returns @True@ if the
 -- 'LMVar' was empty and the put succeeded, otherwise it returns @False@.
-tryPutLMVar :: Label l => LMVar l a -> a -> LIO l Bool
+tryPutLMVar :: MonadLIO l m => LMVar l a -> a -> m Bool
 tryPutLMVar = tryPutLMVarP NoPrivs
 
 -- | Same as 'tryPutLMVar', but uses privileges when raising current label.
-tryPutLMVarP :: Priv l p => p -> LMVar l a -> a -> LIO l Bool
+tryPutLMVarP :: MonadLIOP l p m => p -> LMVar l a -> a -> m Bool
 tryPutLMVarP p m x = do
   guardWriteP p (labelOf m)
   tryPutLMVarTCB m x
@@ -162,12 +164,12 @@ tryPutLMVarP p m x = do
 -- | Combination of 'takeLMVar' and 'putLMVar'. Read the value, and just
 -- put it back. As specified for 'readMVar', this operation is atomic
 -- iff there is no other thread calling 'putLMVar' for this 'LMVar'.
-readLMVar :: Label l => LMVar l a -> LIO l a
+readLMVar :: MonadLIO l m => LMVar l a -> m a
 readLMVar = readLMVarP NoPrivs
 
 -- | Same as 'readLMVar' except @readLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
-readLMVarP :: Priv l p => p -> LMVar l a -> LIO l a
+readLMVarP :: MonadLIOP l p m => p -> LMVar l a -> m a
 readLMVarP p m = do
   guardWriteP p (labelOf m)
   readLMVarTCB m
@@ -191,7 +193,7 @@ swapLMVar = swapLMVarP NoPrivs
 
 -- | Same as 'swapLMVar' except @swapLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
-swapLMVarP :: Priv l p => p -> LMVar l a -> a -> LIO l a
+swapLMVarP :: MonadLIOP l p m => p -> LMVar l a -> a -> m a
 swapLMVarP p m x = do
   guardWriteP p (labelOf m)
   swapLMVarTCB m x
@@ -206,11 +208,11 @@ swapLMVarP p m x = do
 -- label and the current label. Note that this function only returns a
 -- snapshot of the state and does not modify it -- hence the
 -- underlying guard is 'taint' and not 'guardWrite'.
-isEmptyLMVar :: Label l => LMVar l a -> LIO l Bool
+isEmptyLMVar :: MonadLIO l m => LMVar l a -> m Bool
 isEmptyLMVar = isEmptyLMVarP NoPrivs
 
 -- | Same as 'isEmptyLMVar', but uses privileges when raising current label.
-isEmptyLMVarP :: Priv l p => p -> LMVar l a -> LIO l Bool
+isEmptyLMVarP :: MonadLIOP l p m => p -> LMVar l a -> m Bool
 isEmptyLMVarP p m = do
   taintP p (labelOf m)
   isEmptyLMVarTCB m

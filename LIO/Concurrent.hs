@@ -1,4 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE ConstraintKinds,
+             FlexibleContexts #-}
 {- |
 
 This module exposes useful concurrency abstrations for 'LIO'. This
@@ -38,6 +40,8 @@ module LIO.Concurrent (
 
 
 import           Control.Monad
+import           Control.Monad.Base
+import           Control.Monad.Trans.Control
 import           Control.Concurrent hiding ( myThreadId, threadDelay )
 import qualified Control.Concurrent as C
 import           Control.Exception ( toException
@@ -57,8 +61,8 @@ import           LIO.Concurrent.LMVar.TCB (putLMVarTCB)
 
 
 -- | Get the 'ThreadId' of the calling thread.
-myThreadId :: Label l => LIO l ThreadId
-myThreadId = ioTCB C.myThreadId
+myThreadId :: MonadLIO l m => m ThreadId
+myThreadId = liftBase $ ioTCB C.myThreadId
 
 --
 -- Fork
@@ -66,10 +70,11 @@ myThreadId = ioTCB C.myThreadId
 
 -- | Execute an 'LIO' computation in a new lightweight thread. The
 -- 'ThreadId' of the newly created thread is returned.
-forkLIO :: Label l => LIO l () -> LIO l ThreadId
-forkLIO act = do
-  s <- getLIOStateTCB
-  ioTCB . forkIO . void $ tryLIO act s
+forkLIO :: MonadLIO l m => m () -> m ThreadId
+forkLIO = liftBaseDiscard _forkLIO
+  where _forkLIO act = do
+          s <- getLIOStateTCB
+          ioTCB . forkIO . void $ tryLIO act s
 
 
 -- | Labeled fork. @lFork@ allows one to invoke computations that
@@ -145,23 +150,23 @@ lForkP p l act = do
 -- example if it violates clearance), the exception is rethrown by
 -- @lWait@. Similarly, if the thread reads values above the result label,
 -- an exception is thrown in place of the result.
-lWait :: Label l => LabeledResult l a -> LIO l a
+lWait :: MonadLIO l m => LabeledResult l a -> m a
 lWait = lWaitP NoPrivs
 
 -- | Same as 'lWait', but uses priviliges in label checks and raises.
-lWaitP :: Priv l p => p -> LabeledResult l a -> LIO l a
+lWaitP :: MonadLIOP l p m => p -> LabeledResult l a -> m a
 lWaitP p m = do
   v <- readLMVarP p $ lresResultTCB m
   case v of
     Right x -> return x
-    Left e  -> unlabeledThrowTCB e
+    Left e  -> liftBase $ unlabeledThrowTCB e
 
 -- | Same as 'lWait', but does not block waiting for result.
-trylWait :: Label l => LabeledResult l a -> LIO l (Maybe a)
+trylWait :: MonadLIO l m => LabeledResult l a -> m (Maybe a)
 trylWait = trylWaitP NoPrivs
 
 -- | Same as 'trylWait', but uses priviliges in label checks and raises.
-trylWaitP :: Priv l p => p -> LabeledResult l a -> LIO l (Maybe a)
+trylWaitP :: MonadLIOP l p m => p -> LabeledResult l a -> m (Maybe a)
 trylWaitP p m = do
   let mvar = lresResultTCB m
   mv <- tryTakeLMVarP p mvar
@@ -169,13 +174,13 @@ trylWaitP p m = do
     Just v -> do putLMVarP p mvar v
                  case v of
                    Right x -> return $! Just x
-                   Left e  -> unlabeledThrowTCB e
+                   Left e  -> liftBase $ unlabeledThrowTCB e
     _ -> return Nothing
 
 
 -- | Suspend current thread for a given number of microseconds.
-threadDelay :: Label l => Int -> LIO l ()
-threadDelay = ioTCB . C.threadDelay
+threadDelay :: MonadLIO l m => Int -> m ()
+threadDelay = liftBase . ioTCB . C.threadDelay
 
 --
 -- Forcing computations
@@ -186,18 +191,18 @@ threadDelay = ioTCB . C.threadDelay
 -- result is wrapped in a 'Just', otherwise this function returns
 -- 'Nothing'. Note that the current computation must be able to read
 -- and write at the security level of the labeled result.
-lForce :: Label l => LabeledResult l a -> LIO l (Labeled l (Maybe a))
+lForce :: MonadLIO l m => LabeledResult l a -> m (Labeled l (Maybe a))
 lForce = lForceP NoPrivs
 
 -- | Same as 'lForce', but uses privileges when raising current label
 -- to the join of the current label and result label.
-lForceP :: Priv l p => p -> LabeledResult l a -> LIO l (Labeled l (Maybe a))
+lForceP :: MonadLIOP l p m => p -> LabeledResult l a -> m (Labeled l (Maybe a))
 lForceP p m = do
   let l = labelOf m
       mv = lresResultTCB m
   guardWriteP p l
   -- kill thread:
-  ioTCB . killThread . lresThreadIdTCB $ m
+  liftBase . ioTCB . killThread . lresThreadIdTCB $ m
   -- check to see if it wrote to MVar:
   v <- tryTakeLMVarP p mv
   return . labelTCB l =<< case v of

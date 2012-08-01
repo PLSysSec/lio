@@ -1,4 +1,6 @@
 {-# LANGUAGE Unsafe #-}
+{-# LANGUAGE ConstraintKinds,
+             FlexibleContexts #-}
 {- |
 
 This module implements the core of labeled 'IORef's in the 'LIO ad.
@@ -27,9 +29,11 @@ module LIO.LIORef.TCB (
   , modifyLIORefTCB, atomicModifyLIORefTCB
   ) where
 
-import LIO
-import LIO.TCB
-import Data.IORef
+import           Control.Monad.Base
+
+import           LIO
+import           LIO.TCB
+import           Data.IORef
 
 
 -- | An @LIORef@ is an @IORef@ with an associated, fixed label.  The
@@ -54,9 +58,9 @@ instance LabelOf LIORef where
 
 -- | Trusted constructor that creates labeled references with the
 -- given label without any IFC checks.
-newLIORefTCB :: Label l => l -> a -> LIO l (LIORef l a)
+newLIORefTCB :: MonadLIO l m => l -> a -> m (LIORef l a)
 newLIORefTCB l a = do
-  ior <- ioTCB $! newIORef a
+  ior <- liftBase . ioTCB $! newIORef a
   return $! LIORefTCB l ior
 
 --
@@ -65,8 +69,8 @@ newLIORefTCB l a = do
 
 -- | Trusted function used to read the value of a reference without
 -- raising the current label.
-readLIORefTCB :: Label l => LIORef l a -> LIO l a
-readLIORefTCB = ioTCB . readIORef . unlabelLIORefTCB
+readLIORefTCB :: MonadLIO l m => LIORef l a -> m a
+readLIORefTCB = liftBase . ioTCB . readIORef . unlabelLIORefTCB
 
 --
 -- Write 'LIORef's
@@ -74,8 +78,8 @@ readLIORefTCB = ioTCB . readIORef . unlabelLIORefTCB
 
 -- | Trusted function used to write a new value into a labeled
 -- reference, ignoring IFC.
-writeLIORefTCB :: Label l => LIORef l a -> a -> LIO l ()
-writeLIORefTCB lr a = ioTCB $! writeIORef (unlabelLIORefTCB lr) a
+writeLIORefTCB :: MonadLIO l m => LIORef l a -> a -> m ()
+writeLIORefTCB lr a = liftBase . ioTCB $! writeIORef (unlabelLIORefTCB lr) a
 
 --
 -- Modify 'LIORef's
@@ -83,11 +87,12 @@ writeLIORefTCB lr a = ioTCB $! writeIORef (unlabelLIORefTCB lr) a
 
 -- | Trusted function that mutates the contents on an 'LIORef',
 -- ignoring IFC.
-modifyLIORefTCB :: Label l =>  LIORef l a -> (a -> a) -> LIO l ()
-modifyLIORefTCB lr f = ioTCB $! modifyIORef (unlabelLIORefTCB lr) f
+modifyLIORefTCB :: MonadLIO l m =>  LIORef l a -> (a -> a) -> m ()
+modifyLIORefTCB lr f = liftBase . ioTCB $! modifyIORef (unlabelLIORefTCB lr) f
 
 -- | Trusted function used to atomically modify the contents of a
 -- labeled reference, ignoring IFC.
-atomicModifyLIORefTCB :: Label l => LIORef l a -> (a -> (a, b)) -> LIO l b
-atomicModifyLIORefTCB lr f = ioTCB $! atomicModifyIORef (unlabelLIORefTCB lr) f
+atomicModifyLIORefTCB :: MonadLIO l m => LIORef l a -> (a -> (a, b)) -> m b
+atomicModifyLIORefTCB lr f =
+  liftBase . ioTCB $! atomicModifyIORef (unlabelLIORefTCB lr) f
 

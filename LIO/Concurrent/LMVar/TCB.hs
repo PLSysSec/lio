@@ -1,4 +1,6 @@
 {-# LANGUAGE Unsafe #-}
+{-# LANGUAGE ConstraintKinds,
+             FlexibleContexts #-}
 {-|
 
 This module implements the core of labeled 'MVars's in the 'LIO ad.
@@ -25,11 +27,12 @@ module LIO.Concurrent.LMVar.TCB (
   , isEmptyLMVarTCB
   ) where
 
-import Control.Concurrent.MVar
-
-import LIO.Label
-import LIO.Core
-import LIO.TCB
+import           Control.Monad.Base
+import           Control.Concurrent.MVar
+                 
+import           LIO.Label
+import           LIO.Core
+import           LIO.TCB
 
 -- | An @LMVar@ is a labeled synchronization variable (an 'MVar') that
 -- can be used by concurrent threads to communicate.
@@ -47,16 +50,16 @@ instance LabelOf LMVar where
 --
 
 -- | Trusted function used to create an empty @LMVar@, ignoring IFC.
-newEmptyLMVarTCB :: Label l => l -> LIO l (LMVar l a)
+newEmptyLMVarTCB :: MonadLIO l m => l -> m (LMVar l a)
 newEmptyLMVarTCB l = do
-  m <- ioTCB $ newEmptyMVar
+  m <- liftBase . ioTCB $ newEmptyMVar
   return $ LMVarTCB l m
 
 -- | Trusted function used to create an @LMVar@ with the supplied
 -- value, ignoring IFC.
-newLMVarTCB :: Label l => l -> a -> LIO l (LMVar l a)
+newLMVarTCB :: MonadLIO l m => l -> a -> m (LMVar l a)
 newLMVarTCB l a = do
-  m <- ioTCB $ newMVar a
+  m <- liftBase . ioTCB $ newMVar a
   return $ LMVarTCB l m
 
 --
@@ -64,24 +67,24 @@ newLMVarTCB l a = do
 --
 
 -- | Read the contents of an 'LMVar', ignoring IFC.
-takeLMVarTCB :: Label l => LMVar l a -> LIO l a
-takeLMVarTCB (LMVarTCB _ m) = ioTCB $ takeMVar m
+takeLMVarTCB :: MonadLIO l m => LMVar l a -> m a
+takeLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ takeMVar m
 
 -- | Same as 'tryTakeLMVar', but ignorses IFC.
-tryTakeLMVarTCB :: Label l => LMVar l a -> LIO l (Maybe a)
-tryTakeLMVarTCB (LMVarTCB _ m) = ioTCB $ tryTakeMVar m
+tryTakeLMVarTCB :: MonadLIO l m => LMVar l a -> m (Maybe a)
+tryTakeLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ tryTakeMVar m
 
 --
 -- Put 'LMVar'
 --
 
 -- | Put a value into an 'LMVar', ignoring IFC.
-putLMVarTCB :: Label l => LMVar l a -> a -> LIO l ()
-putLMVarTCB (LMVarTCB _ m) a = ioTCB $ putMVar m a
+putLMVarTCB :: MonadLIO l m => LMVar l a -> a -> m ()
+putLMVarTCB (LMVarTCB _ m) a = liftBase . ioTCB $ putMVar m a
 
 -- | Same as 'tryPutLMVar', but ignorses IFC.
-tryPutLMVarTCB :: Label l => LMVar l a -> a -> LIO l Bool
-tryPutLMVarTCB (LMVarTCB _ m) x = ioTCB $ tryPutMVar m x
+tryPutLMVarTCB :: MonadLIO l m => LMVar l a -> a -> m Bool
+tryPutLMVarTCB (LMVarTCB _ m) x = liftBase . ioTCB $ tryPutMVar m x
 
 
 --
@@ -89,21 +92,21 @@ tryPutLMVarTCB (LMVarTCB _ m) x = ioTCB $ tryPutMVar m x
 --
 
 -- | Trusted function used to read (take and put) an 'LMVar', ignoring IFC.
-readLMVarTCB :: Label l => LMVar l a -> LIO l a
-readLMVarTCB (LMVarTCB _ m) = ioTCB $ readMVar m
+readLMVarTCB :: MonadLIO l m => LMVar l a -> m a
+readLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ readMVar m
 
 --
 -- Swap 'LMVar'
 --
 
 -- | Trusted function that swaps value of 'LMVar', ignoring IFC.
-swapLMVarTCB :: Label l => LMVar l a -> a -> LIO l a
-swapLMVarTCB (LMVarTCB _ m) x = ioTCB $ swapMVar m x
+swapLMVarTCB :: MonadLIO l m => LMVar l a -> a -> m a
+swapLMVarTCB (LMVarTCB _ m) x = liftBase . ioTCB $ swapMVar m x
 
 --
 -- Check state of 'LMVar'
 --
 
 -- | Same as 'isEmptyLMVar', but ignorses IFC.
-isEmptyLMVarTCB :: Label l => LMVar l a -> LIO l Bool
-isEmptyLMVarTCB (LMVarTCB _ m) = ioTCB $ isEmptyMVar m
+isEmptyLMVarTCB :: MonadLIO l m => LMVar l a -> m Bool
+isEmptyLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ isEmptyMVar m

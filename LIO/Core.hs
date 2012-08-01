@@ -1,5 +1,7 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE ScopedTypeVariables,
+             ConstraintKinds,
+             FlexibleContexts,
              DeriveDataTypeable #-}
 
 {- | 
@@ -68,7 +70,7 @@ exported by "LIO".
 
 module LIO.Core (
   -- * LIO monad
-    LIO
+    LIO, MonadLIO, MonadLIOP
   -- ** Execute LIO actions
   , evalLIO, runLIO, tryLIO, paranoidLIO
   -- ** Internal state
@@ -109,6 +111,7 @@ import           Prelude hiding (catch)
 import           Data.Typeable
 
 import           Control.Monad
+import           Control.Monad.Base
 import           Control.Monad.Trans.State.Strict
 import qualified Control.Exception as E
 import           Control.Exception hiding ( finally
@@ -119,6 +122,14 @@ import           Control.Exception hiding ( finally
 import           LIO.TCB
 import           LIO.Label
 import           LIO.Privs
+
+
+--
+-- MonadLIO
+--
+
+-- | Priviliged 'MonadLIO'.
+type MonadLIOP l p m = (MonadLIO l m, Priv l p)
 
 --
 -- Execute LIO actions
@@ -176,33 +187,33 @@ tryLIO act = runLIO (Right `liftM` act `catchTCB` (return . Left))
 --
 
 -- | Returns the current value of the thread's label.
-getLabel :: Label l => LIO l l
-getLabel = lioLabel `liftM` getLIOStateTCB
+getLabel :: MonadLIO l m => m l
+getLabel = liftBase $ lioLabel `liftM` getLIOStateTCB
 
 
 -- | Raise the current label to the provided label, which must be
 -- between the current label and clearance. See 'taint'.
-setLabel :: Label l => l -> LIO l ()
+setLabel :: MonadLIO l m => l -> m ()
 setLabel = setLabelP NoPrivs
 
 -- | If the current label is @oldLabel@ and the current clearance is
 -- @clearance@, this function allows code to raise the current label to
 -- any value @newLabel@ such that @oldLabel ``canFlowTo`` newLabel &&
 -- newLabel ``canFlowTo`` clearance@.
-setLabelP :: Priv l p => p -> l -> LIO l ()
+setLabelP :: MonadLIOP l p m => p -> l -> m ()
 setLabelP p l = do
   guardAllocP p l `catchLIO`
     \(_ :: MonitorFailure) -> throwLIO InsufficientPrivs
-  updateLIOStateTCB $ \s -> s { lioLabel = l }
+  liftBase . updateLIOStateTCB $ \s -> s { lioLabel = l }
 
 -- | Returns the current value of the thread's clearance.
-getClearance :: Label l => LIO l l
-getClearance = lioClearance `liftM` getLIOStateTCB
+getClearance :: MonadLIO l m => m l
+getClearance = liftBase $ lioClearance `liftM` getLIOStateTCB
 
 -- | Lower the current clearance. The new clerance must be between
 -- the current label and clerance. One cannot raise the current label
 -- or create object with labels higher than the current clearance.
-setClearance :: Label l => l -> LIO l ()
+setClearance :: MonadLIO l m => l -> m ()
 setClearance = setClearanceP NoPrivs
 
 -- | Raise the current clearance (undoing the effects of
@@ -212,13 +223,13 @@ setClearance = setClearanceP NoPrivs
 -- clearance (modulo privileges), i.e., @'canFlowToP' p cnew c@ must
 -- hold. Additionally, the current label must flow to the new
 -- clearance, i.e., @l ``canFlowTo`` cnew@ must hold.
-setClearanceP :: Priv l p => p -> l -> LIO l ()
+setClearanceP :: MonadLIOP l p m => p -> l -> m ()
 setClearanceP p cnew = do
   l <- getLabel
   c <- getClearance
   unless (canFlowToP p cnew c) $! throwLIO InsufficientPrivs
   unless (l `canFlowTo` cnew)  $! throwLIO CurrentLabelViolation
-  updateLIOStateTCB $ \s -> s { lioClearance = cnew }
+  liftBase . updateLIOStateTCB $ \s -> s { lioClearance = cnew }
 
 -- | Lowers the clearance of a computation, then restores the clearance
 -- to its previous value.  Useful to wrap around a computation if you
@@ -230,12 +241,12 @@ setClearanceP p cnew = do
 -- Note that if the computation inside @withClearance@ acquires any
 -- 'Priv's, it may still be able to raise its clearance above the
 -- supplied argument using 'setClearanceP'.
-withClearance :: Label l => l -> LIO l a -> LIO l a
+withClearance :: MonadLIO l m => l -> m a -> m a
 withClearance l act = do
   guardAlloc l
   c <- getClearance
-  updateLIOStateTCB $ \s -> s { lioClearance = l }
-  act `finally` (updateLIOStateTCB $ \s -> s { lioClearance = c  })
+  liftBase . updateLIOStateTCB $ \s -> s { lioClearance = l }
+  act `finally` (liftBase . updateLIOStateTCB $ \s -> s { lioClearance = c  })
 
 --
 -- Exceptions
@@ -285,10 +296,10 @@ withClearance l act = do
 
 -- | Throw an exception. The label on the exception is the current
 -- label.
-throwLIO :: (Exception e, Label l) => e -> LIO l a
+throwLIO :: (Exception e, MonadLIO l m) => e -> m a
 throwLIO e = do
   l <- getLabel
-  unlabeledThrowTCB $! LabeledExceptionTCB l (toException e)
+  liftBase . unlabeledThrowTCB $! LabeledExceptionTCB l (toException e)
 
 --
 -- Catching exceptions
@@ -297,26 +308,26 @@ throwLIO e = do
 
 -- | Same as 'catchLIO' but does not use privileges when raising the
 -- current label to the join of the current label and exception label.
-catchLIOP :: (Exception e, Priv l p)
+catchLIOP :: (Exception e, MonadLIOP l p m)
           => p
-          -> LIO l a
-          -> (e -> LIO l a)
-          -> LIO l a
+          -> m a
+          -> (e -> m a)
+          -> m a
 catchLIOP p act handler = do 
   clr <- getClearance
   act `catchTCB` \se@(LabeledExceptionTCB l seInner) -> 
     case fromException seInner of
      Just e | l `canFlowTo` clr -> taintP p l >> handler e
-     _                          -> unlabeledThrowTCB se
+     _                          -> liftBase $ unlabeledThrowTCB se
 
 -- | Catches an exception, so long as the label at the point where the
 -- exception was thrown can flow to the clearance at which @catchLIO@ is
 -- invoked. Note that the handler raises the current label to the join
 -- ('upperBound') of the current label and exception label.
-catchLIO :: (Exception e, Label l)
-         => LIO l a
-         -> (e -> LIO l a)
-         -> LIO l a
+catchLIO :: (Exception e, MonadLIO l m)
+         => m a
+         -> (e -> m a)
+         -> m a
 catchLIO = catchLIOP NoPrivs 
 
 --
@@ -338,21 +349,21 @@ may has access to 'throwTo'-like functionality.
 -- | Performs an action only if there was an exception raised by the
 -- computation. Note that the exception is rethrown after the final
 -- computation is executed.
-onException :: Label l
-            => LIO l a -- ^ The computation to run
-            -> LIO l b -- ^ Computation to run on exception
-            -> LIO l a -- ^ Result if no exception thrown
+onException :: MonadLIO l m
+            => m a -- ^ The computation to run
+            -> m b -- ^ Computation to run on exception
+            -> m a -- ^ Result if no exception thrown
 onException = onExceptionP NoPrivs
 
 -- | Privileged version of 'onExceptionP'.  'onException' cannot run its
 -- handler if the label was raised in the computation that threw the
 -- exception.  This variant allows privileges to be supplied, so as to
 -- catch exceptions thrown with a \"higher\" label.
-onExceptionP :: Priv l p
+onExceptionP :: MonadLIOP l p m
              => p       -- ^ Privileges to downgrade exception
-             -> LIO l a -- ^ The computation to run
-             -> LIO l b -- ^ Computation to run on exception
-             -> LIO l a -- ^ Result if no exception thrown
+             -> m a -- ^ The computation to run
+             -> m b -- ^ Computation to run on exception
+             -> m a -- ^ Result if no exception thrown
 onExceptionP p act1 act2 = 
     catchLIOP p act1 (\(e :: SomeException) -> do
                        void act2
@@ -360,19 +371,19 @@ onExceptionP p act1 act2 =
 
 -- | Execute a computation and a finalizer, which is executed even if
 -- an exception is raised in the first computation.
-finally :: Label l
-        => LIO l a -- ^ The computation to run firstly
-        -> LIO l b -- ^ Final computation to run (even if exception is thrown)
-        -> LIO l a -- ^ Result of first action
+finally :: MonadLIO l m
+        => m a -- ^ The computation to run firstly
+        -> m b -- ^ Final computation to run (even if exception is thrown)
+        -> m a -- ^ Result of first action
 finally = finallyP NoPrivs
 
 -- | Version of 'finally' that uses privileges when handling
 -- exceptions thrown in the first computation.
-finallyP :: Priv l p
-         => p       -- ^ Privileges to downgrade exception
-         -> LIO l a -- ^ The computation to run firstly
-         -> LIO l b -- ^ Final computation to run (even if exception is thrown)
-         -> LIO l a -- ^ Result of first action
+finallyP :: MonadLIOP l p m
+         => p   -- ^ Privileges to downgrade exception
+         -> m a -- ^ The computation to run firstly
+         -> m b -- ^ Final computation to run (even if exception is thrown)
+         -> m a -- ^ Result of first action
 finallyP p act1 act2 = do
   r <- onExceptionP p act1 act2
   void act2
@@ -391,21 +402,21 @@ finallyP p act1 act2 = do
 -- Note: @bracket@ does not use 'mask' and thus asynchronous may leave
 -- the resource unreleased if the thread is killed in during release.
 -- An interface for arbitrarily killing threads is not provided by LIO.
-bracket :: Label l
-        => LIO l a           -- ^ Computation to run first
-        -> (a -> LIO l c)    -- ^ Computation to run last
-        -> (a -> LIO l b)    -- ^ Computation to run in-between
-        -> LIO l b
+bracket :: MonadLIO l m
+        => m a           -- ^ Computation to run first
+        -> (a -> m c)    -- ^ Computation to run last
+        -> (a -> m b)    -- ^ Computation to run in-between
+        -> m b
 bracket = bracketP NoPrivs
 
 -- | Like 'bracket', but uses privileges to downgrade the label of any
 -- raised exception.
-bracketP :: Priv l p
-         => p                 -- ^ Priviliges used to downgrade
-         -> LIO l a           -- ^ Computation to run first
-         -> (a -> LIO l c)    -- ^ Computation to run last
-         -> (a -> LIO l b)    -- ^ Computation to run in-between
-         -> LIO l b
+bracketP :: MonadLIOP l p m
+         => p             -- ^ Priviliges used to downgrade
+         -> m a           -- ^ Computation to run first
+         -> (a -> m c)    -- ^ Computation to run last
+         -> (a -> m b)    -- ^ Computation to run in-between
+         -> m b
 bracketP p first third second = do
   x <- first
   finallyP p (second x) (third x)
@@ -413,8 +424,8 @@ bracketP p first third second = do
 -- | Forces its argument to be evaluated to weak head normal form when the
 -- resultant LIO action is executed. This is simply a wrapper for 
 -- "Control.Exception"'s @evaluate@.
-evaluate :: Label l => a -> LIO l a
-evaluate = rethrowIoTCB . E.evaluate
+evaluate :: MonadLIO l m => a -> m a
+evaluate = liftBase . rethrowIoTCB . E.evaluate
 
 --
 -- Exceptions thrown by LIO
@@ -529,13 +540,13 @@ current label less.
 -- If the label does not flow to clearance 'ClearanceViolation' is
 -- thrown; if the current label does not flow to the argument label
 -- 'CurrentLabelViolation' is thrown.
-guardAlloc :: Label l => l -> LIO l ()
+guardAlloc :: MonadLIO l m => l -> m ()
 guardAlloc = guardAllocP NoPrivs
 
 -- | Like 'guardAlloc', but takes privilege argument to be more
 -- permissive.  Note: privileges are /only/ used when checking that
 -- the current label can flow to the given label.
-guardAllocP :: Priv l p => p -> l -> LIO l ()
+guardAllocP :: MonadLIOP l p m => p -> l -> m ()
 guardAllocP p newl = do
   c <- getClearance
   l <- getLabel
@@ -550,20 +561,20 @@ guardAllocP p newl = do
 -- @l@.  This will raise the current label to a value @l'@ such that
 -- @l ``canFlowTo`` l'@, or throw 'ClearanceViolation' if @l'@ would
 -- have to be higher than the current clearance.
-taint :: Label l=> l -> LIO l ()
+taint :: MonadLIO l m => l -> m ()
 taint = taintP NoPrivs
 
 -- | Like 'taint', but use privileges to reduce the amount of taint
 -- required.  Note that @taintP@ will never lower the current label.
 -- It simply uses privileges to avoid raising the label as high as
 -- 'taint' would raise it.
-taintP :: Priv l p => p -> l -> LIO l ()
+taintP :: MonadLIOP l p m => p -> l -> m ()
 taintP p newl = do
   c <- getClearance
   l <- getLabel
   let l' = partDowngradeP p newl l
   unless (l' `canFlowTo` c) $! throwLIO ClearanceViolation
-  updateLIOStateTCB $ \s -> s { lioLabel = l' }
+  liftBase . updateLIOStateTCB $ \s -> s { lioLabel = l' }
 
 
 -- | Use @guardWrite l@ in any (trusted) code before modifying an
@@ -577,12 +588,12 @@ taintP p newl = do
 -- This guarantees that @l@ ``canFlowTo`` the current label (and
 -- clearance), and that the current label ``canFlowTo`` @l@.
 --
-guardWrite :: Label l => l -> LIO l ()
+guardWrite :: MonadLIO l m => l -> m ()
 guardWrite = guardWriteP NoPrivs
 
 -- | Like 'guardWrite', but takes privilege argument to be more
 -- permissive.
-guardWriteP :: Priv l p => p -> l -> LIO l ()
+guardWriteP :: MonadLIOP l p m => p -> l -> m ()
 guardWriteP p newl = do
   taintP      p newl
   guardAllocP p newl

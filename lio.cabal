@@ -56,17 +56,19 @@ Extra-source-files:
 
 Library
   Build-Depends:
-    base         >= 4.5     && < 5.0,
-    transformers >= 0.2.2   && < 1.0,
-    containers   >= 0.4.2.1 && < 1.0,
-    bytestring   >= 0.9.2.1 && < 1.0,
-    cereal       >= 0.3.5.1 && < 1.0,
-    filepath     >= 1.3.0.0 && < 2.0,
-    directory    >= 1.1.0.2 && < 2.0,
-    xattr        >= 0.6.0   && < 1.0,
-    zlib         >= 0.5.3.1 && < 1.0,
-    SHA          >= 1.5.0.0 && < 2.0,
-    time         >= 1.2.0.5 && < 2.0 
+    base              >= 4.5     && < 5.0,
+    transformers      >= 0.2.2   && < 1.0,
+    containers        >= 0.4.2.1 && < 1.0,
+    bytestring        >= 0.9.2.1 && < 1.0,
+    cereal            >= 0.3.5.1 && < 1.0,
+    filepath          >= 1.3.0.0 && < 2.0,
+    directory         >= 1.1.0.2 && < 2.0,
+    xattr             >= 0.6.0   && < 1.0,
+    zlib              >= 0.5.3.1 && < 1.0,
+    SHA               >= 1.5.0.0 && < 2.0,
+    time              >= 1.2.0.5 && < 2.0, 
+    monad-control     >= 0.3.1   && < 1.0,
+    transformers-base >= 0.4.1   && < 1.0
 
 
   Ghc-options: -Wall -Werror -fno-warn-orphans
@@ -78,7 +80,6 @@ Library
     LIO.Label
     -- * Core library
     LIO.Core
-    LIO.MonadLIO
     LIO.TCB
     -- * Labeled values
     LIO.Labeled

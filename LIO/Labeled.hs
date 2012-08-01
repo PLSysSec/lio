@@ -1,4 +1,7 @@
 {-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE ConstraintKinds,
+             FlexibleContexts #-}
+
 {- |
 
 A data type 'Labeled' protects access to pure values (hence, we refer
@@ -55,7 +58,7 @@ instance LabelOf Labeled where
 -- @ccurrent@, then the label @l@ specified must satisfy @lcurrent
 -- ``canFlowTo`` l && l ``canFlowTo`` ccurrent@. Otherwise an
 -- exception is thrown (see 'guardAlloc').
-label :: Label l => l -> a -> LIO l (Labeled l a)
+label :: MonadLIO l m => l -> a -> m (Labeled l a)
 label = labelP NoPrivs
 
 -- | Constructs a 'Labeled' using privilege to allow the `Labeled`'s
@@ -66,7 +69,7 @@ label = labelP NoPrivs
 -- the clearance.  You must use 'setClearanceP' to raise the clearance
 -- first if you wish to create an 'Labeled' at a higher label than the
 -- current clearance.
-labelP :: Priv l p => p -> l -> a -> LIO l (Labeled l a)
+labelP :: MonadLIOP l p m => p -> l -> a -> m (Labeled l a)
 labelP p l a = do
   guardAllocP p l
   return $! labelTCB l a
@@ -86,14 +89,14 @@ labelP p l a = do
 -- current clearance, then @unlabel@ throws 'ClearanceViolation'.
 -- However, you can use 'labelOf' to check if 'unlabel' will succeed
 -- without throwing an exception.
-unlabel :: Label l => Labeled l a -> LIO l a
+unlabel :: MonadLIO l m => Labeled l a -> m a
 unlabel = unlabelP NoPrivs
 
 -- | Extracts the value of an 'Labeled' just like 'unlabel', but takes a
 -- privilege argument to minimize the amount the current label must be
 -- raised.  Function will throw 'ClearanceViolation' under the same
 -- circumstances as 'unlabel'.
-unlabelP :: Priv l p => p -> Labeled l a -> LIO l a
+unlabelP :: MonadLIOP l p m => p -> Labeled l a -> m a
 unlabelP p lv = do
   taintP p $! labelOf lv
   return $! unlabelTCB lv
@@ -113,7 +116,7 @@ unlabelP p lv = do
 -- @'canFlowToP' p l ('labelOf' lv) && 'canFlowToP' p ('labelOf' lv) l@
 --
 -- does not hold.
-relabelLabeledP :: Priv l p => p -> l -> Labeled l a -> LIO l (Labeled l a)
+relabelLabeledP :: MonadLIOP l p m => p -> l -> Labeled l a -> m (Labeled l a)
 relabelLabeledP p newl lv = do
   let origl = labelOf lv
   unless (canFlowToP p newl origl &&
@@ -126,26 +129,26 @@ relabelLabeledP p newl lv = do
 -- if the 'Labeled' is already above the current thread's clearance. If
 -- the supplied label is not bounded then @taintLabeled@ will throw an
 -- exception (see 'guardAlloc').
-taintLabeled :: Label l => l -> Labeled l a -> LIO l (Labeled l a)
+taintLabeled :: MonadLIO l m => l -> Labeled l a -> m (Labeled l a)
 taintLabeled = taintLabeledP NoPrivs
 
 -- | Same as 'taintLabeled', but uses privileges when comparing the
 -- current label to the supplied label. In other words, this function
 -- can be used to lower the label of the labeled value by leveraging
 -- the supplied privileges.
-taintLabeledP :: Priv l p => p -> l -> Labeled l a -> LIO l (Labeled l a)
+taintLabeledP :: MonadLIOP l p m => p -> l -> Labeled l a -> m (Labeled l a)
 taintLabeledP p l lv = do
   guardAllocP p l
   return . labelTCB (l `upperBound` labelOf lv) $! unlabelTCB lv
 
 -- | Downgrades the label of a 'Labeled' as much as possible given the
 -- current privilege.
-untaintLabeled :: Label l => l -> Labeled l a -> LIO l (Labeled l a)
+untaintLabeled :: MonadLIO l m => l -> Labeled l a -> m (Labeled l a)
 untaintLabeled = untaintLabeledP NoPrivs
 
 -- | Same as 'untaintLabeled' but uses the supplied privileges when
 -- downgrading the label of the labeled value.
-untaintLabeledP :: Priv l p => p -> l -> Labeled l a -> LIO l (Labeled l a)
+untaintLabeledP :: MonadLIOP l p m => p -> l -> Labeled l a -> m (Labeled l a)
 untaintLabeledP p target lv =
   relabelLabeledP p (partDowngradeP p (labelOf lv) target) lv
 
@@ -178,4 +181,4 @@ the end label protects the computation result accordingly.
 class Label l => LabeledFunctor l where
   -- | 'fmap'-like funciton that is aware of the current label and
   -- clearance.
-  lFmap :: Labeled l a -> (a -> b) -> LIO l (Labeled l b)
+  lFmap :: MonadLIO l m => Labeled l a -> (a -> b) -> m (Labeled l b)
