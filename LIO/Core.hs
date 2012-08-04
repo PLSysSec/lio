@@ -70,7 +70,9 @@ exported by "LIO".
 
 module LIO.Core (
   -- * LIO monad
-    LIO, MonadLIO, MonadLIOP
+    LIO
+  , MonadLIO, liftLIO
+  , MonadLIOP, liftLIOP
   -- ** Execute LIO actions
   , evalLIO, runLIO, tryLIO, paranoidLIO
   -- ** Internal state
@@ -130,6 +132,14 @@ import           LIO.Privs
 
 -- | Priviliged 'MonadLIO'.
 type MonadLIOP l p m = (MonadLIO l m, Priv l p)
+
+-- | Synonym for 'liftBase'.
+liftLIO :: MonadLIO l m => LIO l a -> m a
+liftLIO = liftBase
+
+-- | Synonym for 'liftBase'.
+liftLIOP :: MonadLIOP l p m => LIO l a -> m a
+liftLIOP = liftBase
 
 --
 -- Execute LIO actions
