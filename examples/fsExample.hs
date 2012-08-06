@@ -1,76 +1,78 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Prelude hiding (catch)
-import System.FilePath
-import Data.Functor ((<$>))
-import Data.Serialize
 
-
-import Control.Exception (SomeException)
-import LIO
-import LIO.MonadCatch
-import LIO.TCB (ioTCB, setLabelTCB, lowerClrTCB)
-import LIO.DCLabel
-import LIO.Handle
-import DCLabel.PrettyShow
-import DCLabel.Core (createPrivTCB)
-
-import Control.Monad
 import qualified Data.ByteString.Lazy as L
 import qualified Data.ByteString.Lazy.Char8 as LC
 
-lpub :: DCLabel
-lpub = newDC (<>) (<>)
+import           Control.Monad
+import           Control.Exception (SomeException)
 
-dcEvalWithRoot :: FilePath -> DC a ->  IO (a, DCLabel)
-dcEvalWithRoot path act = evalWithRoot path (Just lpub) act ()
+import           System.FilePath
+
+import           LIO
+import           LIO.DCLabel
+import           LIO.Concurrent
+import           LIO.Handle
+import           LIO.TCB (ioTCB, updateLIOStateTCB)
+import           LIO.Privs.TCB (mintTCB)
+
+
+dcEvalWithRoot :: FilePath -> DC a ->  IO a
+dcEvalWithRoot path act = evalWithRootFS path (Just dcPub) act defaultState
 
 
 -- Enable malicious code:
 malicious :: Bool
 malicious = False
 
+-- Execute alice first?
+execAliceFirst :: Bool
+execAliceFirst = True
+
 --
 -- Labels and privileges
 --
 
 lalice, lbob, lbobOralice :: DCLabel
-lalice      = newDC "alice" "alice"
-lbob        = newDC "bob" "bob"
-lclarice    = newDC "clarice" "clarice"
-lbobOralice = newDC ("bob" .\/. "alice") ("bob" .\/. "alice")
+lalice      = dcLabel (toComponent "alice")   (toComponent "alice")
+lbob        = dcLabel (toComponent "bob")     (toComponent "bob")
+lclarice    = dcLabel (toComponent "clarice") (toComponent "clarice")
+lbobOralice = dcLabel ("bob" \/ "alice")      ("bob" \/ "alice")
 
-palice, pbob, pclarice :: DCPrivTCB
-pbob     = createPrivTCB $ newPriv "bob"
-palice   = createPrivTCB $ newPriv "alice"
-pclarice = createPrivTCB $ newPriv "clarice"
+palice, pbob, pclarice :: DCPriv
+pbob     = mintTCB $ dcPrivDesc "bob"
+palice   = mintTCB $ dcPrivDesc "alice"
+pclarice = mintTCB $ dcPrivDesc "clarice"
 
 
-main = ignore $ dcEvalWithRoot "/tmp/rootFS" $ do
-  exec bobsCode pbob (newDC "bob" (<>)) "bob"
-  exec alicesCode palice (newDC "alice" (<>)) "alice"
-  exec claricesCode pclarice (newDC "clairce" (<>)) "clarice"
-    where exec act p l s = do setLabelTCB lbot
-                              lowerClrTCB ltop
-                              putStrLnTCB $ ">Executing for " ++ s ++ ":"
-                              catch (withClearance l $ setLabelTCB lpub >>
-                                                       act p)
-                                    (\(e::SomeException) ->
-                                      putStrLnTCB "IFC violation attempt!")
+main = dcEvalWithRoot "/tmp/lio_fs/root" $ do
+  putStrLnTCB $ "malicious = " ++ show malicious
+  putStrLnTCB $ "execAliceFirst = " ++ show execAliceFirst
+  let execA = exec alicesCode palice (dcLabel (toComponent "alice") dcTrue) "alice"
+      execB = exec bobsCode pbob (dcLabel (toComponent "bob") dcTrue) "bob"
+  if execAliceFirst 
+    then execA >> execB
+    else execB >> execA
+  exec claricesCode pclarice (dcLabel (toComponent "clarice") dcTrue) "clarice"
+    where exec act p l s = do putStrLnTCB $ ">Executing for " ++ s ++ ":"
+                              catchLIO (withClearance l $ setLabelTCB dcPub >> act p)
+                                       (\(e::SomeException) ->
+                                        putStrLnTCB "IFC violation attempt!")
                               printCurLabel $ ">" ++ s
-          ignore act = act >> return ()
+                              putStrLnTCB "\n"
+          setLabelTCB l = updateLIOStateTCB $ \s -> s { lioLabel = l }
 
 
 printCurLabel s = do l <- getLabel 
                      c <- getClearance
-                     ioTCB . putStrLn $ s ++ " : " ++ (prettyShow l)
-                                          ++ " : " ++ (prettyShow c)
+                     ioTCB . putStrLn $ s ++ " : " ++ show l ++ " : " ++ show c
 
 --
 -- Bob's code:
 --
 
-bobsCode :: DCPrivTCB -> DC ()
+bobsCode :: DCPriv -> DC ()
 bobsCode p = do
   discard_ $ createDirectoryP p lbobOralice "bobOralice"
   discard_ $ createDirectoryP p lbob ("bobOralice" </> "bob")
@@ -79,14 +81,15 @@ bobsCode p = do
   hPutStrLnP p h (LC.pack "Hi Alice!")
   hCloseP p h
   -- Write secret:
-  taint lbob -- writeFileP uses current label to label file
-  writeFileP p ("bobOralice" </> "bob" </> "secret")
-               (LC.pack "I am Chuck Norris!")
+  writeFileP p lbob ("bobOralice" </> "bob" </> "secret")
+                    (LC.pack "I am Chuck Norris!")
+
 
 --
 -- Alice's code:
 -- 
-alicesCode :: DCPrivTCB -> DC ()
+
+alicesCode :: DCPriv -> DC ()
 alicesCode p = do
   when malicious malCode 
   discard_ $ createDirectoryP p lbobOralice "bobOralice"
@@ -95,7 +98,7 @@ alicesCode p = do
   if "messages" `elem` files
     then do msg <- readFileP p ("bobOralice" </> "messages")
             putStrLnTCB $ "Message log:\n" ++ (LC.unpack msg)
-    else writeFileLP p lbobOralice ("bobOralice" </> "messages")
+    else writeFileP p lbobOralice ("bobOralice" </> "messages")
                                    (LC.pack "Hello Bob!")
     where malCode = do
             msg <- readFileP p ("bobOralice" </> "bob" </> "secret")
@@ -107,7 +110,7 @@ alicesCode p = do
 -- Clarice's malicious code:
 --
 
-claricesCode :: DCPrivTCB -> DC ()
+claricesCode :: DCPriv -> DC ()
 claricesCode p = do
   discard_ $ createDirectoryP p lclarice "clarice"
   when malicious $ do
@@ -121,9 +124,83 @@ claricesCode p = do
 
 discard_ :: DC a -> DC ()
 discard_ act = do
-  c <- getClearance
-  catch (discard c act) (\(e::SomeException) -> return ())
+  forkLIO $ void act
+  threadDelay 100
 
 
 putStrLnTCB :: String -> DC ()
 putStrLnTCB s = ioTCB $ putStrLn s
+
+
+
+{- OUTPUT:
+*Main> main
+malicious = False
+execAliceFirst = False
+>Executing for bob:
+>bob : < |True , |True > : < |False , |True >
+
+
+>Executing for alice:
+Message log:
+Hi Alice!
+
+>alice : < |True , |True > : < |False , |True >
+
+
+>Executing for clarice:
+>clarice : < |True , |True > : < |False , |True >
+
+- rm -rf /tmp/lio_fs/root -------------------------------------------
+*Main> main
+malicious = True
+execAliceFirst = False
+>Executing for bob:
+>bob : < |True , |True > : < |False , |True >
+
+
+>Executing for alice:
+IFC violation attempt!
+>alice : < |True , |True > : < |False , |True >
+
+
+>Executing for clarice:
+IFC violation attempt!
+>clarice : < |True , |True > : < |False , |True >
+
+- rm -rf /tmp/lio_fs/root -------------------------------------------
+*Main> main
+malicious = False
+execAliceFirst = True
+>Executing for alice:
+>alice : < |True , |True > : < |False , |True >
+
+
+>Executing for bob:
+>bob : < |True , |True > : < |False , |True >
+
+
+>Executing for clarice:
+>clarice : < |True , |True > : < |False , |True >
+
+
+- rm -rf /tmp/lio_fs/root -------------------------------------------
+*Main> main
+malicious = True
+execAliceFirst = True
+>Executing for alice:
+IFC violation attempt!
+>alice : < |True , |True > : < |False , |True >
+
+
+>Executing for bob:
+>bob : < |True , |True > : < |False , |True >
+
+
+>Executing for clarice:
+IFC violation attempt!
+>clarice : < |True , |True > : < |False , |True >
+
+
+-}
+
