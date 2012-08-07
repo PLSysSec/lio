@@ -2,10 +2,10 @@
 *.o
 *.swp
 *~
-/Examples/test
 /Setup
 /dist
 /doc
 /ls
 /ps
 /tmp
+/cabal-dev
