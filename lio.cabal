@@ -71,7 +71,7 @@ Library
     transformers-base >= 0.4.1   && < 1.0
 
 
-  Ghc-options: -Wall -Werror -fno-warn-orphans
+  Ghc-options: -Wall -fno-warn-orphans
 
   Exposed-modules:
     -- * Top-level exporter
