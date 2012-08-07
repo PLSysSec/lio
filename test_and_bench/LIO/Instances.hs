@@ -30,6 +30,10 @@ import LIO.Concurrent.LMVar.TCB (newLMVarTCB, unlabelLMVarTCB)
 
 import System.IO.Unsafe
 
+instance (Eq a, Label l) => Eq (Labeled l a) where
+  lv1 == lv2 = labelOf lv1 == labelOf lv2 &&
+               unlabelTCB lv1 == unlabelTCB lv2
+
 instance (Show a, Label l) => Show (Labeled l a) where
   show = showTCB
 
