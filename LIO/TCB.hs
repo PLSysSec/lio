@@ -3,6 +3,7 @@
              MultiParamTypeClasses,
              TypeFamilies,
              ConstraintKinds,
+             FlexibleInstances,
              FlexibleContexts,
              DeriveDataTypeable #-}
 
@@ -25,7 +26,7 @@ The documentation and external, safe 'LIO' interface is provided in
 
 module LIO.TCB (
   -- * LIO monad
-    LIO(..), MonadLIO
+    LIO(..), MonadLIO(..), MonadControlLIO
   -- ** Internal state
   , LIOState(..)
   , getLIOStateTCB, putLIOStateTCB, updateLIOStateTCB 
@@ -76,13 +77,21 @@ data LIOState l = LIOState { lioLabel     :: !l -- ^ Current label.
 newtype LIO l a = LIOTCB { unLIOTCB :: StateT (LIOState l) IO a }
   deriving (Functor, Applicative, Monad)
 
--- | Synonym for monad in which 'LIO' is the base monad.
-type MonadLIO l m = (MonadBaseControl (LIO l) m, Label l)
-
-
 --
 -- Monad base
 --
+
+-- | Synonym for monad in which 'LIO' is the base monad.
+class (MonadBase (LIO l) m, Label l) => MonadLIO l m where
+  -- | Lift an 'LIO' computation.
+  liftLIO :: LIO l a -> m a
+  liftLIO = liftBase
+
+instance Label l => MonadLIO l (LIO l)
+
+-- | Synonym for control-monad in which 'LIO' is the base monad.
+type MonadControlLIO l m = (MonadBaseControl (LIO l) m, MonadLIO l m)
+
 
 instance Label l => MonadBase (LIO l) (LIO l) where liftBase = id
 
@@ -132,7 +141,7 @@ unlabeledThrowTCB = LIOTCB . liftIO . E.throwIO
 -- exception. Note that the label of the exception must be considered
 -- in the handler (i.e., handler must raise the current label) to
 -- preserve security.
-catchTCB :: MonadLIO l m
+catchTCB :: MonadControlLIO l m
          => m a
          -> (LabeledException l -> m a)
          -> m a

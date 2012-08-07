@@ -70,7 +70,7 @@ myThreadId = liftBase $ ioTCB C.myThreadId
 
 -- | Execute an 'LIO' computation in a new lightweight thread. The
 -- 'ThreadId' of the newly created thread is returned.
-forkLIO :: MonadLIO l m => m () -> m ThreadId
+forkLIO :: MonadControlLIO l m => m () -> m ThreadId
 forkLIO = liftBaseDiscard _forkLIO
   where _forkLIO act = do
           s <- getLIOStateTCB
@@ -154,7 +154,7 @@ lWait :: MonadLIO l m => LabeledResult l a -> m a
 lWait = lWaitP NoPrivs
 
 -- | Same as 'lWait', but uses priviliges in label checks and raises.
-lWaitP :: MonadLIOP l p m => p -> LabeledResult l a -> m a
+lWaitP :: (MonadLIO l m, Priv l p) => p -> LabeledResult l a -> m a
 lWaitP p m = do
   v <- readLMVarP p $ lresResultTCB m
   case v of
@@ -166,7 +166,7 @@ trylWait :: MonadLIO l m => LabeledResult l a -> m (Maybe a)
 trylWait = trylWaitP NoPrivs
 
 -- | Same as 'trylWait', but uses priviliges in label checks and raises.
-trylWaitP :: MonadLIOP l p m => p -> LabeledResult l a -> m (Maybe a)
+trylWaitP :: (MonadLIO l m, Priv l p) => p -> LabeledResult l a -> m (Maybe a)
 trylWaitP p m = do
   let mvar = lresResultTCB m
   mv <- tryTakeLMVarP p mvar
@@ -196,7 +196,8 @@ lForce = lForceP NoPrivs
 
 -- | Same as 'lForce', but uses privileges when raising current label
 -- to the join of the current label and result label.
-lForceP :: MonadLIOP l p m => p -> LabeledResult l a -> m (Labeled l (Maybe a))
+lForceP :: (MonadLIO l m, Priv l p)
+        => p -> LabeledResult l a -> m (Labeled l (Maybe a))
 lForceP p m = do
   let l = labelOf m
       mv = lresResultTCB m

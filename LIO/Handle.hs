@@ -41,8 +41,8 @@ changeable current working directory in the 'LIO' Monad, nor symbolic
 links.
 -}
 module LIO.Handle ( evalWithRootFS
-                  , SLabel, SPriv
-                  , SMonadLIO, SMonadLIOP
+                  , SLabel
+                  , SMonadLIO
                     -- * LIO Handle
                   , LabeledHandle, Handle
                   , IOMode(..)
@@ -78,6 +78,7 @@ module LIO.Handle ( evalWithRootFS
 
 import Prelude hiding (catch, readFile, writeFile)
 
+import           Data.Serialize
 import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteString.Lazy.Char8 as L8
 
@@ -100,14 +101,8 @@ import           LIO.FS.TCB
 -- LIO related
 --
 
--- | Type constraint for serializable label and priv.
-type SPriv l p = (SLabel l, Priv l p)
-
--- | Serializable 'MonadLIO'
+-- | Serialize 'MonadLIO'
 type SMonadLIO l m = (SLabel l, MonadLIO l m)
-
--- | Serializable 'MonadLIOP'
-type SMonadLIOP l p m = (SLabel l, MonadLIOP l p m)
 
 
 -- | Same as 'evalLIO', but takes two additional parameters
@@ -144,7 +139,7 @@ getDirectoryContents = getDirectoryContentsP NoPrivs
 
 -- | Same as 'getDirectoryContents', but uses privileges when raising
 -- the current label.
-getDirectoryContentsP :: SMonadLIOP l p m
+getDirectoryContentsP :: (SMonadLIO l m, Priv l p)
                       => p              -- ^ Privilege
                       -> FilePath       -- ^ Directory
                       -> m [FilePath]
@@ -163,7 +158,7 @@ createDirectory = createDirectoryP NoPrivs
 
 -- | Same as 'createDirectory', but uses privileges when raising the
 -- current label and checking IFC restrictions.
-createDirectoryP :: SMonadLIOP l p m
+createDirectoryP :: (SMonadLIO l m, Priv l p)
                  => p           -- ^ Privilege
                  -> l           -- ^ Label of new directory
                  -> FilePath    -- ^ Path of directory
@@ -214,7 +209,7 @@ openFile = openFileP NoPrivs
 
 -- | Same as 'openFile', but uses privileges when traversing
 -- directories and performing IFC checks.
-openFileP :: SMonadLIOP l p m
+openFileP :: (SMonadLIO l m, Priv l p)
           => p          -- ^ Privileges
           -> Maybe l    -- ^ Label of file if created
           -> FilePath   -- ^ File to open
@@ -264,7 +259,7 @@ hClose :: SMonadLIO l m => LabeledHandle l -> m ()
 hClose = hCloseP NoPrivs
 
 -- | Close a labeled file handle.
-hCloseP :: SMonadLIOP l p m => p -> LabeledHandle l -> m ()
+hCloseP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m ()
 hCloseP p lh = do
   guardWriteP p (labelOf lh)
   liftBase . rethrowIoTCB . IO.hClose $ unlabelTCB lh
@@ -276,7 +271,7 @@ hFlush :: SMonadLIO l m => LabeledHandle l -> m ()
 hFlush = hFlushP NoPrivs
 
 -- | Flush a labeled file handle.
-hFlushP :: SMonadLIOP l p m => p -> LabeledHandle l -> m ()
+hFlushP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m ()
 hFlushP p lh = do
   guardWriteP p (labelOf lh)
   liftBase . rethrowIoTCB . IO.hFlush $ unlabelTCB lh
@@ -321,7 +316,7 @@ instance (SLabel l, HandleOps IO.Handle b IO) =>
 
 -- | Read @n@ bytes from the labeled handle, using privileges when
 -- performing label comparisons and tainting.
-hGetP :: (SPriv l p, HandleOps IO.Handle b IO)
+hGetP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
       => p               -- ^ Privileges
       -> LabeledHandle l -- ^ Labeled handle
       -> Int             -- ^ Number of bytes to read
@@ -334,7 +329,7 @@ hGetP p lh n = do
 -- available. Instead, it returns whatever data is available.
 -- Privileges are used in the label comparisons and when raising
 -- the current label.
-hGetNonBlockingP :: (SPriv l p, HandleOps IO.Handle b IO)
+hGetNonBlockingP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
                  => p -> LabeledHandle l -> Int -> LIO l b
 hGetNonBlockingP p lh n = do
  guardWriteP p (labelOf lh)
@@ -343,14 +338,14 @@ hGetNonBlockingP p lh n = do
 -- | Read the entire labeled handle contents and close handle upon
 -- reading @EOF@.  Privileges are used in the label comparisons
 -- and when raising the current label.
-hGetContentsP :: (SPriv l p, HandleOps IO.Handle b IO)
+hGetContentsP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
               => p -> LabeledHandle l -> LIO l b
 hGetContentsP p lh = do
  guardWriteP p (labelOf lh)
  liftBase . rethrowIoTCB $ hGetContents (unlabelTCB lh)
 
 -- | Read the a line from a labeled handle.
-hGetLineP :: (SPriv l p, HandleOps IO.Handle b IO)
+hGetLineP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
           => p -> LabeledHandle l -> LIO l b
 hGetLineP p lh = do
  guardWriteP p (labelOf lh)
@@ -359,21 +354,21 @@ hGetLineP p lh = do
 -- | Output the given (Byte)String to the specified labeled handle.
 -- Privileges are used in the label comparisons and when raising
 -- the current label.
-hPutP :: (SPriv l p, HandleOps IO.Handle b IO)
+hPutP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
       => p -> LabeledHandle l -> b -> LIO l ()
 hPutP p lh s = do
  guardWriteP p (labelOf lh)
  liftBase . rethrowIoTCB $ hPut (unlabelTCB lh) s
 
 -- | Synonym for 'hPutP'.
-hPutStrP :: (SPriv l p, HandleOps IO.Handle b IO)
+hPutStrP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
           => p -> LabeledHandle l -> b -> LIO l ()
 hPutStrP = hPutP
 
 -- | Output the given (Byte)String with an appended newline to the
 -- specified labeled handle. Privileges are used in the label
 -- comparisons and when raising the current label.
-hPutStrLnP :: (SPriv l p, HandleOps IO.Handle b IO)
+hPutStrLnP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
             => p -> LabeledHandle l -> b -> LIO l ()
 hPutStrLnP p lh s = do
  guardWriteP p (labelOf lh)
@@ -389,7 +384,7 @@ readFile :: (HandleOps Handle b IO, SLabel l)
 readFile = readFileP NoPrivs
 
 -- | Same as 'readFile' but uses privilege in opening the file.
-readFileP :: (HandleOps Handle b IO, SPriv l p)
+readFileP :: (HandleOps Handle b IO, Priv l p, Serialize l)
           => p -> FilePath -> LIO l b
 readFileP p file = openFileP p Nothing file ReadMode >>= hGetContentsP p
 
@@ -400,7 +395,7 @@ writeFile = writeFileP NoPrivs
 
 -- | Same as 'writeFile' but uses privilege when opening, writing and
 -- closing the file.
-writeFileP  :: (HandleOps Handle b IO, SPriv l p)
+writeFileP  :: (HandleOps Handle b IO, Priv l p, Serialize l)
             => p -> l -> FilePath -> b -> LIO l ()
 writeFileP p l file contents = do
   bracket (openFileP p (Just l) file WriteMode) (hCloseP p)
@@ -415,7 +410,8 @@ hSetBuffering :: SMonadLIO l m => LabeledHandle l -> BufferMode -> m ()
 hSetBuffering = hSetBufferingP NoPrivs
 
 -- | Set the buffering mode
-hSetBufferingP :: SMonadLIOP l p m => p -> LabeledHandle l -> BufferMode -> m ()
+hSetBufferingP :: (SMonadLIO l m, Priv l p)
+               => p -> LabeledHandle l -> BufferMode -> m ()
 hSetBufferingP p lh m = do
   guardWriteP p (labelOf lh)
   liftBase . rethrowIoTCB $ IO.hSetBuffering (unlabelTCB lh) m
@@ -425,7 +421,8 @@ hGetBuffering :: SMonadLIO l m => LabeledHandle l -> m BufferMode
 hGetBuffering = hGetBufferingP NoPrivs
 
 -- | Get the buffering mode
-hGetBufferingP :: SMonadLIOP l p m => p -> LabeledHandle l -> m BufferMode
+hGetBufferingP :: (SMonadLIO l m, Priv l p)
+               => p -> LabeledHandle l -> m BufferMode
 hGetBufferingP p lh = do
   taintP p (labelOf lh)
   liftBase . rethrowIoTCB $ IO.hGetBuffering (unlabelTCB lh)
@@ -435,7 +432,8 @@ hSetBinaryMode :: SMonadLIO l m => LabeledHandle l -> Bool -> m ()
 hSetBinaryMode = hSetBinaryModeP NoPrivs
 
 -- | Select binary mode ('True') or text mode ('False')
-hSetBinaryModeP :: SMonadLIOP l p m => p -> LabeledHandle l -> Bool -> m ()
+hSetBinaryModeP :: (SMonadLIO l m, Priv l p)
+                => p -> LabeledHandle l -> Bool -> m ()
 hSetBinaryModeP p lh m = do
   guardWriteP p (labelOf lh)
   liftBase . rethrowIoTCB $ IO.hSetBinaryMode (unlabelTCB lh) m
@@ -445,7 +443,7 @@ hIsEOF :: SMonadLIO l m => LabeledHandle l -> m Bool
 hIsEOF = hIsEOFP NoPrivs
 
 -- | End of file.
-hIsEOFP :: SMonadLIOP l p m => p -> LabeledHandle l -> m Bool
+hIsEOFP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool
 hIsEOFP p lh = do
   taintP p (labelOf lh)
   liftBase . rethrowIoTCB $ IO.hIsEOF (unlabelTCB lh)
@@ -455,7 +453,7 @@ hIsOpen :: SMonadLIO l m => LabeledHandle l -> m Bool
 hIsOpen = hIsOpenP NoPrivs
 
 -- | Is handle open.                                                      
-hIsOpenP :: SMonadLIOP l p m => p -> LabeledHandle l -> m Bool      
+hIsOpenP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool      
 hIsOpenP p lh = do
   taintP p (labelOf lh)
   liftBase . rethrowIoTCB $ IO.hIsOpen (unlabelTCB lh)
@@ -465,7 +463,7 @@ hIsClosed :: SMonadLIO l m => LabeledHandle l -> m Bool
 hIsClosed = hIsClosedP NoPrivs
 
 -- | Is handle closed.                                                    
-hIsClosedP :: SMonadLIOP l p m => p -> LabeledHandle l -> m Bool      
+hIsClosedP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool
 hIsClosedP p lh = do
   taintP p (labelOf lh)
   liftBase . rethrowIoTCB $ IO.hIsClosed (unlabelTCB lh)
@@ -475,7 +473,7 @@ hIsReadable :: SMonadLIO l m => LabeledHandle l -> m Bool
 hIsReadable = hIsReadableP NoPrivs
 
 -- | Is handle readable.                                                  
-hIsReadableP :: SMonadLIOP l p m => p -> LabeledHandle l -> m Bool      
+hIsReadableP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool
 hIsReadableP p lh = do
   taintP p (labelOf lh)
   liftBase . rethrowIoTCB $ IO.hIsReadable (unlabelTCB lh)
@@ -485,7 +483,7 @@ hIsWritable :: SMonadLIO l m => LabeledHandle l -> m Bool
 hIsWritable = hIsWritableP NoPrivs
 
 -- | Is handle writable.                                                  
-hIsWritableP :: SMonadLIOP l p m => p -> LabeledHandle l -> m Bool
+hIsWritableP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool
 hIsWritableP p lh = do
   taintP p (labelOf lh)
   liftBase . rethrowIoTCB $ IO.hIsWritable (unlabelTCB lh)
@@ -505,7 +503,7 @@ hIsWritableP p lh = do
 -- and thus no traversal to @bar@.  Note that this is a more permissive
 -- behavior than forcing the read of @..@ from @bar@.
 -- @taintObjPath@ returns this cleaned up path.
-taintObjPathP :: SMonadLIOP l p m
+taintObjPathP :: (SMonadLIO l m, Priv l p)
               => p         -- ^ Privilege 
               -> FilePath  -- ^ Path to object
               -> m FilePath
