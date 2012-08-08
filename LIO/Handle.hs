@@ -34,9 +34,13 @@ An example use case shown below:
 
 The file store for the labeled filesystem (see "LIO.FS") will
 be created in @\/tmp\/lioFS@, but this is transparent and the user
-can think of the filesystem as having root @/@.
+can think of the filesystem as having root @/@. Note that for this to
+work the filesystem must be mounted with the @user_xattr@ option.
+For example, on GNU/Linux:
 
-Note: In the current version of the filesystem, there is no notion of
+> mount -o rw,noauto,user,sync,noexec,user_xattr /dev/sdb1 /tmp/lioFS
+
+In the current version of the filesystem, there is no notion of
 changeable current working directory in the 'LIO' Monad, nor symbolic
 links.
 -}
@@ -519,8 +523,8 @@ taintObjPathP p path0 = do
     taintP p l
   return $ root </> joinPath dirs
 
--- | Take a list of directories (e.g., @["a","b","c"]@) and return all the
--- subtrees up to the node (@["a","a/b","a/b/c"]@).
+-- | Take a list of directories (e.g., @[\"a\",\"b\",\"c\"]@) and return
+-- all the subtrees up to the node (@[\"a\",\"a/b\",\"a/b/c\"]@).
 allSubDirs :: [FilePath] -> [FilePath]
 allSubDirs dirs = reverse $ allSubDirs' dirs "" []
   where allSubDirs' []       _    acc = acc
