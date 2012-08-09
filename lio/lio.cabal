@@ -48,7 +48,6 @@ Description:
 
 
 Extra-source-files:
-  ACKNOWLEDGEMENTS
   examples/dclabel.hs
   examples/gate.hs
   examples/waitAndCatch.hs
