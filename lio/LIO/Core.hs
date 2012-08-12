@@ -80,7 +80,7 @@ module LIO.Core (
   , getLabel, setLabel, setLabelP
   -- *** Current clerance
   , getClearance, setClearance, setClearanceP
-  , withClearance 
+  , withClearance, withClearanceP
   -- * Exceptions
   -- $exceptions
   , LabeledException
@@ -227,17 +227,21 @@ setClearanceP p cnew = do
 
 -- | Lowers the clearance of a computation, then restores the clearance
 -- to its previous value.  Useful to wrap around a computation if you
--- want to be sure you can catch exceptions thrown by it.  If
--- @withClearance@ is given a label that can't flow to the current
--- clearance, then the clearance is lowered to the greatest lower bound
--- of the label supplied and the current clearance.
+-- want to be sure you can catch exceptions thrown by it. The supplied
+-- clearance label must be bounded by the current label and clearance
+-- as enforced by 'guardAlloc'.
 -- 
 -- Note that if the computation inside @withClearance@ acquires any
 -- 'Priv's, it may still be able to raise its clearance above the
 -- supplied argument using 'setClearanceP'.
 withClearance :: MonadControlLIO l m => l -> m a -> m a
-withClearance l act = do
-  guardAlloc l
+withClearance = withClearanceP NoPrivs
+
+-- | Same as 'withClearance', but uses privileges when applying
+-- 'guardAllocP' to the supplied label.
+withClearanceP :: (MonadControlLIO l m, Priv l p) => p -> l -> m a -> m a
+withClearanceP p l act = do
+  guardAllocP p l
   c <- getClearance
   liftLIO . updateLIOStateTCB $ \s -> s { lioClearance = l }
   act `finally` (liftBase . updateLIOStateTCB $ \s ->
