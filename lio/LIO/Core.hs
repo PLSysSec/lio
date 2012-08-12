@@ -1,7 +1,5 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE ScopedTypeVariables,
-             ConstraintKinds,
-             FlexibleContexts,
              DeriveDataTypeable #-}
 
 {- | 
@@ -71,7 +69,7 @@ exported by "LIO".
 module LIO.Core (
   -- * LIO monad
     LIO
-  , MonadLIO(..), MonadControlLIO
+  , MonadLIO(..)
   -- ** Execute LIO actions
   , evalLIO, runLIO, tryLIO, paranoidLIO
   -- ** Internal state
@@ -112,7 +110,6 @@ import           Prelude hiding (catch)
 import           Data.Typeable
 
 import           Control.Monad
-import           Control.Monad.Base
 import           Control.Monad.Trans.State.Strict
 import qualified Control.Exception as E
 import           Control.Exception hiding ( finally
@@ -234,18 +231,18 @@ setClearanceP p cnew = do
 -- Note that if the computation inside @withClearance@ acquires any
 -- 'Priv's, it may still be able to raise its clearance above the
 -- supplied argument using 'setClearanceP'.
-withClearance :: MonadControlLIO l m => l -> m a -> m a
+withClearance :: Label l => l -> LIO l a -> LIO l a
 withClearance = withClearanceP NoPrivs
 
 -- | Same as 'withClearance', but uses privileges when applying
 -- 'guardAllocP' to the supplied label.
-withClearanceP :: (MonadControlLIO l m, Priv l p) => p -> l -> m a -> m a
+withClearanceP :: Priv l p => p -> l -> LIO l a -> LIO l a
 withClearanceP p l act = do
   guardAllocP p l
   c <- getClearance
   liftLIO . updateLIOStateTCB $ \s -> s { lioClearance = l }
-  act `finally` (liftBase . updateLIOStateTCB $ \s ->
-                               s { lioClearance = c `lub` lioLabel s })
+  act `finally` (updateLIOStateTCB $ \s ->
+                   s { lioClearance = c `lub` lioLabel s })
 
 --
 -- Exceptions
@@ -307,26 +304,26 @@ throwLIO e = do
 
 -- | Same as 'catchLIO' but does not use privileges when raising the
 -- current label to the join of the current label and exception label.
-catchLIOP :: (Exception e, MonadControlLIO l m, Priv l p)
+catchLIOP :: (Exception e, Priv l p)
           => p
-          -> m a
-          -> (e -> m a)
-          -> m a
+          -> LIO l a
+          -> (e -> LIO l a)
+          -> LIO l a
 catchLIOP p act handler = do 
   clr <- getClearance
   act `catchTCB` \se@(LabeledExceptionTCB l seInner) -> 
     case fromException seInner of
      Just e | l `canFlowTo` clr -> taintP p l >> handler e
-     _                          -> liftLIO $ unlabeledThrowTCB se
+     _                          -> unlabeledThrowTCB se
 
 -- | Catches an exception, so long as the label at the point where the
 -- exception was thrown can flow to the clearance at which @catchLIO@ is
 -- invoked. Note that the handler raises the current label to the join
 -- ('upperBound') of the current label and exception label.
-catchLIO :: (Exception e, MonadControlLIO l m)
-         => m a
-         -> (e -> m a)
-         -> m a
+catchLIO :: (Exception e, Label l)
+         => LIO l a
+         -> (e -> LIO l a)
+         -> LIO l a
 catchLIO = catchLIOP NoPrivs 
 
 --
@@ -348,21 +345,21 @@ may has access to 'throwTo'-like functionality.
 -- | Performs an action only if there was an exception raised by the
 -- computation. Note that the exception is rethrown after the final
 -- computation is executed.
-onException :: (MonadControlLIO l m)
-            => m a -- ^ The computation to run
-            -> m b -- ^ Computation to run on exception
-            -> m a -- ^ Result if no exception thrown
+onException :: Label l
+            => LIO l a -- ^ The computation to run
+            -> LIO l b -- ^ Computation to run on exception
+            -> LIO l a -- ^ Result if no exception thrown
 onException = onExceptionP NoPrivs
 
 -- | Privileged version of 'onExceptionP'.  'onException' cannot run its
 -- handler if the label was raised in the computation that threw the
 -- exception.  This variant allows privileges to be supplied, so as to
 -- catch exceptions thrown with a \"higher\" label.
-onExceptionP :: (MonadControlLIO l m, Priv l p)
+onExceptionP :: Priv l p
              => p       -- ^ Privileges to downgrade exception
-             -> m a -- ^ The computation to run
-             -> m b -- ^ Computation to run on exception
-             -> m a -- ^ Result if no exception thrown
+             -> LIO l a -- ^ The computation to run
+             -> LIO l b -- ^ Computation to run on exception
+             -> LIO l a -- ^ Result if no exception thrown
 onExceptionP p act1 act2 = 
     catchLIOP p act1 (\(e :: SomeException) -> do
                        void act2
@@ -370,19 +367,19 @@ onExceptionP p act1 act2 =
 
 -- | Execute a computation and a finalizer, which is executed even if
 -- an exception is raised in the first computation.
-finally :: (MonadControlLIO l m)
-        => m a -- ^ The computation to run firstly
-        -> m b -- ^ Final computation to run (even if exception is thrown)
-        -> m a -- ^ Result of first action
+finally :: Label l
+        => LIO l a -- ^ The computation to run firstly
+        -> LIO l b -- ^ Final computation to run (even if exception is thrown)
+        -> LIO l a -- ^ Result of first action
 finally = finallyP NoPrivs
 
 -- | Version of 'finally' that uses privileges when handling
 -- exceptions thrown in the first computation.
-finallyP :: (MonadControlLIO l m, Priv l p)
-         => p   -- ^ Privileges to downgrade exception
-         -> m a -- ^ The computation to run firstly
-         -> m b -- ^ Final computation to run (even if exception is thrown)
-         -> m a -- ^ Result of first action
+finallyP :: Priv l p
+         => p       -- ^ Privileges to downgrade exception
+         -> LIO l a -- ^ The computation to run firstly
+         -> LIO l b -- ^ Final computation to run (even if exception is thrown)
+         -> LIO l a -- ^ Result of first action
 finallyP p act1 act2 = do
   r <- onExceptionP p act1 act2
   void act2
@@ -401,21 +398,21 @@ finallyP p act1 act2 = do
 -- Note: @bracket@ does not use 'mask' and thus asynchronous may leave
 -- the resource unreleased if the thread is killed in during release.
 -- An interface for arbitrarily killing threads is not provided by LIO.
-bracket :: (MonadControlLIO l m)
-        => m a           -- ^ Computation to run first
-        -> (a -> m c)    -- ^ Computation to run last
-        -> (a -> m b)    -- ^ Computation to run in-between
-        -> m b
+bracket :: Label l
+        => LIO l a           -- ^ Computation to run first
+        -> (a -> LIO l c)    -- ^ Computation to run last
+        -> (a -> LIO l b)    -- ^ Computation to run in-between
+        -> LIO l b
 bracket = bracketP NoPrivs
 
 -- | Like 'bracket', but uses privileges to downgrade the label of any
 -- raised exception.
-bracketP :: (MonadControlLIO l m, Priv l p)
-         => p             -- ^ Priviliges used to downgrade
-         -> m a           -- ^ Computation to run first
-         -> (a -> m c)    -- ^ Computation to run last
-         -> (a -> m b)    -- ^ Computation to run in-between
-         -> m b
+bracketP :: Priv l p
+         => p                 -- ^ Priviliges used to downgrade
+         -> LIO l a           -- ^ Computation to run first
+         -> (a -> LIO l c)    -- ^ Computation to run last
+         -> (a -> LIO l b)    -- ^ Computation to run in-between
+         -> LIO l b
 bracketP p first third second = do
   x <- first
   finallyP p (second x) (third x)

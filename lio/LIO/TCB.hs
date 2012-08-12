@@ -1,10 +1,8 @@
 {-# LANGUAGE Unsafe #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving,
              MultiParamTypeClasses,
-             TypeFamilies,
-             ConstraintKinds,
+             FunctionalDependencies,
              FlexibleInstances,
-             FlexibleContexts,
              DeriveDataTypeable #-}
 
 {- | 
@@ -26,7 +24,7 @@ The documentation and external, safe 'LIO' interface is provided in
 
 module LIO.TCB (
   -- * LIO monad
-    LIO(..), MonadLIO(..), MonadControlLIO
+    LIO(..), MonadLIO(..)
   -- ** Internal state
   , LIOState(..)
   , getLIOStateTCB, putLIOStateTCB, updateLIOStateTCB 
@@ -44,8 +42,6 @@ import           Data.Typeable
 
 import           Control.Applicative
 import           Control.Monad
-import           Control.Monad.Base
-import           Control.Monad.Trans.Control
 import           Control.Monad.Trans.State.Strict
 import           Control.Monad.Trans.Class (lift)
 import           Control.Monad.IO.Class (liftIO)
@@ -82,23 +78,12 @@ newtype LIO l a = LIOTCB { unLIOTCB :: StateT (LIOState l) IO a }
 --
 
 -- | Synonym for monad in which 'LIO' is the base monad.
-class (MonadBase (LIO l) m, Label l) => MonadLIO l m where
+class (Monad m, Label l) => MonadLIO l m | m -> l where
   -- | Lift an 'LIO' computation.
   liftLIO :: LIO l a -> m a
-  liftLIO = liftBase
 
-instance Label l => MonadLIO l (LIO l)
-
--- | Synonym for control-monad in which 'LIO' is the base monad.
-type MonadControlLIO l m = (MonadBaseControl (LIO l) m, MonadLIO l m)
-
-
-instance Label l => MonadBase (LIO l) (LIO l) where liftBase = id
-
-instance Label l => MonadBaseControl (LIO l) (LIO l) where
-    newtype StM (LIO l) a = StLIO a
-    liftBaseWith f = f $ liftM StLIO
-    restoreM (StLIO x) = return x
+instance Label l => MonadLIO l (LIO l) where
+  liftLIO = id
 
 --
 -- Internal state
@@ -141,17 +126,17 @@ unlabeledThrowTCB = LIOTCB . liftIO . E.throwIO
 -- exception. Note that the label of the exception must be considered
 -- in the handler (i.e., handler must raise the current label) to
 -- preserve security.
-catchTCB :: MonadControlLIO l m
-         => m a
-         -> (LabeledException l -> m a)
-         -> m a
-catchTCB act handler = control $ \runInLIO -> do
+catchTCB :: Label l
+         => LIO l a
+         -> (LabeledException l -> LIO l a)
+         -> LIO l a
+catchTCB act handler = do
   s0 <- getLIOStateTCB
-  (res, s1) <- ioTCB $! toIO (runInLIO act) s0 `E.catch` ioHandler runInLIO s0
+  (res, s1) <- ioTCB $! toIO act s0 `E.catch` ioHandler s0
   putLIOStateTCB s1
   return res
     where toIO io = runStateT (unLIOTCB io)
-          ioHandler runInLIO s e = toIO (runInLIO (handler e)) s
+          ioHandler s e = toIO (handler e) s
 
 --
 -- Executing IO actions

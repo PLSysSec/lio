@@ -87,7 +87,6 @@ import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteString.Lazy.Char8 as L8
 
 import           Control.Monad
-import           Control.Monad.Base
 import           Control.Exception (throwIO)
 
 
@@ -149,7 +148,7 @@ getDirectoryContentsP :: (SMonadLIO l m, Priv l p)
                       -> m [FilePath]
 getDirectoryContentsP p dir = do
   path <- taintObjPathP p dir
-  liftBase . rethrowIoTCB $ IO.getDirectoryContents path
+  liftLIO . rethrowIoTCB $ IO.getDirectoryContents path
 
 -- | Create a directory at the supplied path with the given label.  The
 -- given label must be bounded by the the current label and clearance, as
@@ -176,13 +175,13 @@ createDirectoryP p l dir0 = do
   -- Taint up to containing dir:
   path <- taintObjPathP p containingDir
   -- Get label of containing dir:
-  ldir <- liftBase $ getPathLabelTCB path
+  ldir <- liftLIO $ getPathLabelTCB path
   -- Can write to containing dir:
   guardWriteP p ldir
   -- Can still create dir:
   guardAllocP p l
   -- Create actual directory:
-  liftBase $ createDirectoryTCB l $ path </> dName
+  liftLIO $ createDirectoryTCB l $ path </> dName
     where breakDir dir = let ds  = splitDirectories dir
                              cd' = joinPath $ init ds
                              cd  = if null cd' then [pathSeparator] else cd'
@@ -228,15 +227,15 @@ openFileP p ml file' mode = do
   -- Taint up to containing dir:
   path <- taintObjPathP p containingDir
   --Get label of containing dir:
-  ldir <- liftBase $ getPathLabelTCB path
+  ldir <- liftLIO $ getPathLabelTCB path
   -- Create actual file path:
   let objPath = path </> fileName
   -- Check if file exists:
-  exists <- liftBase . rethrowIoTCB $ IO.doesFileExist objPath
+  exists <- liftLIO . rethrowIoTCB $ IO.doesFileExist objPath
   if exists
      then do
        -- Get label of file:
-       l <- liftBase $ getPathLabelTCB objPath
+       l <- liftLIO $ getPathLabelTCB objPath
        -- Make sure we can create labeled handle:
        guardAllocP p l
        -- NOTE: if mode == ReadMode, we might want to instead do
@@ -245,7 +244,7 @@ openFileP p ml file' mode = do
        -- label. Some Unix systems still update a file's atime
        -- when performing a read and so, for now, a read always
        -- implies a write.
-       h <- liftBase . rethrowIoTCB $ IO.openFile objPath mode
+       h <- liftLIO . rethrowIoTCB $ IO.openFile objPath mode
        return $ labelTCB l h
      else case ml of
            Nothing -> throwLIO FSObjNeedLabel
@@ -254,7 +253,7 @@ openFileP p ml file' mode = do
              guardWriteP p ldir
              -- Can still create file with this label:
              guardAllocP p l
-             h <- liftBase $ createFileTCB l objPath mode
+             h <- liftLIO $ createFileTCB l objPath mode
              return $ labelTCB l h
 
 -- | Close a file handle. Must be able to write to the the labeled
@@ -266,7 +265,7 @@ hClose = hCloseP NoPrivs
 hCloseP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m ()
 hCloseP p lh = do
   guardWriteP p (labelOf lh)
-  liftBase . rethrowIoTCB . IO.hClose $ unlabelTCB lh
+  liftLIO . rethrowIoTCB . IO.hClose $ unlabelTCB lh
 
 
 -- | Flush a file handle. Must be able to write to the the labeled
@@ -278,7 +277,7 @@ hFlush = hFlushP NoPrivs
 hFlushP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m ()
 hFlushP p lh = do
   guardWriteP p (labelOf lh)
-  liftBase . rethrowIoTCB . IO.hFlush $ unlabelTCB lh
+  liftLIO . rethrowIoTCB . IO.hFlush $ unlabelTCB lh
 
 
 -- | Class used to abstract reading and writing from and to handles,
@@ -327,7 +326,7 @@ hGetP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
       -> LIO l b
 hGetP p lh n = do
  guardWriteP p (labelOf lh)
- liftBase . rethrowIoTCB $ hGet (unlabelTCB lh) n
+ liftLIO . rethrowIoTCB $ hGet (unlabelTCB lh) n
 
 -- | Same as 'hGetP', but will not block waiting for data to become
 -- available. Instead, it returns whatever data is available.
@@ -337,7 +336,7 @@ hGetNonBlockingP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
                  => p -> LabeledHandle l -> Int -> LIO l b
 hGetNonBlockingP p lh n = do
  guardWriteP p (labelOf lh)
- liftBase . rethrowIoTCB $ hGetNonBlocking (unlabelTCB lh) n
+ liftLIO . rethrowIoTCB $ hGetNonBlocking (unlabelTCB lh) n
 
 -- | Read the entire labeled handle contents and close handle upon
 -- reading @EOF@.  Privileges are used in the label comparisons
@@ -346,14 +345,14 @@ hGetContentsP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
               => p -> LabeledHandle l -> LIO l b
 hGetContentsP p lh = do
  guardWriteP p (labelOf lh)
- liftBase . rethrowIoTCB $ hGetContents (unlabelTCB lh)
+ liftLIO . rethrowIoTCB $ hGetContents (unlabelTCB lh)
 
 -- | Read the a line from a labeled handle.
 hGetLineP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
           => p -> LabeledHandle l -> LIO l b
 hGetLineP p lh = do
  guardWriteP p (labelOf lh)
- liftBase . rethrowIoTCB $ hGetLine (unlabelTCB lh)
+ liftLIO . rethrowIoTCB $ hGetLine (unlabelTCB lh)
 
 -- | Output the given (Byte)String to the specified labeled handle.
 -- Privileges are used in the label comparisons and when raising
@@ -362,7 +361,7 @@ hPutP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
       => p -> LabeledHandle l -> b -> LIO l ()
 hPutP p lh s = do
  guardWriteP p (labelOf lh)
- liftBase . rethrowIoTCB $ hPut (unlabelTCB lh) s
+ liftLIO . rethrowIoTCB $ hPut (unlabelTCB lh) s
 
 -- | Synonym for 'hPutP'.
 hPutStrP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
@@ -376,7 +375,7 @@ hPutStrLnP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
             => p -> LabeledHandle l -> b -> LIO l ()
 hPutStrLnP p lh s = do
  guardWriteP p (labelOf lh)
- liftBase . rethrowIoTCB $ hPutStrLn (unlabelTCB lh) s
+ liftLIO . rethrowIoTCB $ hPutStrLn (unlabelTCB lh) s
 
 --
 -- Special cases
@@ -418,7 +417,7 @@ hSetBufferingP :: (SMonadLIO l m, Priv l p)
                => p -> LabeledHandle l -> BufferMode -> m ()
 hSetBufferingP p lh m = do
   guardWriteP p (labelOf lh)
-  liftBase . rethrowIoTCB $ IO.hSetBuffering (unlabelTCB lh) m
+  liftLIO . rethrowIoTCB $ IO.hSetBuffering (unlabelTCB lh) m
 
 -- | Get the buffering mode
 hGetBuffering :: SMonadLIO l m => LabeledHandle l -> m BufferMode
@@ -429,7 +428,7 @@ hGetBufferingP :: (SMonadLIO l m, Priv l p)
                => p -> LabeledHandle l -> m BufferMode
 hGetBufferingP p lh = do
   taintP p (labelOf lh)
-  liftBase . rethrowIoTCB $ IO.hGetBuffering (unlabelTCB lh)
+  liftLIO . rethrowIoTCB $ IO.hGetBuffering (unlabelTCB lh)
 
 -- | Select binary mode ('True') or text mode ('False')
 hSetBinaryMode :: SMonadLIO l m => LabeledHandle l -> Bool -> m ()
@@ -440,7 +439,7 @@ hSetBinaryModeP :: (SMonadLIO l m, Priv l p)
                 => p -> LabeledHandle l -> Bool -> m ()
 hSetBinaryModeP p lh m = do
   guardWriteP p (labelOf lh)
-  liftBase . rethrowIoTCB $ IO.hSetBinaryMode (unlabelTCB lh) m
+  liftLIO . rethrowIoTCB $ IO.hSetBinaryMode (unlabelTCB lh) m
 
 -- | End of file.
 hIsEOF :: SMonadLIO l m => LabeledHandle l -> m Bool
@@ -450,7 +449,7 @@ hIsEOF = hIsEOFP NoPrivs
 hIsEOFP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool
 hIsEOFP p lh = do
   taintP p (labelOf lh)
-  liftBase . rethrowIoTCB $ IO.hIsEOF (unlabelTCB lh)
+  liftLIO . rethrowIoTCB $ IO.hIsEOF (unlabelTCB lh)
                                                                           
 -- | Is handle open.                                                      
 hIsOpen :: SMonadLIO l m => LabeledHandle l -> m Bool      
@@ -460,7 +459,7 @@ hIsOpen = hIsOpenP NoPrivs
 hIsOpenP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool      
 hIsOpenP p lh = do
   taintP p (labelOf lh)
-  liftBase . rethrowIoTCB $ IO.hIsOpen (unlabelTCB lh)
+  liftLIO . rethrowIoTCB $ IO.hIsOpen (unlabelTCB lh)
                                                                           
 -- | Is handle closed.                                                    
 hIsClosed :: SMonadLIO l m => LabeledHandle l -> m Bool      
@@ -470,7 +469,7 @@ hIsClosed = hIsClosedP NoPrivs
 hIsClosedP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool
 hIsClosedP p lh = do
   taintP p (labelOf lh)
-  liftBase . rethrowIoTCB $ IO.hIsClosed (unlabelTCB lh)
+  liftLIO . rethrowIoTCB $ IO.hIsClosed (unlabelTCB lh)
                                                                           
 -- | Is handle readable.                                                  
 hIsReadable :: SMonadLIO l m => LabeledHandle l -> m Bool      
@@ -480,7 +479,7 @@ hIsReadable = hIsReadableP NoPrivs
 hIsReadableP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool
 hIsReadableP p lh = do
   taintP p (labelOf lh)
-  liftBase . rethrowIoTCB $ IO.hIsReadable (unlabelTCB lh)
+  liftLIO . rethrowIoTCB $ IO.hIsReadable (unlabelTCB lh)
                                                                           
 -- | Is handle writable.                                                  
 hIsWritable :: SMonadLIO l m => LabeledHandle l -> m Bool
@@ -490,7 +489,7 @@ hIsWritable = hIsWritableP NoPrivs
 hIsWritableP :: (SMonadLIO l m, Priv l p) => p -> LabeledHandle l -> m Bool
 hIsWritableP p lh = do
   taintP p (labelOf lh)
-  liftBase . rethrowIoTCB $ IO.hIsWritable (unlabelTCB lh)
+  liftLIO . rethrowIoTCB $ IO.hIsWritable (unlabelTCB lh)
 
 --
 -- Internal helpers
@@ -515,11 +514,11 @@ taintObjPathP p path0 = do
   -- Clean up supplied path:
   path <- cleanUpPath path0
   -- Get root directory:
-  root <- liftBase $ getRootDirTCB
+  root <- liftLIO $ getRootDirTCB
   let dirs = splitDirectories . stripSlash $ path
   -- "Traverse" all directories up to object:
   forM_ ("" : allSubDirs dirs) $ \dir -> do
-    l <- liftBase $ getPathLabelTCB (root </> dir)
+    l <- liftLIO $ getPathLabelTCB (root </> dir)
     taintP p l
   return $ root </> joinPath dirs
 
@@ -542,7 +541,7 @@ stripSlash xx@(x:xs) | x == pathSeparator = stripSlash xs
 -- invalid as it can be used explore parts of the filesystem that should
 -- otherwise be unaccessible. Similarly, we remove any @.@ from the path.
 cleanUpPath :: MonadLIO l m => FilePath -> m FilePath 
-cleanUpPath = liftBase . rethrowIoTCB . doit . splitDirectories . normalise . stripSlash
+cleanUpPath = liftLIO . rethrowIoTCB . doit . splitDirectories . normalise . stripSlash
   where doit []          = return []
         doit ("..":_)    = throwIO FSIllegalFileName
         doit (_:"..":xs) = doit xs

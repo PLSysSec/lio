@@ -1,6 +1,4 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE ConstraintKinds,
-             FlexibleContexts #-}
 {- |
 
 This module exposes useful concurrency abstrations for 'LIO'. This
@@ -40,8 +38,6 @@ module LIO.Concurrent (
 
 
 import           Control.Monad
-import           Control.Monad.Base
-import           Control.Monad.Trans.Control
 import           Control.Concurrent hiding ( myThreadId, threadDelay )
 import qualified Control.Concurrent as C
 import           Control.Exception ( toException
@@ -62,7 +58,7 @@ import           LIO.Concurrent.LMVar.TCB (putLMVarTCB)
 
 -- | Get the 'ThreadId' of the calling thread.
 myThreadId :: MonadLIO l m => m ThreadId
-myThreadId = liftBase $ ioTCB C.myThreadId
+myThreadId = liftLIO $ ioTCB C.myThreadId
 
 --
 -- Fork
@@ -70,11 +66,10 @@ myThreadId = liftBase $ ioTCB C.myThreadId
 
 -- | Execute an 'LIO' computation in a new lightweight thread. The
 -- 'ThreadId' of the newly created thread is returned.
-forkLIO :: MonadControlLIO l m => m () -> m ThreadId
-forkLIO = liftBaseDiscard _forkLIO
-  where _forkLIO act = do
-          s <- getLIOStateTCB
-          ioTCB . forkIO . void $ tryLIO act s
+forkLIO :: Label l => LIO l () -> LIO l ThreadId
+forkLIO act = do
+  s <- getLIOStateTCB
+  ioTCB . forkIO . void $ tryLIO act s
 
 
 -- | Labeled fork. @lFork@ allows one to invoke computations that
@@ -159,7 +154,7 @@ lWaitP p m = do
   v <- readLMVarP p $ lresResultTCB m
   case v of
     Right x -> return x
-    Left e  -> liftBase $ unlabeledThrowTCB e
+    Left e  -> liftLIO $ unlabeledThrowTCB e
 
 -- | Same as 'lWait', but does not block waiting for result.
 trylWait :: MonadLIO l m => LabeledResult l a -> m (Maybe a)
@@ -174,13 +169,13 @@ trylWaitP p m = do
     Just v -> do putLMVarP p mvar v
                  case v of
                    Right x -> return $! Just x
-                   Left e  -> liftBase $ unlabeledThrowTCB e
+                   Left e  -> liftLIO $ unlabeledThrowTCB e
     _ -> return Nothing
 
 
 -- | Suspend current thread for a given number of microseconds.
 threadDelay :: MonadLIO l m => Int -> m ()
-threadDelay = liftBase . ioTCB . C.threadDelay
+threadDelay = liftLIO . ioTCB . C.threadDelay
 
 --
 -- Forcing computations
@@ -203,7 +198,7 @@ lForceP p m = do
       mv = lresResultTCB m
   guardWriteP p l
   -- kill thread:
-  liftBase . ioTCB . killThread . lresThreadIdTCB $ m
+  liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
   -- check to see if it wrote to MVar:
   v <- tryTakeLMVarP p mv
   return . labelTCB l =<< case v of
