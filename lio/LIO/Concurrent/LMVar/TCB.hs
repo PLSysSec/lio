@@ -1,6 +1,4 @@
 {-# LANGUAGE Unsafe #-}
-{-# LANGUAGE ConstraintKinds,
-             FlexibleContexts #-}
 {-|
 
 This module implements the core of labeled 'MVars's in the 'LIO ad.
@@ -27,7 +25,6 @@ module LIO.Concurrent.LMVar.TCB (
   , isEmptyLMVarTCB
   ) where
 
-import           Control.Monad.Base
 import           Control.Concurrent.MVar
                  
 import           LIO.Label
@@ -52,14 +49,14 @@ instance LabelOf LMVar where
 -- | Trusted function used to create an empty @LMVar@, ignoring IFC.
 newEmptyLMVarTCB :: MonadLIO l m => l -> m (LMVar l a)
 newEmptyLMVarTCB l = do
-  m <- liftBase . ioTCB $ newEmptyMVar
+  m <- liftLIO . ioTCB $ newEmptyMVar
   return $ LMVarTCB l m
 
 -- | Trusted function used to create an @LMVar@ with the supplied
 -- value, ignoring IFC.
 newLMVarTCB :: MonadLIO l m => l -> a -> m (LMVar l a)
 newLMVarTCB l a = do
-  m <- liftBase . ioTCB $ newMVar a
+  m <- liftLIO . ioTCB $ newMVar a
   return $ LMVarTCB l m
 
 --
@@ -68,11 +65,11 @@ newLMVarTCB l a = do
 
 -- | Read the contents of an 'LMVar', ignoring IFC.
 takeLMVarTCB :: MonadLIO l m => LMVar l a -> m a
-takeLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ takeMVar m
+takeLMVarTCB (LMVarTCB _ m) = liftLIO . ioTCB $ takeMVar m
 
 -- | Same as 'tryTakeLMVar', but ignorses IFC.
 tryTakeLMVarTCB :: MonadLIO l m => LMVar l a -> m (Maybe a)
-tryTakeLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ tryTakeMVar m
+tryTakeLMVarTCB (LMVarTCB _ m) = liftLIO . ioTCB $ tryTakeMVar m
 
 --
 -- Put 'LMVar'
@@ -80,11 +77,11 @@ tryTakeLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ tryTakeMVar m
 
 -- | Put a value into an 'LMVar', ignoring IFC.
 putLMVarTCB :: MonadLIO l m => LMVar l a -> a -> m ()
-putLMVarTCB (LMVarTCB _ m) a = liftBase . ioTCB $ putMVar m a
+putLMVarTCB (LMVarTCB _ m) a = liftLIO . ioTCB $ putMVar m a
 
 -- | Same as 'tryPutLMVar', but ignorses IFC.
 tryPutLMVarTCB :: MonadLIO l m => LMVar l a -> a -> m Bool
-tryPutLMVarTCB (LMVarTCB _ m) x = liftBase . ioTCB $ tryPutMVar m x
+tryPutLMVarTCB (LMVarTCB _ m) x = liftLIO . ioTCB $ tryPutMVar m x
 
 
 --
@@ -93,7 +90,7 @@ tryPutLMVarTCB (LMVarTCB _ m) x = liftBase . ioTCB $ tryPutMVar m x
 
 -- | Trusted function used to read (take and put) an 'LMVar', ignoring IFC.
 readLMVarTCB :: MonadLIO l m => LMVar l a -> m a
-readLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ readMVar m
+readLMVarTCB (LMVarTCB _ m) = liftLIO . ioTCB $ readMVar m
 
 --
 -- Swap 'LMVar'
@@ -101,7 +98,7 @@ readLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ readMVar m
 
 -- | Trusted function that swaps value of 'LMVar', ignoring IFC.
 swapLMVarTCB :: MonadLIO l m => LMVar l a -> a -> m a
-swapLMVarTCB (LMVarTCB _ m) x = liftBase . ioTCB $ swapMVar m x
+swapLMVarTCB (LMVarTCB _ m) x = liftLIO . ioTCB $ swapMVar m x
 
 --
 -- Check state of 'LMVar'
@@ -109,4 +106,4 @@ swapLMVarTCB (LMVarTCB _ m) x = liftBase . ioTCB $ swapMVar m x
 
 -- | Same as 'isEmptyLMVar', but ignorses IFC.
 isEmptyLMVarTCB :: MonadLIO l m => LMVar l a -> m Bool
-isEmptyLMVarTCB (LMVarTCB _ m) = liftBase . ioTCB $ isEmptyMVar m
+isEmptyLMVarTCB (LMVarTCB _ m) = liftLIO . ioTCB $ isEmptyMVar m

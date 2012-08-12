@@ -69,7 +69,7 @@ label = labelP NoPrivs
 -- the clearance.  You must use 'setClearanceP' to raise the clearance
 -- first if you wish to create an 'Labeled' at a higher label than the
 -- current clearance.
-labelP :: MonadLIOP l p m => p -> l -> a -> m (Labeled l a)
+labelP :: (MonadLIO l m, Priv l p) => p -> l -> a -> m (Labeled l a)
 labelP p l a = do
   guardAllocP p l
   return $! labelTCB l a
@@ -96,7 +96,7 @@ unlabel = unlabelP NoPrivs
 -- privilege argument to minimize the amount the current label must be
 -- raised.  Function will throw 'ClearanceViolation' under the same
 -- circumstances as 'unlabel'.
-unlabelP :: MonadLIOP l p m => p -> Labeled l a -> m a
+unlabelP :: (MonadLIO l m, Priv l p) => p -> Labeled l a -> m a
 unlabelP p lv = do
   taintP p $! labelOf lv
   return $! unlabelTCB lv
@@ -116,7 +116,8 @@ unlabelP p lv = do
 -- @'canFlowToP' p l ('labelOf' lv) && 'canFlowToP' p ('labelOf' lv) l@
 --
 -- does not hold.
-relabelLabeledP :: MonadLIOP l p m => p -> l -> Labeled l a -> m (Labeled l a)
+relabelLabeledP :: (MonadLIO l m, Priv l p)
+                => p -> l -> Labeled l a -> m (Labeled l a)
 relabelLabeledP p newl lv = do
   let origl = labelOf lv
   unless (canFlowToP p newl origl &&
@@ -136,7 +137,8 @@ taintLabeled = taintLabeledP NoPrivs
 -- current label to the supplied label. In other words, this function
 -- can be used to lower the label of the labeled value by leveraging
 -- the supplied privileges.
-taintLabeledP :: MonadLIOP l p m => p -> l -> Labeled l a -> m (Labeled l a)
+taintLabeledP :: (MonadLIO l m, Priv l p)
+              => p -> l -> Labeled l a -> m (Labeled l a)
 taintLabeledP p l lv = do
   guardAllocP p l
   return . labelTCB (l `upperBound` labelOf lv) $! unlabelTCB lv
@@ -148,7 +150,8 @@ untaintLabeled = untaintLabeledP NoPrivs
 
 -- | Same as 'untaintLabeled' but uses the supplied privileges when
 -- downgrading the label of the labeled value.
-untaintLabeledP :: MonadLIOP l p m => p -> l -> Labeled l a -> m (Labeled l a)
+untaintLabeledP :: (MonadLIO l m, Priv l p)
+                => p -> l -> Labeled l a -> m (Labeled l a)
 untaintLabeledP p target lv =
   relabelLabeledP p (partDowngradeP p (labelOf lv) target) lv
 

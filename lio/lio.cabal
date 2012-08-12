@@ -12,7 +12,7 @@ Description:
   The /Labeled IO/ (LIO) library is an information flow control (IFC)
   library. IFC is a mechanism that enforces security policies by
   tracking and controlling the flow of information within a system.
-  Different from discrectionary access control (think UNIX file
+  Different from discretionary access control (think UNIX file
   permissions), with IFC you can execute an untrusted computation on
   your secret data and be sure that it does not leak it or overwrite
   it.
@@ -30,7 +30,7 @@ Description:
   additional parameter for the label which they inspect before
   actually performing the (underlying IO) side-effecting computation.
   So, before writing to a file LIO asserts that the write will not
-  violate any security policicies associated with the file or the data
+  violate any security policies associated with the file or the data
   to be written.
 
   .
@@ -48,7 +48,6 @@ Description:
 
 
 Extra-source-files:
-  ACKNOWLEDGEMENTS
   examples/dclabel.hs
   examples/gate.hs
   examples/waitAndCatch.hs
@@ -58,20 +57,18 @@ Library
   Build-Depends:
     base              >= 4.5     && < 5.0,
     transformers      >= 0.2.2   && < 1.0,
-    containers        >= 0.4.2.1 && < 1.0,
+    containers        >= 0.4.2.1 && < 0.5,
     bytestring        >= 0.9.2.1 && < 1.0,
-    cereal            >= 0.3.5.1 && < 1.0,
-    filepath          >= 1.3.0.0 && < 2.0,
-    directory         >= 1.1.0.2 && < 2.0,
-    xattr             >= 0.6.0   && < 1.0,
-    zlib              >= 0.5.3.1 && < 1.0,
-    SHA               >= 1.5.0.0 && < 2.0,
-    time              >= 1.2.0.5 && < 2.0, 
-    monad-control     >= 0.3.1   && < 1.0,
-    transformers-base >= 0.4.1   && < 1.0
+    cereal            >= 0.3.5.1 && < 0.4,
+    filepath          >= 1.3.0.0 && < 1.4,
+    directory         >= 1.1.0.2 && < 1.2,
+    xattr             >= 0.6.1   && < 1.0,
+    zlib              >= 0.5.3.1 && < 0.6,
+    SHA               >= 1.5.0.0 && < 1.6,
+    time              >= 1.2.0.5 && < 1.5
 
 
-  Ghc-options: -Wall -Werror -fno-warn-orphans
+  Ghc-options: -Wall -fno-warn-orphans
 
   Exposed-modules:
     -- * Top-level exporter
@@ -109,62 +106,3 @@ Library
     -- * File system
     LIO.Handle
     LIO.FS.TCB
-
-test-suite lio_test
-  type: exitcode-stdio-1.0
-  hs-source-dirs: test_and_bench
-  main-is: lio_test.hs
-
-  ghc-options:
-    -threaded -rtsopts
-
-  build-depends:
-    QuickCheck,
-    HUnit,
-    quickcheck-instances,
-    test-framework,
-    test-framework-quickcheck2,
-    test-framework-hunit,
-    base,
-    lio,
-    containers,
-    bytestring
-
-test-suite dclabel_test
-  type: exitcode-stdio-1.0
-  hs-source-dirs: test_and_bench
-  main-is: dclabel_test.hs
-
-  ghc-options:
-    -threaded -rtsopts
-
-  build-depends:
-    QuickCheck,
-    HUnit,
-    quickcheck-instances,
-    test-framework,
-    test-framework-quickcheck2,
-    test-framework-hunit,
-    base,
-    lio,
-    containers,
-    bytestring,
-    cereal
-
-benchmark dclabel_bench
-  type: exitcode-stdio-1.0
-  hs-source-dirs: test_and_bench
-  main-is: dclabel_bench.hs
-
-  ghc-options:
-    -O2 -threaded -rtsopts
-
-  build-depends:
-    base,
-    QuickCheck,
-    quickcheck-instances,
-    containers,
-    criterion,
-    lio,
-    bytestring,
-    cereal

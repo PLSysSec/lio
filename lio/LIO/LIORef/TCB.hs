@@ -1,6 +1,4 @@
 {-# LANGUAGE Unsafe #-}
-{-# LANGUAGE ConstraintKinds,
-             FlexibleContexts #-}
 {- |
 
 This module implements the core of labeled 'IORef's in the 'LIO ad.
@@ -28,8 +26,6 @@ module LIO.LIORef.TCB (
   -- ** Modify 'LIORef's
   , modifyLIORefTCB, atomicModifyLIORefTCB
   ) where
-
-import           Control.Monad.Base
 
 import           LIO
 import           LIO.TCB
@@ -60,7 +56,7 @@ instance LabelOf LIORef where
 -- given label without any IFC checks.
 newLIORefTCB :: MonadLIO l m => l -> a -> m (LIORef l a)
 newLIORefTCB l a = do
-  ior <- liftBase . ioTCB $! newIORef a
+  ior <- liftLIO . ioTCB $! newIORef a
   return $! LIORefTCB l ior
 
 --
@@ -70,7 +66,7 @@ newLIORefTCB l a = do
 -- | Trusted function used to read the value of a reference without
 -- raising the current label.
 readLIORefTCB :: MonadLIO l m => LIORef l a -> m a
-readLIORefTCB = liftBase . ioTCB . readIORef . unlabelLIORefTCB
+readLIORefTCB = liftLIO . ioTCB . readIORef . unlabelLIORefTCB
 
 --
 -- Write 'LIORef's
@@ -79,7 +75,7 @@ readLIORefTCB = liftBase . ioTCB . readIORef . unlabelLIORefTCB
 -- | Trusted function used to write a new value into a labeled
 -- reference, ignoring IFC.
 writeLIORefTCB :: MonadLIO l m => LIORef l a -> a -> m ()
-writeLIORefTCB lr a = liftBase . ioTCB $! writeIORef (unlabelLIORefTCB lr) a
+writeLIORefTCB lr a = liftLIO . ioTCB $! writeIORef (unlabelLIORefTCB lr) a
 
 --
 -- Modify 'LIORef's
@@ -88,11 +84,11 @@ writeLIORefTCB lr a = liftBase . ioTCB $! writeIORef (unlabelLIORefTCB lr) a
 -- | Trusted function that mutates the contents on an 'LIORef',
 -- ignoring IFC.
 modifyLIORefTCB :: MonadLIO l m =>  LIORef l a -> (a -> a) -> m ()
-modifyLIORefTCB lr f = liftBase . ioTCB $! modifyIORef (unlabelLIORefTCB lr) f
+modifyLIORefTCB lr f = liftLIO . ioTCB $! modifyIORef (unlabelLIORefTCB lr) f
 
 -- | Trusted function used to atomically modify the contents of a
 -- labeled reference, ignoring IFC.
 atomicModifyLIORefTCB :: MonadLIO l m => LIORef l a -> (a -> (a, b)) -> m b
 atomicModifyLIORefTCB lr f =
-  liftBase . ioTCB $! atomicModifyIORef (unlabelLIORefTCB lr) f
+  liftLIO . ioTCB $! atomicModifyIORef (unlabelLIORefTCB lr) f
 
