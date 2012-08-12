@@ -225,11 +225,11 @@ setClearanceP p cnew = do
   unless (l `canFlowTo` cnew)  $! throwLIO CurrentLabelViolation
   liftLIO . updateLIOStateTCB $ \s -> s { lioClearance = cnew }
 
--- | Lowers the clearance of a computation, then restores the clearance
--- to its previous value.  Useful to wrap around a computation if you
--- want to be sure you can catch exceptions thrown by it. The supplied
--- clearance label must be bounded by the current label and clearance
--- as enforced by 'guardAlloc'.
+-- | Lowers the clearance of a computation, then restores the clearance to its
+-- previous value (actually, to the upper bound of the current label and previous
+-- value).  Useful to wrap around a computation if you want to be sure you can
+-- catch exceptions thrown by it. The supplied clearance label must be bounded by
+-- the current label and clearance as enforced by 'guardAlloc'.
 -- 
 -- Note that if the computation inside @withClearance@ acquires any
 -- 'Priv's, it may still be able to raise its clearance above the
@@ -245,7 +245,7 @@ withClearanceP p l act = do
   c <- getClearance
   liftLIO . updateLIOStateTCB $ \s -> s { lioClearance = l }
   act `finally` (liftBase . updateLIOStateTCB $ \s ->
-                               s { lioClearance = c  })
+                               s { lioClearance = c `lub` lioLabel s })
 
 --
 -- Exceptions
