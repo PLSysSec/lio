@@ -6,18 +6,20 @@
 {-# LANGUAGE RankNTypes #-}
 
 -- | Instances for "QuickCheck"\'s 'Arbitrary' class.
-module LIO.Instances {-()-} where
+module LIO.Instances (
+    A(..), B(..), C(..), D(..), DCAction(..)
+  , DoNotThrow(..)
+  ) where
 
 import Data.Typeable
 import Data.IORef
 import Control.Concurrent.MVar
 
-import Control.Monad
 import Control.Exception hiding (onException)
 
 import Test.QuickCheck hiding (label)
-import Test.QuickCheck.Instances
-import LIO.DCLabel.Instances
+import Test.QuickCheck.Instances ()
+import LIO.DCLabel.Instances ()
 
 import LIO
 import LIO.LIORef
@@ -30,6 +32,10 @@ import LIO.Concurrent.LMVar.TCB (newLMVarTCB, unlabelLMVarTCB)
 
 import System.IO.Unsafe
 
+instance (Eq a, Label l) => Eq (Labeled l a) where
+  lv1 == lv2 = labelOf lv1 == labelOf lv2 &&
+               unlabelTCB lv1 == unlabelTCB lv2
+
 instance (Show a, Label l) => Show (Labeled l a) where
   show = showTCB
 
@@ -40,17 +46,23 @@ instance (Label l, Arbitrary l, Arbitrary a) => Arbitrary (Labeled l a) where
     return $ labelTCB l x
     
 
+-- | Exception type
 data A = A deriving (Eq, Show, Typeable)
 instance Exception A
+-- | Exception type
 data B = B deriving (Eq, Show, Typeable)
 instance Exception B
+-- | Exception type
 data C = C deriving (Eq, Show, Typeable)
 instance Exception C
+-- | Exception type
 data D = D deriving (Eq, Show, Typeable)
 instance Exception D
+-- | Exception type that will /never/ be thrown
 data DoNotThrow = DoNotThrow deriving (Eq, Show, Typeable)
 instance Exception DoNotThrow
 
+-- | General 'DC' action
 data DCAction = forall a. (Show a, Arbitrary a) => DCAction (DC a)
 
 instance Show DCAction where
@@ -87,6 +99,7 @@ lioActs = [ return . DCAction $ return ()
           , throwAct
           , catchAllAct
           , catchNoneAct
+          , onExceptionAct
           , withRandomL guardAlloc
           , withRandomL taint
           , withRandomL guardWrite
@@ -94,6 +107,7 @@ lioActs = [ return . DCAction $ return ()
           , unlabelAct
           , newLIORefAct
           , writeLIORefAct
+          , readLIORefAct
           , modifyLIORefAct
           , atomicModifyLIORefAct
           ] 

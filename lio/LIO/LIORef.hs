@@ -48,7 +48,7 @@ newLIORef = newLIORefP NoPrivs
 -- | Same as 'newLIORef' except @newLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
-newLIORefP :: MonadLIOP l p m => p -> l -> a -> m (LIORef l a)
+newLIORefP :: (MonadLIO l m, Priv l p) => p -> l -> a -> m (LIORef l a)
 newLIORefP p l a = do
   guardAllocP p l
   newLIORefTCB l a
@@ -67,7 +67,7 @@ readLIORef = readLIORefP NoPrivs
 
 -- | Same as 'readLIORef' except @readLIORefP@ takes a privilege object
 -- which is used when the current label is raised.
-readLIORefP :: MonadLIOP l p m => p -> LIORef l a -> m a
+readLIORefP :: (MonadLIO l m, Priv l p) => p -> LIORef l a -> m a
 readLIORefP p lr = do
   taintP p $! labelOf lr
   readLIORefTCB lr
@@ -86,7 +86,7 @@ writeLIORef = writeLIORefP NoPrivs
 -- | Same as 'writeLIORef' except @writeLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
-writeLIORefP :: MonadLIOP l p m => p -> LIORef l a -> a -> m ()
+writeLIORefP :: (MonadLIO l m, Priv l p) => p -> LIORef l a -> a -> m ()
 writeLIORefP p lr a = do
   guardAllocP p $! labelOf lr 
   writeLIORefTCB lr a
@@ -112,7 +112,8 @@ modifyLIORef = modifyLIORefP NoPrivs
 -- | Same as 'modifyLIORef' except @modifyLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
-modifyLIORefP :: MonadLIOP l p m =>  p -> LIORef l a -> (a -> a) -> m ()
+modifyLIORefP :: (MonadLIO l m, Priv l p)
+              =>  p -> LIORef l a -> (a -> a) -> m ()
 modifyLIORefP p lr f = do
   guardAllocP p $! labelOf lr 
   modifyLIORefTCB lr f
@@ -131,7 +132,8 @@ atomicModifyLIORef = atomicModifyLIORefP NoPrivs
 
 -- | Same as 'atomicModifyLIORef' except @atomicModifyLIORefP@ takes
 -- a set of privileges which are accounted for in label comparisons.
-atomicModifyLIORefP :: MonadLIOP l p m => p -> LIORef l a -> (a -> (a, b)) -> m b
+atomicModifyLIORefP :: (MonadLIO l m, Priv l p)
+                    => p -> LIORef l a -> (a -> (a, b)) -> m b
 atomicModifyLIORefP p lr f = do
   guardWriteP p $! labelOf lr 
   atomicModifyLIORefTCB lr f

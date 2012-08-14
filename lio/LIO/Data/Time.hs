@@ -1,7 +1,4 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE ConstraintKinds,
-             FlexibleContexts #-}
-
 {- |
 
 This module re-exports "Data.Time" wrapped in 'LIO'.
@@ -20,8 +17,6 @@ module LIO.Data.Time (
   , utcToLocalZonedTime
   ) where
 
-import           Control.Monad.Base
-
 import qualified Data.Time as T
 import           Data.Time hiding ( getCurrentTime
                                   , getZonedTime
@@ -31,12 +26,12 @@ import           LIO.TCB
 
 -- | Get the current UTC time from the system clock.
 getCurrentTime :: MonadLIO l m => m UTCTime
-getCurrentTime = liftBase $ rethrowIoTCB T.getCurrentTime
+getCurrentTime = liftLIO $ rethrowIoTCB T.getCurrentTime
 
 -- | Get the local time together with a TimeZone.
 getZonedTime :: MonadLIO l m => m ZonedTime
-getZonedTime = liftBase $ rethrowIoTCB T.getZonedTime
+getZonedTime = liftLIO $ rethrowIoTCB T.getZonedTime
 
 -- | Convert UTC time to local time with TimeZone.
 utcToLocalZonedTime :: MonadLIO l m => UTCTime -> m ZonedTime
-utcToLocalZonedTime = liftBase . rethrowIoTCB . T.utcToLocalZonedTime
+utcToLocalZonedTime = liftLIO . rethrowIoTCB . T.utcToLocalZonedTime

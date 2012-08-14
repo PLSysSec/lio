@@ -5,7 +5,7 @@ module LIO.DCLabel.Instances () where
 
 import Control.Monad (liftM)
 import Test.QuickCheck
-import Test.QuickCheck.Instances
+import Test.QuickCheck.Instances ()
 import LIO.DCLabel.Core
 import LIO.DCLabel.Privs.TCB
 import Data.Set hiding (map)
