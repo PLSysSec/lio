@@ -1,5 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE ConstraintKinds,
+{-# LANGUAGE CPP,
+             ConstraintKinds,
              FlexibleContexts #-}
 
 {- |
@@ -37,13 +38,24 @@ module LIO.Labeled (
   -- * Labeled functor
   -- $functor
   , LabeledFunctor(..)
+#ifdef TO_LABELED
+  -- * Executing sensitive computation
+  -- $toLabeled
+  , toLabeled, toLabeledP
+  , discard, discardP
+#endif
   ) where
 
+import           LIO.TCB
 import           LIO.Label
 import           LIO.Core
 import           LIO.Privs
 import           LIO.Labeled.TCB
 import           Control.Monad
+
+#ifdef TO_LABELED
+import qualified Control.Exception as E
+#endif
 
 -- | Returns label of a 'Labeled' type.
 instance LabelOf Labeled where
@@ -175,6 +187,7 @@ As a result, we provide a class 'LabeledFunctor' that export 'lFmap'
 created value is in the 'LIO' monad and secondly each label format
 implementation must produce their own definition of 'lFmap' such that
 the end label protects the computation result accordingly.
+
 -}
 
 -- | IFC-aware functor instance. Since certain label formats may contain
@@ -185,3 +198,174 @@ class Label l => LabeledFunctor l where
   -- | 'fmap'-like funciton that is aware of the current label and
   -- clearance.
   lFmap :: MonadLIO l m => Labeled l a -> (a -> b) -> m (Labeled l b)
+
+#ifdef TO_LABELED
+
+{- $toLabeled
+
+LIO provides a means for executing a sensitive computation without
+raising the current label. This is done with the function 'toLabeled'.
+The semantics of the function is as follows:
+
+1. Execute whatever action is supplied. This action may raise the
+current label or lower the current clearance.
+
+2. Take the result of the computation and wrap it in a 'Labeled'
+value. The label of the value is provided as an argument to
+'toLabeled'. Hence, the computation should not observe anything more
+sensitive than this.
+
+3. Restore the current label and clearance to that of step 1. Return
+the 'Labeled' value created in step 2, if the end current label is not
+above the value's label. Otherwise raise an exception to indicate that
+the computation read data more sensitive than the set bound.
+
+Note that if the executed computation raises an exception, 'toLabeled'
+hides the exception -- this exception is only propagated when the
+'Labeled' value is 'unlabel'ed.
+
+NOTE:
+As indicated by the warnings, 'toLabeled' is not safe with respect to
+/termination sensitive non-interference/. This means that a malicious
+computation can carry out an attack that leaks information by not
+terminating in a 'toLabeled' block. Similarly an attacker can leverage
+timing to do the same.  Your version of LIO has been compiled with the
+@toLabeled@ flag, and thus susceptible to such attacks. If this was
+not by choice, recompile the package (by default, 'toLabeled' is not
+included) and use the primitives in "LIO.Concurrent" to implement a
+similarly-behaving program.
+
+-}
+
+-- | @toLabeled@ is the dual of 'unlabel'.  It allows one to invoke
+-- computations that would raise the current label, but without
+-- actually raising the label.  Instead, the result of the
+-- computation is packaged into a 'Labeled' with a supplied
+-- label. (Of couse, the computation executed by @toLabeled@ must
+-- most observe any data whose label exceeds the supplied label.)
+--
+-- To get at the result of the computation one will have to call
+-- 'unlabel' and raise the label, but this can be postponed, or
+-- done inside some other call to 'toLabeled'.  This suggests that
+-- the provided label must be above the current label and below
+-- the current clearance.  --
+-- Note that @toLabeled@ always restores the clearance to whatever
+-- it was when it was invoked, regardless of what occurred in the
+-- computation producing the value of the 'Labeled'.  This highlights
+-- one main use of clearance: to ensure that a @Labeled@ computed
+-- does not exceed a particular label.
+--
+-- If an exception is thrown within a @toLabeled@ block, such that
+-- the outer context is withing a 'catch', which is further within
+-- a @toLabeled@ block, infromation can be leaked. Consider the
+-- following program that uses 'DCLabel's. (Note that 'discard' is
+-- simply @toLabeled@ that throws throws the result away.)
+--
+--  > main = evalDC' $ do
+--  >   lRef <- newLIORef bottom ""
+--  >   hRef <- newLIORef top "secret"
+--  >   -- brute force:
+--  >   forM_ ["fun", "secret"] $ \guess -> do
+--  >     stash <- readLIORef lRef
+--  >     writeLIORef lRef $ stash ++ "\n" ++ guess ++ ":"
+--  >     discard top $ do
+--  >       catch ( discard top $ do
+--  >                 secret <- readLIORef hRef
+--  >                 when (secret == guess) $ throwIO . userError $ "got it!"
+--  >             ) (\(e :: IOError) -> return ())
+--  >       l <- getLabel
+--  >       when (l == bottom) $ do stash <- readLIORef lRef
+--  >                             writeLIORef lRef $ stash ++ "no!"
+--  >   readLIORef lRef
+--  >     where evalDC' act = do (r,l) <- runDC act
+--  >                            putStrLn r
+--  >                            putStrLn $ "label = " ++ prettyShow l
+--
+--  The output of the program is:
+--
+--  > $ ./new
+--  >
+--  > fun:no!
+--  > secret:
+--  > label = <True , False>
+--
+-- Note that the current label is 'bottom' (which in DCLabels is
+-- @<True , False>@), and the secret is leaked. The fundamental issue
+-- is that the outer 'discard' allows for the current label to remain
+-- low even though the 'catch' raised the current label when the
+-- secret was found (and thus exception was throw). As a consequence,
+-- 'toLabeled' catches all exceptions, and returns a 'Labeled'
+-- value that may have a labeled exception as wrapped by @throw@.
+-- All exceptions within the outer computation, including
+-- IFC violation attempts, are essentially rethrown when performing
+-- an 'unlabel'.
+--
+toLabeled :: Label l
+          => l       -- ^ Label of result and upper bound on
+                     --  inner-computations' observation
+          -> LIO l a -- ^ Inner computation
+          -> LIO l (Labeled l a)
+toLabeled = toLabeledP NoPrivs
+{-# WARNING toLabeled "toLabeled is susceptible to termination attacks" #-}
+
+-- | Same as 'toLabeled' but allows one to supply a privilege object
+-- when comparing the initial and final label of the computation.
+--
+toLabeledP :: Priv l p
+           => p -> l -> LIO l a -> LIO l (Labeled l a)
+toLabeledP p l act = do
+  -- Check that the supplied upper bound is bounded
+  guardAllocP p l
+  -- Get current state:
+  save_s <- getLIOStateTCB
+  -- Execute action, catching any exceptions:
+  res <- (liftM Right act) `catchTCB` (return . Left . lubErr l)
+  -- Get the new state:
+  s   <- getLIOStateTCB
+  let lastL = lioLabel s
+  -- Restore state
+  putLIOStateTCB save_s
+  return . labelTCB l $
+    if canFlowToP p lastL l
+           -- If the result was an exception, rethrow it when unlabel
+           -- otherwise just return the result
+      then either E.throw id res
+           -- Violated the upper bound:
+      else let l1  = lastL `upperBound` l
+               -- Join of exception label (if any) and l1
+               l2 = either (upperBound l1 . getErrLabel) (const l1) res
+               -- Throw pure exception with label l1
+           in E.throw $ LabeledExceptionTCB l2 $ E.toException $ 
+                  VMonitorFailure { monitorFailure = CanFlowToViolation
+                                  , monitorMessage = errMsg }
+    where lubErr lnew (LabeledExceptionTCB le e) =
+                  LabeledExceptionTCB (le `lub` lnew) e
+          --
+          getErrLabel (LabeledExceptionTCB le _) = le
+          --
+          errMsg = "Computation read data more sensitive than bound."
+{-# WARNING toLabeledP "toLabeledP is susceptible to termination attacks" #-}
+
+
+-- | Executes a computation that would raise the current label, but
+-- discards the result so as to keep the label the same.  Used when
+-- one only cares about the side effects of a computation.  For
+-- instance, if @log_handle@ is an 'LHandle' with a high label, one
+-- can execute
+--
+-- @
+--   discard top $ 'hputStrLn' log_handle \"Log message\"
+-- @
+--
+-- to create a log message without affecting the current label.
+--
+discard :: Label l => l -> LIO l a -> LIO l ()
+discard = discardP NoPrivs
+{-# WARNING discard "discard is susceptible to termination attacks" #-}
+
+-- | Same as 'discard', but uses privileges when comparing initial and
+-- final label of the computation.
+discardP :: Priv l p => p -> l -> LIO l a -> LIO l ()
+discardP p l act = void $ toLabeledP p l act
+{-# WARNING discardP "discardP is susceptible to termination attacks" #-}
+#endif
