@@ -71,7 +71,7 @@ Flag toLabeled
 
 Library
   Build-Depends:
-    base         >= 4.5
+    base         >= 4.5     && < 5.0
    ,transformers >= 0.2.2
    ,containers   >= 0.4.2
    ,bytestring   >= 0.9
