@@ -52,6 +52,12 @@ Extra-source-files:
   examples/gate.hs
   examples/waitAndCatch.hs
   examples/fsExample.hs
+  examples/LambdaChair/LambdaChair.hs
+  examples/LambdaChair/LambdaChair/TCB.hs
+  examples/LambdaChair/AliceCode.hs
+  examples/LambdaChair/BobCode.hs
+  examples/LambdaChair/Main.hs
+
 
 Source-repository head
   Type:     git
