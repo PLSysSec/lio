@@ -61,7 +61,7 @@ Extra-source-files:
 
 Source-repository head
   Type:     git
-  Location: http://www.gitstar.com/scs/lio.git
+  Location: ssh://anonymous@gitstar.com/scs/lio.git
 
 Flag toLabeled
   Description:
