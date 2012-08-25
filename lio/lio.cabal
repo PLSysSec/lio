@@ -80,8 +80,8 @@ Library
    ,directory    >= 1.1.0.2
    ,xattr        >= 0.6.1
    ,zlib         >= 0.5.3.1
-   ,SHA          >= 1.5.0.0 && < 1.6
-   ,time         >= 1.2.0.5 && < 1.5
+   ,SHA          >= 1.5.0.0
+   ,time         >= 1.2.0.5
 
   GHC-options: -Wall -fno-warn-orphans
 
