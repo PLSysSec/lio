@@ -51,6 +51,7 @@ Extra-source-files:
   examples/dclabel.hs
   examples/gate.hs
   examples/waitAndCatch.hs
+  examples/bracket.hs
   examples/fsExample.hs
   examples/LambdaChair/LambdaChair.hs
   examples/LambdaChair/LambdaChair/TCB.hs
