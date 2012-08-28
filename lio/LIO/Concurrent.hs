@@ -33,7 +33,7 @@ module LIO.Concurrent (
   , threadDelay
   -- * Forcing computations (EXPERIMENTAL)
   , AsyncException(..)
-  , lForce, lForceP
+  , lBracket, lBracketP
   ) where
 
 
@@ -53,7 +53,7 @@ import           LIO.TCB
                  
 import           LIO.Concurrent.TCB
 import           LIO.Concurrent.LMVar
-import           LIO.Concurrent.LMVar.TCB (putLMVarTCB)
+import           LIO.Concurrent.LMVar.TCB (tryTakeLMVarTCB, putLMVarTCB)
 
 
 -- | Get the 'ThreadId' of the calling thread.
@@ -125,6 +125,7 @@ lForkP p l act = do
       in if canFlowToP p endLabel l
            then res
            else Left $! LabeledExceptionTCB le (toException e)
+    forever $ return ()
   return $ LabeledResultTCB { lresThreadIdTCB = tid, lresResultTCB = mv }
     where -- raise the label of the exception to the join of the
           -- exception label and supplied lForkP upper bound
@@ -152,6 +153,8 @@ lWait = lWaitP NoPrivs
 lWaitP :: (MonadLIO l m, Priv l p) => p -> LabeledResult l a -> m a
 lWaitP p m = do
   v <- readLMVarP p $ lresResultTCB m
+  -- kill thread:
+  liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
   case v of
     Right x -> return x
     Left e  -> liftLIO $ unlabeledThrowTCB e
@@ -167,6 +170,8 @@ trylWaitP p m = do
   mv <- tryTakeLMVarP p mvar
   case mv of
     Just v -> do putLMVarP p mvar v
+                 -- kill thread:
+                 liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
                  case v of
                    Right x -> return $! Just x
                    Left e  -> liftLIO $ unlabeledThrowTCB e
@@ -181,33 +186,52 @@ threadDelay = liftLIO . ioTCB . C.threadDelay
 -- Forcing computations
 --
 
--- | Force execution of a thread spawned with 'lFork' or 'lForkP'.
--- If the computation completed without raising an exception, then the
--- result is wrapped in a 'Just', otherwise this function returns
--- 'Nothing'. Note that the current computation must be able to read
--- and write at the security level of the labeled result.
-lForce :: MonadLIO l m => LabeledResult l a -> m (Labeled l (Maybe a))
-lForce = lForceP NoPrivs
 
--- | Same as 'lForce', but uses privileges when raising current label
--- to the join of the current label and result label.
-lForceP :: (MonadLIO l m, Priv l p)
-        => p -> LabeledResult l a -> m (Labeled l (Maybe a))
-lForceP p m = do
-  let l = labelOf m
-      mv = lresResultTCB m
-  guardWriteP p l
-  -- kill thread:
-  liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
-  -- check to see if it wrote to MVar:
-  v <- tryTakeLMVarP p mv
-  return . labelTCB l =<< case v of
-    Nothing -> do
-      let e = toException ThreadKilled
-      putLMVarTCB mv $ Left (LabeledExceptionTCB l e)
-      return Nothing
-    Just v' -> do
-      putLMVarTCB mv v'
-      case v' of
-        Left _  -> return Nothing
-        Right x -> return (Just x)
+-- | Though in most cases using a 'LabeledResult' is sufficient, in
+-- certain scenarios it is desirable to produce a pure 'Labeled' value
+-- that is the result of other potentially sensitive values. As such, we
+-- provide @lBracket@.
+-- 
+-- @lBracket@ is like 'lFork', but rather than returning a
+-- 'LabeledResult', it returns a 'Labeled' value. The key difference
+-- between the two is that @lBracket@ takes an additional parameter
+-- specifying the number of microseconds the inner computation will take.
+-- As such, @lBracket@ will block for the specified duration and the
+-- result of the inner computation be /forced/. That is, if the
+-- computation terminated /cleanly/, i.e., it did not throw an
+-- exception and it finished in the time specified, then 'Just' the
+-- result is returned, otherwise 'Nothing' is returned.
+--
+-- Note that the original LIO (before version 0.9) included a similar
+-- \"primitive\" called @toLabeled@. We have chosen to call this
+-- @lBracket@ in part because it is a more descriptive name and to
+-- avoid confusion with the previous @toLabeled@ where time was not 
+-- considered.
+lBracket :: (MonadLIO l m)
+          => l                -- ^ Label of result
+          -> Int              -- ^ Duration of computation in microseconds
+          -> LIO l a          -- ^ Computation to execute in separate thread
+          -> m (Labeled l (Maybe a)) -- ^ Labeled result
+lBracket = lBracketP NoPrivs
+
+-- | Same as 'lBracket', but uses privileges when forking the new
+-- thread.
+lBracketP :: (MonadLIO l m, Priv l p)
+           => p                -- ^ Privileges
+           -> l                -- ^ Label of result
+           -> Int              -- ^ Duration of computation in microseconds
+           -> LIO l a          -- ^ Computation to execute in separate thread
+           -> m (Labeled l (Maybe a)) -- ^ Labeled result
+lBracketP p l t act = do
+  f <- liftLIO $ lForkP p l act
+  threadDelay t
+  force f
+    where force m = do
+            let mv = lresResultTCB m
+            -- check to see if it wrote to MVar:
+            -- kill thread:
+            liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
+            v <- tryTakeLMVarTCB mv
+            return . labelTCB l =<< case v of
+              Just (Right x) -> return (Just x)
+              _  -> return Nothing
