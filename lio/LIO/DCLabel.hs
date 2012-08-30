@@ -16,7 +16,7 @@ labels is presented in "LIO.DCLabel.DSL".
 
 module LIO.DCLabel (
   -- ** Principals
-    Principal, principal
+    Principal, principalName, principal
   -- ** Clauses
   , Clause, clause
   -- ** Components
