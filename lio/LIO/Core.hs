@@ -238,9 +238,8 @@ withClearance = withClearanceP NoPrivs
 -- 'guardAllocP' to the supplied label.
 withClearanceP :: Priv l p => p -> l -> LIO l a -> LIO l a
 withClearanceP p l act = do
-  guardAllocP p l
   c <- getClearance
-  liftLIO . updateLIOStateTCB $ \s -> s { lioClearance = l }
+  setClearanceP p l
   act `finally` (updateLIOStateTCB $ \s ->
                    s { lioClearance = c `lub` lioLabel s })
 
