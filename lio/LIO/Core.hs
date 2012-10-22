@@ -106,7 +106,6 @@ module LIO.Core (
   , guardWrite, guardWriteP
   ) where
 
-import           Prelude hiding (catch)
 import           Data.Typeable
 
 import           Control.Monad

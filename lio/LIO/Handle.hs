@@ -80,7 +80,7 @@ module LIO.Handle ( evalWithRootFS
                   , hIsWritable, hIsWritableP
                   ) where
 
-import Prelude hiding (catch, readFile, writeFile)
+import Prelude hiding (readFile, writeFile)
 
 import           Data.Serialize
 import qualified Data.ByteString.Char8 as S8

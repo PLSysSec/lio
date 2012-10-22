@@ -31,8 +31,6 @@ module LIO.FS.TCB (
   , lazyEncodeLabel, encodeLabel, decodeLabel
   ) where
 
-import           Prelude hiding (catch)
-
 import           Data.Serialize
 import           Data.Typeable
 import           Data.IORef

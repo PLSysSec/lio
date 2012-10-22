@@ -125,7 +125,6 @@ lForkP p l act = do
       in if canFlowToP p endLabel l
            then res
            else Left $! LabeledExceptionTCB le (toException e)
-    forever $ return ()
   return $ LabeledResultTCB { lresThreadIdTCB = tid, lresResultTCB = mv }
     where -- raise the label of the exception to the join of the
           -- exception label and supplied lForkP upper bound
