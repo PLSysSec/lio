@@ -106,6 +106,7 @@ module LIO.Core (
   , guardWrite, guardWriteP
   ) where
 
+import           Prelude hiding (catch)
 import           Data.Typeable
 
 import           Control.Monad
@@ -119,7 +120,6 @@ import           Control.Exception hiding ( finally
 import           LIO.TCB
 import           LIO.Label
 import           LIO.Privs
-import		 Prelude hiding (catch)
 
 
 --
