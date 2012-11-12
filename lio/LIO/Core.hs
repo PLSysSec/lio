@@ -119,6 +119,7 @@ import           Control.Exception hiding ( finally
 import           LIO.TCB
 import           LIO.Label
 import           LIO.Privs
+import		 Prelude hiding (catch)
 
 
 --
