@@ -106,7 +106,6 @@ module LIO.Core (
   , guardWrite, guardWriteP
   ) where
 
-import           Prelude hiding (catch)
 import           Data.Typeable
 
 import           Control.Monad
@@ -161,7 +160,7 @@ paranoidLIO :: Label l
             -> LIOState l
              -- ^ Initial state
             -> IO (Either SomeException (a, LIOState l))
-paranoidLIO act s = (Right `liftM` runLIO act s) `catch` (return . Left)
+paranoidLIO act s = (Right `liftM` runLIO act s) `E.catch` (return . Left)
 
 -- | Similar to 'evalLIO', but catches all exceptions exceptions
 -- thrown with 'throwLIO'.
