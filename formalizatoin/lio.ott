@@ -5,7 +5,6 @@ metavar x ::=   {{ com  term variable }}
 metavar a ::= {{ com memory location }}
               {{ lex alphanum }} 
 
-
 indexvar i ::= {{ com integer }}
 
 indexvar n ::= {{ com integer }}
@@ -21,32 +20,30 @@ v :: 'v_' ::=                                   {{ com value                 }}
   | false        ::   :: VFalse                 {{ com Boolean false         }}
   | ()           ::   :: VUnit                  {{ com unit value            }}
   | l            ::   :: VLabel                 {{ com label                 }}
-  | a            :: M :: VAddress               {{ com address               }}
+  | Loc T        :: M :: VAddress               {{ com address               }}
+                                                {{ tex a^[[T]]_\ell          }}
   | x            ::   :: VVar                   {{ com variable              }}
   | \ x . t      ::   :: VLam                   {{ com lambda                }}
   | ( t1 , t2 )  ::   :: VTuple                 {{ com tuple                 }}
   | fix t        ::   :: VFix                   {{ com fixpoint              }}
-  | Lb t1 t2     ::   :: VLabeled               {{ com labeled               }}
-  | LIO t        :: M :: VLIOVal                {{ com \textsf{LIO} value    }}
-                                                {{ tex ([[t]])^\textsf{LIO}  }}
-  | hole         :: M :: VHole                  {{ com hole                  }}
-                                                {{ tex \bullet               }}
+  | Lb t1 t2     :: M :: VLabeled               {{ com labeled               }}
+  | LIO t        :: M :: VLIOVal                {{ com LIO value             }}
+                                                {{ tex ([[t]])^{[[LIO]]_\ell}   }}
                                                                              
 t :: 't_'  ::=                                  {{ com term                  }}
   | true         ::   :: VTrue                  {{ com Boolean true          }}
   | false        ::   :: VFalse                 {{ com Boolean false         }}
   | ()           ::   :: VUnit                  {{ com unit value            }}
   | l            ::   :: VLabel                 {{ com label                 }}
-  | a            :: M :: VAddress               {{ com address               }}
+  | Loc T        :: M :: VAddress               {{ com address               }}
+                                                {{ tex a^[[T]]_\ell          }}
   | x            ::   :: VVar                   {{ com variable              }}
   | \ x . t      ::   :: VLam (+ bind x in t +) {{ com lambda                }}
   | ( t1 , t2 )  ::   :: VTuple                 {{ com tuple                 }}
   | fix t        ::   :: VFix                   {{ com fixpoint              }}
-  | Lb t1 t2     ::   :: VLabeled               {{ com labeled               }}
-  | LIO t        :: M :: VLIOVal                {{ com \textsf{LIO} value    }}
-                                                {{ tex ([[t]])^\textsf{LIO}  }}
-  | hole         :: M :: VHole                  {{ com hole                  }}
-                                                {{ tex \bullet               }}
+  | Lb t1 t2     :: M :: VLabeled               {{ com labeled               }}
+  | LIO t        :: M :: VLIOVal                {{ com LIO value             }}
+                                                {{ tex ([[t]])^{[[LIO]]_\ell}   }}
 
   | t t'                  ::   :: App           {{ com app                   }}
   | proj i  t             ::   :: Proj          {{ com proj                  }}
@@ -56,8 +53,9 @@ t :: 't_'  ::=                                  {{ com term                  }}
                                                 (+ bind x in t'              +)
                                                 {{ com let                   }}
   | return t              ::   :: Return        {{ com return                }}
+                                               {{ tex [[return]]_\ell\ [[t]] }}
   | bind t t'             ::   :: Bind          {{ com bind                  }}
-                                             {{ tex [[t]] >\!\!>\!\!= [[t']] }}
+                                        {{ tex [[t]] >\!\!>\!\!=_\ell [[t']] }}
   | label t t'            ::   :: Label         {{ com label                 }}
   | unlabel t             ::   :: UnLabel       {{ com unlabel               }}
   | toLabeled t1 t2       ::   :: ToLabeled     {{ com execute action        }}
@@ -66,7 +64,9 @@ t :: 't_'  ::=                                  {{ com term                  }}
   | writeLIORef t1 t2     ::   :: WriteLIORef   {{ com write reference       }}
   | lowerClr t            ::   :: LowerClr      {{ com lower clearance       }}
   | getLabel              ::   :: GetLabel      {{ com get current label     }}
+                                                {{ tex [[getLabel]]_\ell     }}
   | getClearance          ::   :: GetClearance  {{ com get current clearance }}
+                                                {{ tex [[getClearance]]_\ell }}
   | labelOf t             ::   :: LabelOf       {{ com get label of value    }}
   | lub t1 t2             ::   :: Join          {{ com least upper bound     }}
                                                 {{ tex [[t1]] \sqcup [[t2]] }}
@@ -74,15 +74,34 @@ t :: 't_'  ::=                                  {{ com term                  }}
   | { t / x } t'          :: M :: Tsub        
                                       {{ icho (tsubst_t [[t]] [[x]] [[t']]) }}
 
-M :: 'M_'  ::=                                  {{ com memory                }}
+M {{ tex \phi }} :: 'M_'  ::=                   {{ com memory                }}
    | mem_empty            ::   :: MemEmpty      {{ com empty set             }}
                                                 {{ tex \emptyset             }}
-   | ( a , t ) , M        ::   :: ConcatElem    {{ com element addition      }}
-   | update M a t         ::   :: Update        {{ com memory update         }}
-                                        {{ tex [[M]] [ [[a]] \mapsto [[t]] ] }}
+   | M , ( t , t' )       ::   :: ConcatElem    {{ com element addition      }}
+   | update M t t'        ::   :: Update        {{ com memory update         }}
+                                       {{ tex [[M]] [ [[t]] \mapsto [[t']] ] }}
 
 p :: 'p_'  ::=                                  {{ com program               }}
   | <| l , c , M , t |>   ::   :: Program       {{ com environment and term  }}
+
+
+T {{ tex \tau }} :: T_ ::=                      {{ com type                  }}
+  | Bool                ::   :: TBool           {{ com Booleans              }}
+  | ()                  ::   :: TUnit           {{ com unit                  }}
+  | Label               ::   :: TLabel          {{ com label }} {{tex \ell   }}
+  | T -> T'             ::   :: TArrow          {{ com function              }}
+  | ( T , T' )          ::   :: TProduct        {{ com product               }}
+  | Labeled T           :: S :: TLabeled        {{ com Labeled value         }}
+                                              {{ tex [[Labeled]]_\ell\ [[T]] }}
+  | LIORef T            :: S :: TLIORef         {{ com Reference             }}
+                                               {{ tex [[LIORef]]_\ell\ [[T]] }}
+  | LIO T               :: S :: TLIO            {{ com LIO action            }}
+                                                {{ tex [[LIO]]_\ell\ [[T]]   }}
+  | ( T )               :: S :: TParen          {{ ich [[T]] }} {{ ocaml int }}
+
+G {{ tex \Gamma }} :: G_ ::=                    {{ com type environment      }}
+  | tenv_empty          ::   :: TyEmpty         {{ tex \emptyset             }}
+  | G , x : T           ::   :: ConcatType
 
 formula :: 'formula_' ::=          
   | judgement           ::   :: judgement
@@ -92,28 +111,159 @@ formula :: 'formula_' ::=
   | M = M'              ::   :: eqvM
   | l = l'              ::   :: eqvl
   | l [= l'             ::   :: canFlowTo
-  | elem ( a , t ) M    ::   :: atInM  {{ tex ([[a]], [[t]]) \in [[M]] }}
-  | fresh a             ::   :: aFresh {{ tex [[a]]\ \mathit{fresh}  }}
+  | elem ( t , t' ) M   ::   :: atInM       {{ tex ([[t]], [[t']]) \in [[M]] }}
+  | x : T inT G         ::   :: xTG
+  | fresh t             ::   :: aFresh       {{ tex [[t]]\ \mathit{fresh}    }}
 
 terminals :: 'terminals_' ::=
-  | \            ::  :: lambda   {{ tex \lambda }}
-  | -->          ::  :: reduce   {{ tex \longrightarrow }}
-  | =>           ::  :: bigstep  {{ tex \longrightarrow^* }}
-  | ~>           ::  :: preduce  {{ tex \leadsto }}
-  | <|           ::  :: langle   {{ tex \langle }}
-  | |>           ::  :: rangle   {{ tex \rangle }}
-  | [=           ::  :: leq      {{ tex \sqsubseteq }}
-  | [|           ::  :: llbacket {{ tex [\![}}
-  | |]           ::  :: rrbacket {{ tex ]\!]}}
+  | \            ::  :: lambda   {{ tex \lambda                              }}
+  | -->          ::  :: reduce   {{ tex \longrightarrow                      }}
+  | ->           ::  :: arrow    {{ tex \to                                  }}
+  | =>           ::  :: bigstep  {{ tex \longrightarrow^*                    }}
+  | ~>           ::  :: preduce  {{ tex \leadsto                             }}
+  | <|           ::  :: langle   {{ tex \langle                              }}
+  | |>           ::  :: rangle   {{ tex \rangle                              }}
+  | [=           ::  :: leq      {{ tex \sqsubseteq                          }}
+  | [|           ::  :: llbacket {{ tex [\![                                 }}
+  | |]           ::  :: rrbacket {{ tex ]\!]                                 }}
+  | |-           ::  :: vdash    {{ tex \vdash                               }}
+  | inT          ::  :: in       {{ tex \in                                  }}
 
 subrules
   v <:: t
 
 defns
-Jop :: '' ::=
+  Jtype :: '' ::= 
 
- defn
- p1 => p2 :: ::bigstep::'' {{ com [[p1]] takes big step reduces to [[p2]]}} by
+defn
+    G |- t : T :: :: typeinf :: T_ by
+
+    -------------------------- :: true
+    tenv_empty |- true : Bool
+
+    -------------------------- :: false
+    tenv_empty |- false : Bool
+
+    -------------------------- :: unit
+    tenv_empty |- () : ()
+
+    -------------------------- :: labels1
+    tenv_empty |- l  : Label  
+
+    -------------------------- :: labels2
+    tenv_empty |- c  : Label  
+
+    ----------------------------- :: addr
+    tenv_empty |- Loc T: LIORef T
+
+    x:T inT G
+    ----------- :: valName
+    G |- x:T
+
+    G , x : T1  |- t : T2
+    -------------------- :: abs
+    G |- \x.t : T1 -> T2
+
+    G |- t1 : T1
+    G |- t2 : T2 
+    ------------------------ :: tuple
+    G |- (t1, t2) : (T1, T2)
+
+    G |- t : T -> T
+    --------------- :: fix
+    G |- fix t : T
+
+    G |- t1 : Label
+    G |- t : T2
+    ----------------------------- :: labeledVal
+    G |- Lb t1 t2 : Labeled T2
+
+    G |- t : T
+    ------------------------ :: lioVal
+    G |- LIO t : LIO T
+
+    G |- t  : T1 -> T2
+    G |- t' : T1 
+    ---------------- :: app
+    G |- t t' : T2
+
+    G |- t : (T1, T2)
+    ----------------- :: proj
+    G |- proj i t : Ti
+
+    G |- t1 : Bool
+    G |- t2 : T
+    G |- t3 : T
+    ------------------------------ :: ifEl
+    G |- if t1 then t2 else t3 : T
+
+    G |- t1 : T1
+    G , x : T1  |- t2 : T2
+    --------------------------- :: let
+    G |- let x = t1 in t2 : T2
+
+    G |- t : T
+    --------------------- :: return
+    G |- return t : LIO T
+
+    G |- t  : LIO T1
+    G |- t' : T1 -> LIO T2
+    ------------------------ :: bind
+    G |- bind t t' : LIO T2
+
+    G |- t  : Label
+    G |- t' : T
+    --------------------------------- :: label
+    G |- label t t' : LIO (Labeled T)
+
+    G |- t : Labeled T
+    ---------------------- :: unlabel
+    G |- unlabel t : LIO T
+
+    G |- t1 : Label
+    G |- t2 : LIO T
+    -------------------------------------- :: toLabeled
+    G |- toLabeled t1 t2 : LIO (Labeled T)
+
+    G |- t1 : Label
+    G |- t2 : T
+    ------------------------------------- :: newLIORef
+    G |- newLIORef t1 t2 : LIO (LIORef T)
+
+    G |- t : LIORef T
+    ------------------------- :: readLIORef
+    G |- readLIORef t : LIO T
+
+    G |- t1 : LIORef T
+    G |- t2 : T
+    ------------------------------- :: writeLIORef
+    G |- writeLIORef t1 t2 : LIO ()
+
+    G |- t : Label
+    ------------------------:: lowerClr
+    G |- lowerClr t : LIO ()
+
+    ---------------------------------- :: getLabel
+    tenv_empty |- getLabel : LIO Label
+
+    ---------------------------------- :: getClearance
+    tenv_empty |- getClearance : LIO Label
+
+    G |- t : Labeled T
+    ---------------------- :: labelOf
+    G |- labelOf t : Label
+
+    G |- t1 : Label
+    G |- t2 : Label
+    ---------------------- :: join
+    G |- lub t1 t2 : Label
+
+
+defns
+  Jop :: '' ::=
+
+defn
+ p1 => p2 :: ::bigstep::''  {{ com [[p1]] takes big step reduces to [[p2]]}} by
 
     <| l, c, M, t |> --> <| l', c', M', t' |>
     ------------------------------------------ :: onestep
@@ -124,8 +274,8 @@ Jop :: '' ::=
     <| l, c, M, v |> => <| l, c, M, v |>
     
 
- defn
- t1 ~> t2 :: ::preduce::'' {{ com pure [[t1]] reduces to [[t2]]}} by
+defn
+ t1 ~> t2 :: ::preduce:: P_ {{ com pure [[t1]] reduces to [[t2]]}} by
 
 
 
@@ -183,8 +333,8 @@ Jop :: '' ::=
 
 
 
- defn
- p1 --> p2 :: ::reduce::'' {{ com [[p1]] reduces to [[p2]]}} by
+defn
+ p1 --> p2 :: ::reduce:: E_ {{ com [[p1]] reduces to [[p2]]}} by
 
     ----------------------------------------------  :: return
     <|l, c, M, return t |> --> <|l, c, M, LIO t |>
@@ -236,31 +386,32 @@ Jop :: '' ::=
 
     l [= l1
     l1 [= c
-    fresh a
-    M' = (a, Lb l1 t2) , M
+    fresh Loc T
+    M' = M , (Loc T, Lb l1 t2)
+    G |- Lb l1 t2 : Labeled T
     ------------------------------------------------------  :: newLIORef
-    <|l, c, M, newLIORef l1 t2|> --> <|l, c, M', return a|>
+    <|l, c, M, newLIORef l1 t2|> --> <|l, c, M', return (Loc T) |>
 
     t ~> t'
     -------------------------------------------------------  :: readLIORefCtx
     <|l, c, M, readLIORef t|> --> <|l, c, M, readLIORef t'|>
 
-    elem (a, Lb l1 t2) M
+    elem (Loc T, Lb l1 t2) M
     lub l l1 ~> l' 
     l' [= c
     ----------------------------------------------------  :: readLIORef
-    <|l, c, M, readLIORef a|> --> <|l', c, M, return t2|>
+    <|l, c, M, readLIORef (Loc T)|> --> <|l', c, M, return t2|>
 
     t1 ~> t1'
     ------------------------------------------------------------------  :: writeLIORefCtx
     <|l, c, M, writeLIORef t1 t2|> --> <|l, c, M, writeLIORef t1' t2|>
 
-    elem (a, Lb l1 t2) M
+    elem (Loc T, Lb l1 t2) M
     lub l l1 ~> l' 
     l' [= c
-    M' = update M a (Lb l1 t2')
+    M' = update M Loc T Lb l1 t2'
     ---------------------------------------------------------  :: writeLIORef
-    <|l, c, M, writeLIORef a t2'|> --> <|l', c, M', return ()|>
+    <|l, c, M, writeLIORef (Loc T) t2'|> --> <|l', c, M', return ()|>
   
     t ~> t'
     -----------------------------------------------------  :: lowerClrCtx
