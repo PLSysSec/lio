@@ -1,15 +1,15 @@
 metavar x ::=   {{ com  term variable }} 
                 {{ lex alphanum }} 
 
-
-metavar a ::= {{ com memory location }}
-              {{ lex alphanum }} 
-
 indexvar i ::= {{ com integer }}
 
 indexvar n ::= {{ com integer }}
 
 grammar
+
+loc :: 'loc_' ::=                               {{ com memory location       }}
+  | Loc T        :: M :: VAddress               {{ com address               }}
+                                                {{ tex a^[[T]]_\ell          }}
 
 l, c :: 'l_' ::=                                {{ com label                 }}
   | lubPrim l l' ::   :: VLub                   {{ com primitive label join  }}
@@ -22,13 +22,17 @@ v :: 'v_' ::=                                   {{ com value                 }}
   | l            ::   :: VLabel                 {{ com label                 }}
   | Loc T        :: M :: VAddress               {{ com address               }}
                                                 {{ tex a^[[T]]_\ell          }}
+  | Exception    ::   :: VException             {{ com exception             }}
+                                                {{ tex X                     }}
+  | LException t :: M :: VLException            {{ com labeled exception     }}
+                                                {{ tex X_[[t]]               }}
   | x            ::   :: VVar                   {{ com variable              }}
   | \ x . t      ::   :: VLam                   {{ com lambda                }}
   | ( t1 , t2 )  ::   :: VTuple                 {{ com tuple                 }}
   | fix t        ::   :: VFix                   {{ com fixpoint              }}
-  | Lb t1 t2     :: M :: VLabeled               {{ com labeled               }}
+  | Lb t1 t2     :: M :: VLabeled               {{ com labeled value         }}
   | LIO t        :: M :: VLIOVal                {{ com LIO value             }}
-                                                {{ tex ([[t]])^{[[LIO]]_\ell}   }}
+                                               {{ tex ([[t]])^{[[LIO]]_\ell} }}
                                                                              
 t :: 't_'  ::=                                  {{ com term                  }}
   | true         ::   :: VTrue                  {{ com Boolean true          }}
@@ -37,14 +41,17 @@ t :: 't_'  ::=                                  {{ com term                  }}
   | l            ::   :: VLabel                 {{ com label                 }}
   | Loc T        :: M :: VAddress               {{ com address               }}
                                                 {{ tex a^[[T]]_\ell          }}
+  | Exception    ::   :: VException             {{ com exception             }}
+                                                {{ tex X                     }}
+  | LException t :: M :: VLException            {{ com labeled exception     }}
+                                                {{ tex X_[[t]]               }}
   | x            ::   :: VVar                   {{ com variable              }}
   | \ x . t      ::   :: VLam (+ bind x in t +) {{ com lambda                }}
   | ( t1 , t2 )  ::   :: VTuple                 {{ com tuple                 }}
   | fix t        ::   :: VFix                   {{ com fixpoint              }}
-  | Lb t1 t2     :: M :: VLabeled               {{ com labeled               }}
+  | Lb t1 t2     :: M :: VLabeled               {{ com labeled value         }}
   | LIO t        :: M :: VLIOVal                {{ com LIO value             }}
-                                                {{ tex ([[t]])^{[[LIO]]_\ell}   }}
-
+                                               {{ tex ([[t]])^{[[LIO]]_\ell} }}
   | t t'                  ::   :: App           {{ com app                   }}
   | proj i  t             ::   :: Proj          {{ com proj                  }}
                                                 {{ tex \pi_[[i]] [[t]]       }}
@@ -62,6 +69,8 @@ t :: 't_'  ::=                                  {{ com term                  }}
   | newLIORef t1 t2       ::   :: NewLIORef     {{ com new reference         }}
   | readLIORef t1         ::   :: ReadLIORef    {{ com read reference        }}
   | writeLIORef t1 t2     ::   :: WriteLIORef   {{ com write reference       }}
+  | throwLIO t1           ::   :: ThrowLIO      {{ com throw exception       }}
+  | catchLIO t1 t2        ::   :: CatchLIO      {{ com catch exception       }}
   | lowerClr t            ::   :: LowerClr      {{ com lower clearance       }}
   | getLabel              ::   :: GetLabel      {{ com get current label     }}
                                                 {{ tex [[getLabel]]_\ell     }}
@@ -69,20 +78,20 @@ t :: 't_'  ::=                                  {{ com term                  }}
                                                 {{ tex [[getClearance]]_\ell }}
   | labelOf t             ::   :: LabelOf       {{ com get label of value    }}
   | lub t1 t2             ::   :: Join          {{ com least upper bound     }}
-                                                {{ tex [[t1]] \sqcup [[t2]] }}
+                                                {{ tex [[t1]] \sqcup [[t2]]  }}
   | ( t )                 :: S :: Paren         {{ icho [[t]]                }} 
-  | { t / x } t'          :: M :: Tsub        
-                                      {{ icho (tsubst_t [[t]] [[x]] [[t']]) }}
+  | { t / x } t'          :: M :: Tsub {{ icho (tsubst_t [[t]] [[x]] [[t']]) }}
 
 M {{ tex \phi }} :: 'M_'  ::=                   {{ com memory                }}
    | mem_empty            ::   :: MemEmpty      {{ com empty set             }}
                                                 {{ tex \emptyset             }}
-   | M , ( t , t' )       ::   :: ConcatElem    {{ com element addition      }}
-   | update M t t'        ::   :: Update        {{ com memory update         }}
-                                       {{ tex [[M]] [ [[t]] \mapsto [[t']] ] }}
+   | M , ( loc , t )      ::   :: ConcatElem    {{ com element addition      }}
+   | update M loc t       ::   :: Update        {{ com memory update         }}
+                                      {{ tex [[M]] [ [[loc]] \mapsto [[t]] ] }}
 
-p :: 'p_'  ::=                                  {{ com program               }}
-  | <| l , c , M , t |>   ::   :: Program       {{ com environment and term  }}
+p :: 'p_'  ::=                                  {{ com configuration         }}
+  | <| l , c , M , t |>   ::   :: Program       {{ com current label, 
+                                                  clearance, memory and term }}
 
 
 T {{ tex \tau }} :: T_ ::=                      {{ com type                  }}
@@ -91,12 +100,15 @@ T {{ tex \tau }} :: T_ ::=                      {{ com type                  }}
   | Label               ::   :: TLabel          {{ com label }} {{tex \ell   }}
   | T -> T'             ::   :: TArrow          {{ com function              }}
   | ( T , T' )          ::   :: TProduct        {{ com product               }}
-  | Labeled T           :: S :: TLabeled        {{ com Labeled value         }}
+  | Labeled T           ::   :: TLabeled        {{ com Labeled value         }}
                                               {{ tex [[Labeled]]_\ell\ [[T]] }}
-  | LIORef T            :: S :: TLIORef         {{ com Reference             }}
+  | LIORef T            ::   :: TLIORef         {{ com Reference             }}
                                                {{ tex [[LIORef]]_\ell\ [[T]] }}
-  | LIO T               :: S :: TLIO            {{ com LIO action            }}
+  | LIO T               ::   :: TLIO            {{ com LIO action            }}
                                                 {{ tex [[LIO]]_\ell\ [[T]]   }}
+  | Exception           ::   :: TException      {{ com exception             }}
+  | LException          ::   :: TLException     {{ com labeled exception     }}
+                                                {{ tex [[Exception]]_\ell    }}
   | ( T )               :: S :: TParen          {{ ich [[T]] }} {{ ocaml int }}
 
 G {{ tex \Gamma }} :: G_ ::=                    {{ com type environment      }}
@@ -105,13 +117,12 @@ G {{ tex \Gamma }} :: G_ ::=                    {{ com type environment      }}
 
 formula :: 'formula_' ::=          
   | judgement           ::   :: judgement
-  | [| formula |]       ::   :: denotational
   | x = x'              ::   :: eqvx
-  | t = t'              ::   :: eqvt
+  | neq t t'            ::   :: not_eqvt            {{ tex [[t]] \neq [[t']] }}
   | M = M'              ::   :: eqvM
   | l = l'              ::   :: eqvl
   | l [= l'             ::   :: canFlowTo
-  | elem ( t , t' ) M   ::   :: atInM       {{ tex ([[t]], [[t']]) \in [[M]] }}
+  | elem ( loc , t ) M  ::   :: atInM      {{ tex ([[loc]], [[t]]) \in [[M]] }}
   | x : T inT G         ::   :: xTG
   | fresh t             ::   :: aFresh       {{ tex [[t]]\ \mathit{fresh}    }}
 
@@ -124,8 +135,6 @@ terminals :: 'terminals_' ::=
   | <|           ::  :: langle   {{ tex \langle                              }}
   | |>           ::  :: rangle   {{ tex \rangle                              }}
   | [=           ::  :: leq      {{ tex \sqsubseteq                          }}
-  | [|           ::  :: llbacket {{ tex [\![                                 }}
-  | |]           ::  :: rrbacket {{ tex ]\!]                                 }}
   | |-           ::  :: vdash    {{ tex \vdash                               }}
   | inT          ::  :: in       {{ tex \in                                  }}
 
@@ -138,26 +147,33 @@ defns
 defn
     G |- t : T :: :: typeinf :: T_ by
 
-    -------------------------- :: true
+    ------------------------- :: true
     tenv_empty |- true : Bool
 
     -------------------------- :: false
     tenv_empty |- false : Bool
 
-    -------------------------- :: unit
+    --------------------- :: unit
     tenv_empty |- () : ()
 
-    -------------------------- :: labels1
+    ------------------------ :: labels1
     tenv_empty |- l  : Label  
 
-    -------------------------- :: labels2
+    ------------------------ :: labels2
     tenv_empty |- c  : Label  
 
     ----------------------------- :: addr
     tenv_empty |- Loc T: LIORef T
 
+    ----------------------------------- :: exception
+    tenv_empty |- Exception : Exception
+
+    G |- t1 : Label
+    ---------------------------------------- :: labeledException
+    G |- LException t1 : LException
+
     x:T inT G
-    ----------- :: valName
+    --------- :: valName
     G |- x:T
 
     G , x : T1  |- t : T2
@@ -175,20 +191,20 @@ defn
 
     G |- t1 : Label
     G |- t : T2
-    ----------------------------- :: labeledVal
+    -------------------------- :: labeledVal
     G |- Lb t1 t2 : Labeled T2
 
     G |- t : T
-    ------------------------ :: lioVal
+    ------------------ :: lioVal
     G |- LIO t : LIO T
 
     G |- t  : T1 -> T2
     G |- t' : T1 
-    ---------------- :: app
+    -------------- :: app
     G |- t t' : T2
 
     G |- t : (T1, T2)
-    ----------------- :: proj
+    ------------------ :: proj
     G |- proj i t : Ti
 
     G |- t1 : Bool
@@ -199,7 +215,7 @@ defn
 
     G |- t1 : T1
     G , x : T1  |- t2 : T2
-    --------------------------- :: let
+    -------------------------- :: let
     G |- let x = t1 in t2 : T2
 
     G |- t : T
@@ -208,7 +224,7 @@ defn
 
     G |- t  : LIO T1
     G |- t' : T1 -> LIO T2
-    ------------------------ :: bind
+    ----------------------- :: bind
     G |- bind t t' : LIO T2
 
     G |- t  : Label
@@ -246,7 +262,7 @@ defn
     ---------------------------------- :: getLabel
     tenv_empty |- getLabel : LIO Label
 
-    ---------------------------------- :: getClearance
+    -------------------------------------- :: getClearance
     tenv_empty |- getClearance : LIO Label
 
     G |- t : Labeled T
@@ -321,14 +337,14 @@ defn
     lub l1 l2 ~> lubPrim l1 l2
 
     t ~> t'
-    -------------------------------------------------------------------- :: labelOfCtx1
+    ----------------------- :: labelOfCtx1
     labelOf t ~> labelOf t'
 
     t1 ~> t1'
-    -------------------------------------------------------------------- :: labelOfCtx2
+    ---------------------------------------- :: labelOfCtx2
     labelOf (Lb t1 t2) ~> labelOf (Lb t1' t2)
 
-    --------------------------------------------------  :: labelOf
+    ------------------------ :: labelOf
     labelOf (Lb l1 t2) ~> l1
 
 
@@ -366,7 +382,7 @@ defn
 
     lub l l1 ~> l2
     l2 [= c
-    ---------------------------------------------------------  :: unlabel
+    -----------------------------------------------------------  :: unlabel
     <|l, c, M, unlabel (Lb l1 t2)|> --> <|l2, c, M, return t2|>
 
     t1 ~> t1'
@@ -375,9 +391,9 @@ defn
 
     l  [= l1
     l1 [= c
-    <|l, c, M, t|> => <|l', c', M', return t'|>
+    <|l, c, M, t|> => <|l', c', M', LIO t'|>
     l' [= l1
-    -------------------------------------------------------------- :: toLabeled
+    --------------------------------------------------------- :: toLabeled
     <|l, c, M, toLabeled l1 t|> --> <|l, c, M', label l1 t'|>
 
     t1 ~> t1'
@@ -389,18 +405,18 @@ defn
     fresh Loc T
     M' = M , (Loc T, Lb l1 t2)
     G |- Lb l1 t2 : Labeled T
-    ------------------------------------------------------  :: newLIORef
-    <|l, c, M, newLIORef l1 t2|> --> <|l, c, M', return (Loc T) |>
+    --------------------------------------------------------------  :: newLIORef
+    <|l, c, M, newLIORef l1 t2|> --> <|l, c, M', return Loc T |>
 
     t ~> t'
-    -------------------------------------------------------  :: readLIORefCtx
+    --------------------------------------------------------  :: readLIORefCtx
     <|l, c, M, readLIORef t|> --> <|l, c, M, readLIORef t'|>
 
     elem (Loc T, Lb l1 t2) M
     lub l l1 ~> l' 
     l' [= c
     ----------------------------------------------------  :: readLIORef
-    <|l, c, M, readLIORef (Loc T)|> --> <|l', c, M, return t2|>
+    <|l, c, M, readLIORef Loc T|> --> <|l', c, M, return t2|>
 
     t1 ~> t1'
     ------------------------------------------------------------------  :: writeLIORefCtx
@@ -410,11 +426,32 @@ defn
     lub l l1 ~> l' 
     l' [= c
     M' = update M Loc T Lb l1 t2'
-    ---------------------------------------------------------  :: writeLIORef
+    -----------------------------------------------------------------  :: writeLIORef
     <|l, c, M, writeLIORef (Loc T) t2'|> --> <|l', c, M', return ()|>
+
+    t ~> t'
+    ---------------------------------------------------- :: throwLIOCtx
+    <|l, c, M, throwLIO t|> --> <|l, c, M, throwLIO t'|>
+
+    -------------------------------------------------------------------- :: throwLIO
+    <|l, c, M, throwLIO Exception|> --> <|l, c, M, return LException l|>
+
+
+    <|l, c, M, t1|> => <|l', c', M', LIO v1|>
+    ------------------------------------------------------ :: catchLIOCtx
+    <|l, c, M, catchLIO t1 t2|> --> <|l', c', M', catchLIO LIO v1 t2|>
+
+    lub l l1 ~> l'
+    l' [= c
+    ----------------------------------------------------------------------------- :: catchLIOEx
+    <|l, c, M, catchLIO LIO LException l1 t2|> --> <|l', c, M, t2 Exception|>
+
+    neq v1 LException l1
+    -------------------------------------------------------- :: catchLIO
+    <|l, c, M, catchLIO LIO v1 t2|> --> <|l, c, M, LIO v1|>
   
     t ~> t'
-    -----------------------------------------------------  :: lowerClrCtx
+    ------------------------------------------------------  :: lowerClrCtx
     <|l, c, M, lowerClr t |> -->  <|l, c, M, lowerClr t'|>
 
     l  [= c'
