@@ -44,6 +44,7 @@ import           Codec.Compression.Zlib hiding (compress)
 
 import           Control.Monad
 import           Control.Exception
+import qualified Control.Exception as E
                  
 import           System.FilePath
 import           System.Directory
@@ -156,7 +157,7 @@ setFSTCB path = do
           e <- doesDirectoryExist path
           unless e $ throwIO FSRootNoExist
          doFail = throwIO FSRootCorrupt
-         throwOnFail act = act `catch` (\(_:: SomeException) -> doFail)
+         throwOnFail act = act `E.catch` (\(_:: SomeException) -> doFail)
 
 -- | Initialize filesystem at the given path. The supplied path must be
 -- absolute, otherwise @initFSTCB@ throw 'FSRootInvalid'.  If the FS has
@@ -221,7 +222,7 @@ getPathLabelTCB path = rethrowIoTCB $ do
     Right l | h == h' -> return l
     _                 -> doFail
   where doFail = throwIO $ FSLabelCorrupt path
-        throwOnFail act = act `catch` (\(_:: SomeException) -> doFail)
+        throwOnFail act = act `E.catch` (\(_:: SomeException) -> doFail)
 
 
 -- | Create a directory object with the given label.
