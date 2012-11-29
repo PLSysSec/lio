@@ -256,7 +256,7 @@ similarly-behaving program.
 -- does not exceed a particular label.
 --
 -- If an exception is thrown within a @toLabeled@ block, such that
--- the outer context is withing a 'catch', which is further within
+-- the outer context is withing a 'catchLIO', which is further within
 -- a @toLabeled@ block, infromation can be leaked. Consider the
 -- following program that uses 'DCLabel's. (Note that 'discard' is
 -- simply @toLabeled@ that throws throws the result away.)
@@ -269,10 +269,10 @@ similarly-behaving program.
 --  >     stash <- readLIORef lRef
 --  >     writeLIORef lRef $ stash ++ "\n" ++ guess ++ ":"
 --  >     discard top $ do
---  >       catch ( discard top $ do
---  >                 secret <- readLIORef hRef
---  >                 when (secret == guess) $ throwIO . userError $ "got it!"
---  >             ) (\(e :: IOError) -> return ())
+--  >       catchLIO ( discard top $ do
+--  >                    secret <- readLIORef hRef
+--  >                    when (secret == guess) $ throwIO . userError $ "got it!"
+--  >                ) (\(e :: IOError) -> return ())
 --  >       l <- getLabel
 --  >       when (l == bottom) $ do stash <- readLIORef lRef
 --  >                             writeLIORef lRef $ stash ++ "no!"
@@ -292,7 +292,7 @@ similarly-behaving program.
 -- Note that the current label is 'bottom' (which in DCLabels is
 -- @<True , False>@), and the secret is leaked. The fundamental issue
 -- is that the outer 'discard' allows for the current label to remain
--- low even though the 'catch' raised the current label when the
+-- low even though the 'catchLIO' raised the current label when the
 -- secret was found (and thus exception was throw). As a consequence,
 -- 'toLabeled' catches all exceptions, and returns a 'Labeled'
 -- value that may have a labeled exception as wrapped by @throw@.
