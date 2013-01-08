@@ -4,6 +4,9 @@
 *~
 /Setup
 /dist
+/lio/dist
+/lio-eval/dist
+/quickcheck-lio-instances/dist
 /doc
 /ls
 /ps

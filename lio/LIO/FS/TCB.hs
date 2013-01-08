@@ -31,7 +31,7 @@ module LIO.FS.TCB (
   , lazyEncodeLabel, encodeLabel, decodeLabel
   ) where
 
-import           Data.Serialize
+import           Data.Binary
 import           Data.Typeable
 import           Data.IORef
 import qualified Data.ByteString as S
@@ -63,7 +63,7 @@ type S8 = S8.ByteString
 type L8 = L8.ByteString
 
 -- | Constraintfor serializable labels
-type SLabel l = (Label l, Serialize l)
+type SLabel l = (Label l, Binary l)
 
 --
 -- Exception thrown by the file store interface
@@ -189,7 +189,7 @@ labelHashAttr = "user._lio_label_sha"
 
 -- | Encode a label into an attribute value.
 lazyEncodeLabel :: SLabel l => l -> L8
-lazyEncodeLabel = compress . encodeLazy
+lazyEncodeLabel = compress . encode
 
 -- | Encode a label into an attribute value.
 encodeLabel :: SLabel l => l -> AttrValue
@@ -197,7 +197,7 @@ encodeLabel = strictify . lazyEncodeLabel
 
 -- | Descode label from an attribute value.
 decodeLabel :: SLabel l => AttrValue -> Either String l
-decodeLabel = decodeLazy . decompress . lazyfy
+decodeLabel = decode . decompress . lazyfy
 
 -- | Set the label of a given path. This function sets the 'labelAttr'
 -- attribute to the encoded label, and the hash to 'labelHashAttr'.
