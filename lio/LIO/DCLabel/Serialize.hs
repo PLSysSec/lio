@@ -1,23 +1,25 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE StandaloneDeriving,
              GeneralizedNewtypeDeriving #-}
+{- |
 
-{- | This module provides instances for binary serialization of
-'DCLabel's. Specifically, we provide insgtances for @cereal@\'s
-@Data.Serialize@.  -}
+This module provides instances for binary serialization of
+'DCLabel's. Specifically, we provide insgtances for @binary@\'s
+@Data.Binary@.
 
+-}
 module LIO.DCLabel.Serialize () where
 
 
 import           LIO.DCLabel.Core
-import           Data.Serialize
+import           Data.Binary
 import           Control.Monad
 
-deriving instance Serialize Principal
-deriving instance Serialize Clause
+deriving instance Binary Principal
+deriving instance Binary Clause
 
 -- | Serialize components by converting them to maybe's
-instance Serialize Component where
+instance Binary Component where
   put c = put . dcToMaybe $! c
     where dcToMaybe DCFalse       = Nothing
           dcToMaybe (DCFormula f) = Just f
@@ -26,6 +28,6 @@ instance Serialize Component where
           dcFromMaybe (Just f) = dcFormula f
 
 -- | Serialize labels by converting them to pairs of components.
-instance Serialize DCLabel where
+instance Binary DCLabel where
   put l = put (dcSecrecy l, dcIntegrity l)
   get   = uncurry dcLabelNoReduce `liftM` get

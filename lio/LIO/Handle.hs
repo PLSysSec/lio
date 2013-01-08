@@ -82,7 +82,7 @@ module LIO.Handle ( evalWithRootFS
 
 import Prelude hiding (readFile, writeFile)
 
-import           Data.Serialize
+import           Data.Binary
 import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteString.Lazy.Char8 as L8
 
@@ -319,7 +319,7 @@ instance (SLabel l, HandleOps IO.Handle b IO) =>
 
 -- | Read @n@ bytes from the labeled handle, using privileges when
 -- performing label comparisons and tainting.
-hGetP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
+hGetP :: (Priv l p, Binary l, HandleOps IO.Handle b IO)
       => p               -- ^ Privileges
       -> LabeledHandle l -- ^ Labeled handle
       -> Int             -- ^ Number of bytes to read
@@ -332,7 +332,7 @@ hGetP p lh n = do
 -- available. Instead, it returns whatever data is available.
 -- Privileges are used in the label comparisons and when raising
 -- the current label.
-hGetNonBlockingP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
+hGetNonBlockingP :: (Priv l p, Binary l, HandleOps IO.Handle b IO)
                  => p -> LabeledHandle l -> Int -> LIO l b
 hGetNonBlockingP p lh n = do
  guardWriteP p (labelOf lh)
@@ -341,14 +341,14 @@ hGetNonBlockingP p lh n = do
 -- | Read the entire labeled handle contents and close handle upon
 -- reading @EOF@.  Privileges are used in the label comparisons
 -- and when raising the current label.
-hGetContentsP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
+hGetContentsP :: (Priv l p, Binary l, HandleOps IO.Handle b IO)
               => p -> LabeledHandle l -> LIO l b
 hGetContentsP p lh = do
  guardWriteP p (labelOf lh)
  liftLIO . rethrowIoTCB $ hGetContents (unlabelTCB lh)
 
 -- | Read the a line from a labeled handle.
-hGetLineP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
+hGetLineP :: (Priv l p, Binary l, HandleOps IO.Handle b IO)
           => p -> LabeledHandle l -> LIO l b
 hGetLineP p lh = do
  guardWriteP p (labelOf lh)
@@ -357,21 +357,21 @@ hGetLineP p lh = do
 -- | Output the given (Byte)String to the specified labeled handle.
 -- Privileges are used in the label comparisons and when raising
 -- the current label.
-hPutP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
+hPutP :: (Priv l p, Binary l, HandleOps IO.Handle b IO)
       => p -> LabeledHandle l -> b -> LIO l ()
 hPutP p lh s = do
  guardWriteP p (labelOf lh)
  liftLIO . rethrowIoTCB $ hPut (unlabelTCB lh) s
 
 -- | Synonym for 'hPutP'.
-hPutStrP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
+hPutStrP :: (Priv l p, Binary l, HandleOps IO.Handle b IO)
           => p -> LabeledHandle l -> b -> LIO l ()
 hPutStrP = hPutP
 
 -- | Output the given (Byte)String with an appended newline to the
 -- specified labeled handle. Privileges are used in the label
 -- comparisons and when raising the current label.
-hPutStrLnP :: (Priv l p, Serialize l, HandleOps IO.Handle b IO)
+hPutStrLnP :: (Priv l p, Binary l, HandleOps IO.Handle b IO)
             => p -> LabeledHandle l -> b -> LIO l ()
 hPutStrLnP p lh s = do
  guardWriteP p (labelOf lh)
@@ -387,7 +387,7 @@ readFile :: (HandleOps Handle b IO, SLabel l)
 readFile = readFileP NoPrivs
 
 -- | Same as 'readFile' but uses privilege in opening the file.
-readFileP :: (HandleOps Handle b IO, Priv l p, Serialize l)
+readFileP :: (HandleOps Handle b IO, Priv l p, Binary l)
           => p -> FilePath -> LIO l b
 readFileP p file = openFileP p Nothing file ReadMode >>= hGetContentsP p
 
@@ -398,7 +398,7 @@ writeFile = writeFileP NoPrivs
 
 -- | Same as 'writeFile' but uses privilege when opening, writing and
 -- closing the file.
-writeFileP  :: (HandleOps Handle b IO, Priv l p, Serialize l)
+writeFileP  :: (HandleOps Handle b IO, Priv l p, Binary l)
             => p -> l -> FilePath -> b -> LIO l ()
 writeFileP p l file contents = do
   bracket (openFileP p (Just l) file WriteMode) (hCloseP p)

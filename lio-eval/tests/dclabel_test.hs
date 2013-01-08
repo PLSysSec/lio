@@ -7,9 +7,9 @@ import Test.QuickCheck
 import Test.QuickCheck.Instances
 import LIO.DCLabel
 import LIO.DCLabel.Core
+import Data.Binary
 import Data.Monoid
 import Data.Set hiding (map)
-import Data.Serialize
 
 import LIO
 import LIO.DCLabel.Instances
@@ -86,8 +86,7 @@ prop_dc_bottom _ = forAll (arbitrary :: Gen DCLabel) $ \l -> bottom `canFlowTo` 
 -- | Test serialization.
 prop_dc_serialize :: DCLabel -> Bool
 prop_dc_serialize l = case decode (encode l) of
-                        Left _ -> False
-                        Right l' -> l == l'
+                        l' -> l' == l
 
 main :: IO ()
 main = defaultMain tests
