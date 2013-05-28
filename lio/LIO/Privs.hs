@@ -39,7 +39,7 @@ import LIO.Privs.TCB
 -- | This class defines privileges and the more-permissive relation
 -- ('canFlowToP') on labels using privileges. Additionally, it defines
 -- 'partDowngradeP' which is used to downgrage a label up to a limit,
--- given a set of privilege.
+-- given a set of privileges.
 class (Label l, PrivTCB p, Monoid p) => Priv l p where
     -- | The \"can-flow-to given privileges\" pre-order used to compare
     -- two labels in the presence of privileges.  If @'canFlowToP' p L_1

@@ -7,13 +7,13 @@
 This module exports the class 'PrivTCB' which all privilege types must
 be an instance of. This class is in the TCB since privileges can be
 used to bypass label restrictions and untrusted code should not be
-allowed to do do arbitrarily. See "LIO.Privs" for an additional
+allowed to do so arbitrarily. See "LIO.Privs" for an additional
 description of privileges and their role within "LIO".
 
 In addition to 'PrivTCB' this module exports the class 'PrivDesc'
 which provides a function from privileges to /privilege descriptions/.
 A privilege description is a meaningful and safe interpretation of a
-coresponding privilege (note that the function must be one-to-on).
+coresponding privilege (note that the function must be one-to-one).
 Privilege descriptions are used in "LIO.Gate" as \"proof\" of
 privilege ownership.  Additionally, privilege descriptions can be used
 by TCB code to mint new privileges using the 'MintTCB' class.
@@ -30,11 +30,11 @@ module LIO.Privs.TCB (
 -- (namely trusted) can make a \"privilege type\".
 class PrivTCB p
 
--- | Class used to convert a privilege to a privilege description.  This
--- is particularly useful when one piece of code wishes to prove
+-- | Class used to convert a privilege to a privilege description.
+-- This is particularly useful when one piece of code wishes to prove
 -- ownership of certain privileges without granting the privilege.
--- NOTE: it (almost) always a security violation if the privilege is
--- also the privilege description.
+-- NOTE: it is (almost) always a security violation if the privilege
+-- is also the privilege description.
 --
 -- Although this class is not part of the TCB there are some security
 -- implications that should be considered when making a type an
