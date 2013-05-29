@@ -38,7 +38,7 @@ import           Data.IORef
 -- allow @LIORef@ to be an instance of 'LabelOf'.  Of course, you can
 -- create an @LIORef@ of 'Labeled' to get a limited form of
 -- flow-sensitivity.
-data LIORef l a = LIORefTCB { labelOfLIORef :: !l
+data LIORef l a = LIORefTCB { labelOfLIORefTCB :: !l
                             -- ^ Label of the labeled 'IORef'.
                             , unlabelLIORefTCB :: (IORef a)
                             -- ^ Access the underlying 'IORef', ignoring IFC.
@@ -46,7 +46,7 @@ data LIORef l a = LIORefTCB { labelOfLIORef :: !l
 
 -- | Get the label of an 'LIORef'.
 instance LabelOf LIORef where
-  labelOf = labelOfLIORef
+  labelOf = labelOfLIORefTCB
 
 --
 -- Create labeled 'IORef's
