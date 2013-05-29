@@ -106,7 +106,6 @@ Library
     LIO.Gate
     -- * LIO privileges
     LIO.Privs
-    LIO.Privs.TCB
     -- * Concurrency
     LIO.Concurrent
     LIO.Concurrent.TCB

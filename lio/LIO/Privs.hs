@@ -25,55 +25,15 @@ arguments depend on the particular label type.
 
 module LIO.Privs (
   -- * Privilege descriptions
-    PrivDesc(..)
+    PrivDesc(..), canFlowToP, partDowngradeP
   -- * Privileges
-  , Priv(..)
-  , NoPrivs(..)
+  , Priv, privDesc
+  , NoPrivs, noPrivs
   ) where
 
 import Data.Monoid
-
 import LIO.Label
 import LIO.Privs.TCB
-
--- | This class defines privileges and the more-permissive relation
--- ('canFlowToP') on labels using privileges. Additionally, it defines
--- 'partDowngradeP' which is used to downgrage a label up to a limit,
--- given a set of privilege.
-class (Label l, PrivTCB p, Monoid p) => Priv l p where
-    -- | The \"can-flow-to given privileges\" pre-order used to compare
-    -- two labels in the presence of privileges.  If @'canFlowToP' p L_1
-    -- L_2@ holds, then privileges @p@ are sufficient to downgrade data
-    -- from @L_1@ to @L_2@.  Note that @'canFlowTo' L_1 L_2@ implies
-    -- @'canFlowToP' p L_1 L_2@ for all @p@, but for some labels and
-    -- privileges, 'canFlowToP' will hold even where 'canFlowTo' does
-    -- not.
-    canFlowToP :: p -> l -> l -> Bool
-    canFlowToP p a b = partDowngradeP p a b `canFlowTo` b
-
-    -- | Roughly speaking, @L_r = partDowngradeP p L L_g@ computes how
-    -- close one can come to downgrading data labeled @L@ to the goal label
-    -- @L_g@, given privileges @p@.  When @p == 'NoPrivs'@, the resulting
-    -- label @L_r == L ``upperBound`` L_g@.  If @p@ contains /all/
-    -- possible privileges, then @L_r == L_g@.
-    --
-    -- More specifically, @L_r@ is the greatest lower bound of the
-    -- set of all labels @L_l@ satisfying:
-    --
-    --   1. @ L_g &#8849; L_l@, and
-    --
-    --   2. @ L &#8849;&#8346; L_l@.
-    --
-    -- Operationally, @partDowngradeP@ captures the minimum change required
-    -- to the current label when viewing data labeled @L_l@.  A common
-    -- pattern is to use the result of 'getLabel' as @L_g@ (i.e., the
-    -- goal is to use privileges @p@ to avoid changing the label at all),
-    -- and then compute @L_r@ based on the label of data the code is
-    -- about to observe. 
-    partDowngradeP :: p  -- ^ Privileges
-                   -> l  -- ^ Label from which data must flow
-                   -> l  -- ^ Goal label
-                   -> l  -- ^ Result
 
 --
 -- No privileges
@@ -82,15 +42,16 @@ class (Label l, PrivTCB p, Monoid p) => Priv l p where
 -- | Generic privilege type used to denote the lack of privileges.
 data NoPrivs = NoPrivs deriving (Show, Read)
 
-instance PrivTCB NoPrivs
-instance PrivDesc NoPrivs NoPrivs where privDesc = id
-instance MintTCB  NoPrivs NoPrivs where mintTCB  = id
+noPrivs :: Priv NoPrivs
+noPrivs = MintTCB NoPrivs
+
 instance Monoid NoPrivs where
   mempty      = NoPrivs
   mappend _ _ = NoPrivs
 
 -- | With lack of privileges, 'canFlowToP' is simply 'canFlowTo', and
 -- 'partDowngradeP' is the least 'upperBound'.
-instance Label l => Priv l NoPrivs where
-  canFlowToP _ l1 l2    = l1 `canFlowTo` l2
-  partDowngradeP _ l lg = l `upperBound` lg
+instance Label l => PrivDesc l NoPrivs where
+  canFlowToP_desc _ l1 l2    = l1 `canFlowTo` l2
+  partDowngradeP_desc _ l lg = l `upperBound` lg
+

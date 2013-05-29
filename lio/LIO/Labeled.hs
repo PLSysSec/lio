@@ -69,7 +69,7 @@ instance LabelOf Labeled where
 -- ``canFlowTo`` l && l ``canFlowTo`` ccurrent@. Otherwise an
 -- exception is thrown (see 'guardAlloc').
 label :: MonadLIO l m => l -> a -> m (Labeled l a)
-label = labelP NoPrivs
+label = labelP noPrivs
 
 -- | Constructs a 'Labeled' using privilege to allow the `Labeled`'s
 -- label to be below the current label.  If the current label is
@@ -79,7 +79,7 @@ label = labelP NoPrivs
 -- the clearance.  You must use 'setClearanceP' to raise the clearance
 -- first if you wish to create an 'Labeled' at a higher label than the
 -- current clearance.
-labelP :: (MonadLIO l m, Priv l p) => p -> l -> a -> m (Labeled l a)
+labelP :: (MonadLIO l m, PrivDesc l p) => Priv p -> l -> a -> m (Labeled l a)
 labelP p l a = do
   guardAllocP p l
   return $! labelTCB l a
@@ -100,13 +100,13 @@ labelP p l a = do
 -- However, you can use 'labelOf' to check if 'unlabel' will succeed
 -- without throwing an exception.
 unlabel :: MonadLIO l m => Labeled l a -> m a
-unlabel = unlabelP NoPrivs
+unlabel = unlabelP noPrivs
 
 -- | Extracts the value of an 'Labeled' just like 'unlabel', but takes a
 -- privilege argument to minimize the amount the current label must be
 -- raised.  Function will throw 'ClearanceViolation' under the same
 -- circumstances as 'unlabel'.
-unlabelP :: (MonadLIO l m, Priv l p) => p -> Labeled l a -> m a
+unlabelP :: (MonadLIO l m, PrivDesc l p) => Priv p -> Labeled l a -> m a
 unlabelP p lv = do
   taintP p $! labelOf lv
   return $! unlabelTCB lv
@@ -126,8 +126,8 @@ unlabelP p lv = do
 -- @'canFlowToP' p l ('labelOf' lv) && 'canFlowToP' p ('labelOf' lv) l@
 --
 -- does not hold.
-relabelLabeledP :: (MonadLIO l m, Priv l p)
-                => p -> l -> Labeled l a -> m (Labeled l a)
+relabelLabeledP :: (MonadLIO l m, PrivDesc l p)
+                => Priv p -> l -> Labeled l a -> m (Labeled l a)
 relabelLabeledP p newl lv = do
   let origl = labelOf lv
   unless (canFlowToP p newl origl &&
@@ -141,22 +141,22 @@ relabelLabeledP p newl lv = do
 -- the supplied label is not bounded then @taintLabeled@ will throw an
 -- exception (see 'guardAlloc').
 taintLabeled :: MonadLIO l m => l -> Labeled l a -> m (Labeled l a)
-taintLabeled = taintLabeledP NoPrivs
+taintLabeled = taintLabeledP noPrivs
 
 -- | Same as 'taintLabeled', but uses privileges when comparing the
 -- current label to the supplied label. In other words, this function
 -- can be used to lower the label of the labeled value by leveraging
 -- the supplied privileges.
-taintLabeledP :: (MonadLIO l m, Priv l p)
-              => p -> l -> Labeled l a -> m (Labeled l a)
+taintLabeledP :: (MonadLIO l m, PrivDesc l p)
+              => Priv p -> l -> Labeled l a -> m (Labeled l a)
 taintLabeledP p l lv = do
   guardAllocP p l
   return . labelTCB (l `upperBound` labelOf lv) $! unlabelTCB lv
 
 -- | Same as 'untaintLabeled' but uses the supplied privileges when
 -- downgrading the label of the labeled value.
-untaintLabeledP :: (MonadLIO l m, Priv l p)
-                => p -> l -> Labeled l a -> m (Labeled l a)
+untaintLabeledP :: (MonadLIO l m, PrivDesc l p)
+                => Priv p -> l -> Labeled l a -> m (Labeled l a)
 untaintLabeledP p target lv =
   relabelLabeledP p (partDowngradeP p (labelOf lv) target) lv
 
@@ -303,14 +303,14 @@ toLabeled :: Label l
                      --  inner-computations' observation
           -> LIO l a -- ^ Inner computation
           -> LIO l (Labeled l a)
-toLabeled = toLabeledP NoPrivs
+toLabeled = toLabeledP noPrivs
 {-# WARNING toLabeled "toLabeled is susceptible to termination attacks" #-}
 
 -- | Same as 'toLabeled' but allows one to supply a privilege object
 -- when comparing the initial and final label of the computation.
 --
-toLabeledP :: Priv l p
-           => p -> l -> LIO l a -> LIO l (Labeled l a)
+toLabeledP :: PrivDesc l p
+           => Priv p -> l -> LIO l a -> LIO l (Labeled l a)
 toLabeledP p l act = do
   -- Check that the supplied upper bound is bounded
   guardAllocP p l
@@ -358,12 +358,12 @@ toLabeledP p l act = do
 -- to create a log message without affecting the current label.
 --
 discard :: Label l => l -> LIO l a -> LIO l ()
-discard = discardP NoPrivs
+discard = discardP noPrivs
 {-# WARNING discard "discard is susceptible to termination attacks" #-}
 
 -- | Same as 'discard', but uses privileges when comparing initial and
 -- final label of the computation.
-discardP :: Priv l p => p -> l -> LIO l a -> LIO l ()
+discardP :: PrivDesc l p => Priv p -> l -> LIO l a -> LIO l ()
 discardP p l act = void $ toLabeledP p l act
 {-# WARNING discardP "discardP is susceptible to termination attacks" #-}
 #endif

@@ -15,11 +15,10 @@ provided by "LIO.DCLabel.Privs".
 
 module LIO.DCLabel.Privs.TCB (
     DCPrivDesc
-  , DCPriv(..)
+  , DCPriv
   , allPrivTCB
   ) where
 
-import           Data.Typeable
 import           LIO.DCLabel.Core
 import           LIO.Privs
 import           LIO.Privs.TCB
@@ -32,14 +31,9 @@ type DCPrivDesc = Component
 -- | A privilege is a minted and protected privilege description
 -- ('DCPrivDesc') that may only be created by trusted code or
 -- delegated from an existing @DCPriv@.
-newtype DCPriv = DCPrivTCB { unDCPriv :: DCPrivDesc }
-  deriving (Eq, Show, Typeable)
-
-instance PrivTCB  DCPriv
-instance PrivDesc DCPriv DCPrivDesc where privDesc = unDCPriv
-instance MintTCB  DCPriv DCPrivDesc where mintTCB = DCPrivTCB
+type DCPriv = Priv DCPrivDesc
 
 -- | The all privilege corresponds to logical @False@
 allPrivTCB :: DCPriv
-allPrivTCB = mintTCB dcFalse
+allPrivTCB = MintTCB dcFalse
 

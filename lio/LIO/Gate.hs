@@ -55,9 +55,9 @@ gate = Gate
 -- provide the privilege description corresponding to the supplied
 -- privilege as \"proof\" without explicitly passing in the privilege.
 -- 
-callGate :: PrivDesc p d
-         => Gate d a -- ^ Gate
-         -> p        -- ^ Privilege used as proof-of-ownership
+callGate :: PrivDesc l p
+         => Gate p a -- ^ Gate
+         -> Priv p   -- ^ Privilege used as proof-of-ownership
          -> a
 callGate g = unGate g . privDesc
 

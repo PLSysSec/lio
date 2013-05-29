@@ -100,12 +100,12 @@ lFork :: Label l
       => l                -- ^ Label of result
       -> LIO l a          -- ^ Computation to execute in separate thread
       -> LIO l (LabeledResult l a) -- ^ Labeled result
-lFork = lForkP NoPrivs
+lFork = lForkP noPrivs
 
 -- | Same as 'lFork', but the supplied set of priviliges are accounted
 -- for when performing label comparisons.
-lForkP :: Priv l p
-       => p -> l -> LIO l a -> LIO l (LabeledResult l a)
+lForkP :: PrivDesc l p
+       => Priv p -> l -> LIO l a -> LIO l (LabeledResult l a)
 lForkP p l act = do
   -- Upperbound is between current label and clearance, asserted by
   -- 'newEmptyLMVarP', otherwise add: guardAllocP p l
@@ -142,10 +142,10 @@ lForkP p l act = do
 -- @lWait@. Similarly, if the thread reads values above the result label,
 -- an exception is thrown in place of the result.
 lWait :: MonadLIO l m => LabeledResult l a -> m a
-lWait = lWaitP NoPrivs
+lWait = lWaitP noPrivs
 
 -- | Same as 'lWait', but uses priviliges in label checks and raises.
-lWaitP :: (MonadLIO l m, Priv l p) => p -> LabeledResult l a -> m a
+lWaitP :: (MonadLIO l m, PrivDesc l p) => Priv p -> LabeledResult l a -> m a
 lWaitP p m = do
   v <- readLMVarP p $ lresResultTCB m
   -- kill thread:
@@ -156,10 +156,10 @@ lWaitP p m = do
 
 -- | Same as 'lWait', but does not block waiting for result.
 trylWait :: MonadLIO l m => LabeledResult l a -> m (Maybe a)
-trylWait = trylWaitP NoPrivs
+trylWait = trylWaitP noPrivs
 
 -- | Same as 'trylWait', but uses priviliges in label checks and raises.
-trylWaitP :: (MonadLIO l m, Priv l p) => p -> LabeledResult l a -> m (Maybe a)
+trylWaitP :: (MonadLIO l m, PrivDesc l p) => Priv p -> LabeledResult l a -> m (Maybe a)
 trylWaitP p m = do
   let mvar = lresResultTCB m
   mv <- tryTakeLMVarP p mvar
@@ -207,12 +207,12 @@ lBracket :: (MonadLIO l m)
           -> Int              -- ^ Duration of computation in microseconds
           -> LIO l a          -- ^ Computation to execute in separate thread
           -> m (Labeled l (Maybe a)) -- ^ Labeled result
-lBracket = lBracketP NoPrivs
+lBracket = lBracketP noPrivs
 
 -- | Same as 'lBracket', but uses privileges when forking the new
 -- thread.
-lBracketP :: (MonadLIO l m, Priv l p)
-           => p                -- ^ Privileges
+lBracketP :: (MonadLIO l m, PrivDesc l p)
+           => Priv p           -- ^ Privileges
            -> l                -- ^ Label of result
            -> Int              -- ^ Duration of computation in microseconds
            -> LIO l a          -- ^ Computation to execute in separate thread

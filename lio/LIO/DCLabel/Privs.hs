@@ -40,38 +40,38 @@ import           Data.Monoid
 import qualified Data.Set as Set
 
 import           LIO
-import           LIO.Privs.TCB (mintTCB)
+import           LIO.Privs.TCB
 import           LIO.DCLabel.Core
 import           LIO.DCLabel.Privs.TCB
 
 -- | Privileges can be combined using 'mappend'
-instance Monoid DCPriv where
-  mempty = noPriv
-  mappend p1 p2 = mintTCB . dcReduce $!
-                      privDesc p1 `dcAnd` privDesc p2
+instance Monoid DCPrivDesc where
+  mempty = dcTrue
+  mappend p1 p2 = dcReduce $! p1 `dcAnd` p2
 
-instance Priv DCLabel DCPriv where
-  canFlowToP p l1 l2 | pd == dcTrue = canFlowTo l1 l2
-                     | otherwise =
+instance PrivDesc DCLabel DCPrivDesc where
+  canFlowToP_desc pd l1 l2
+           | pd == dcTrue = canFlowTo l1 l2
+           | otherwise =
     let i1 = dcReduce $ dcIntegrity l1 `dcAnd` pd
         s2 = dcReduce $ dcSecrecy l2   `dcAnd` pd
     in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
-      where pd = privDesc p
-  partDowngradeP p la lg | p == noPriv     = la `upperBound` lg
-                         | p == allPrivTCB = lg
-                         | otherwise        = 
-    let sa  = dcSecrecy $ la
-        ia  = dcIntegrity la
-        sg  = dcSecrecy   lg
-        ig  = dcIntegrity lg
-        pd  = privDesc    p
-        sa' = dcFormula . Set.filter (f pd) $ unDCFormula sa
-        sr  = if isFalse sa 
-                then sa
-                else sa' `dcAnd` sg
-        ir  = (pd `dcAnd` ia) `dcOr` ig
-    in dcLabel sr ir
-      where f pd c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
+
+  partDowngradeP_desc pd la lg
+               | pd == mempty              = la `upperBound` lg
+               | pd == privDesc allPrivTCB = lg
+               | otherwise = 
+    let sec_a  = dcSecrecy $ la
+        int_a  = dcIntegrity la
+        sec_g  = dcSecrecy   lg
+        int_g  = dcIntegrity lg
+        sec_a' = dcFormula . Set.filter f $ unDCFormula sec_a
+        sec_res  = if isFalse sec_a
+                then sec_a
+                else sec_a' `dcAnd` sec_g
+        int_res  = (pd `dcAnd` int_a) `dcOr` int_g
+    in dcLabel sec_res int_res
+      where f c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
 
 --
 -- Helpers
@@ -80,7 +80,7 @@ instance Priv DCLabel DCPriv where
 -- | The empty privilege, or no privileges, corresponds to logical
 -- @True@.
 noPriv :: DCPriv
-noPriv = mintTCB dcTrue
+noPriv = MintTCB dcTrue
 
 -- | Given a privilege and a privilege description turn the privilege
 -- description into a privilege (i.e., mint). Such delegation succeeds
@@ -88,7 +88,7 @@ noPriv = mintTCB dcTrue
 dcDelegatePriv :: DCPriv -> DCPrivDesc -> Maybe DCPriv
 dcDelegatePriv p pd = let c  = privDesc $! p
                       in if c `dcImplies` pd
-                           then Just $! mintTCB pd
+                           then Just $! MintTCB pd
                            else Nothing
 
 -- | We say a piece of code having a privilege object (of type 'DCPriv')
@@ -98,3 +98,4 @@ dcDelegatePriv p pd = let c  = privDesc $! p
 -- function can be used to make such checks.
 dcOwns :: DCPrivDesc -> Clause -> Bool
 dcOwns pd c = pd `dcImplies` dcFormula (Set.singleton c)
+
