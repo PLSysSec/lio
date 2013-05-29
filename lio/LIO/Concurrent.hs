@@ -24,7 +24,6 @@ result of such a sub-computation.
 -}
 module LIO.Concurrent (
     LabeledResult
-  , ThreadId
   -- * Forking new threads
   , forkLIO, lForkP, lFork
   -- * Waiting on threads
@@ -60,12 +59,9 @@ import           LIO.Concurrent.LMVar.TCB (tryTakeLMVarTCB, putLMVarTCB)
 -- Fork
 --
 
--- | Execute an 'LIO' computation in a new lightweight thread. The
--- 'ThreadId' of the newly created thread is returned.
-forkLIO :: Label l => LIO l () -> LIO l ThreadId
-forkLIO act = do
-  s <- getLIOStateTCB
-  ioTCB . fmap ThreadIdTCB . forkIO . void $ tryLIO act s
+-- | Execute an 'LIO' computation in a new lightweight thread.
+forkLIO :: Label l => LIO l () -> LIO l ()
+forkLIO = void . forkLIOTCB
 
 
 -- | Labeled fork. @lFork@ allows one to invoke computations that
@@ -110,7 +106,7 @@ lForkP p l act = do
   -- Upperbound is between current label and clearance, asserted by
   -- 'newEmptyLMVarP', otherwise add: guardAllocP p l
   mv <- newEmptyLMVarP p l
-  (ThreadIdTCB tid) <- forkLIO $ do
+  tid <- forkLIOTCB $ do
     res      <- (Right `liftM` act) `catchTCB` (return . Left . taintError)
     endLabel <- getLabel
     putLMVarTCB mv $! 
@@ -230,3 +226,4 @@ lBracketP p l t act = do
             return . labelTCB l =<< case v of
               Just (Right x) -> return (Just x)
               _  -> return Nothing
+
