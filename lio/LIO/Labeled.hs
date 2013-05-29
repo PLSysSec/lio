@@ -34,7 +34,7 @@ module LIO.Labeled (
   , unlabel, unlabelP
   -- * Relabel values
   , relabelLabeledP
-  , taintLabeled, taintLabeledP , untaintLabeled, untaintLabeledP
+  , taintLabeled, taintLabeledP, untaintLabeledP
   -- * Labeled functor
   -- $functor
   , LabeledFunctor(..)
@@ -154,11 +154,6 @@ taintLabeledP :: (MonadLIO l m, Priv l p)
 taintLabeledP p l lv = do
   guardAllocP p l
   return . labelTCB (l `upperBound` labelOf lv) $! unlabelTCB lv
-
--- | Downgrades the label of a 'Labeled' as much as possible given the
--- current privilege.
-untaintLabeled :: MonadLIO l m => l -> Labeled l a -> m (Labeled l a)
-untaintLabeled = untaintLabeledP NoPrivs
 
 -- | Same as 'untaintLabeled' but uses the supplied privileges when
 -- downgrading the label of the labeled value.
