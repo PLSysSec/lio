@@ -144,8 +144,6 @@ lWait = lWaitP noPrivs
 lWaitP :: (MonadLIO l m, PrivDesc l p) => Priv p -> LabeledResult l a -> m a
 lWaitP p m = do
   v <- readLMVarP p $ lresResultTCB m
-  -- kill thread:
-  liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
   case v of
     Right x -> return x
     Left e  -> liftLIO $ unlabeledThrowTCB e
@@ -161,8 +159,6 @@ trylWaitP p m = do
   mv <- tryTakeLMVarP p mvar
   case mv of
     Just v -> do putLMVarP p mvar v
-                 -- kill thread:
-                 liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
                  case v of
                    Right x -> return $! Just x
                    Left e  -> liftLIO $ unlabeledThrowTCB e
