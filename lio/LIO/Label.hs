@@ -26,7 +26,7 @@ data will often just increase the current label to ensure that @L_r
 /clearance/ (accessible via the @getClearance@ function), that
 represents the highest value the current thread can raise its label
 to. The purpose of clearance is to enforce discretionary access
-control: you can set the clearance to a label @L_clear@ as to prevent
+control: you can set the clearance to a label @L_clear@ so as to prevent
 a piece of LIO code from accessing anything above @L_clear@.
 
 Conversely, it is only permissible to modify data labeled @L_w@ when
@@ -87,13 +87,13 @@ import Data.Typeable
 -- &#8849;).
 class (Eq l, Show l, Typeable l) => Label l where
   -- | Bottom, or minimum, element. It must be that for any label @L@, 
-  -- @'bottom' ``canFlowTo`` L@.
+  -- @bottom ``canFlowTo`` L@.
   bottom :: l
   -- | Top, or maximum, element. It must be that for any label @L@, 
-  -- @L ``canFlowTo`` 'top'@.
+  -- @L ``canFlowTo`` top@.
   top :: l
   -- | /Least/ upper bound, or join, of two labels. For any two labels
-  -- @L_1@ and @L_2@, such that @L_3 = L_1 ``lub`` L_2@, it must be that:
+  -- @L_1@ and @L_2@, if @L_3 = L_1 \`lub` L_2@, it must be that:
   --
   -- * @L_1 ``canFlowTo`` L_3@,
   --
@@ -105,7 +105,7 @@ class (Eq l, Show l, Typeable l) => Label l where
   --   such element.
   lub :: l -> l -> l
   -- | /Greatest/ lower bound, or meet, of two labels. For any two labels
-  -- @L_1@ and @L_2@, such that @L_3 = L_1 ``glb`` L_2@, it must be that:
+  -- @L_1@ and @L_2@, if @L_3 = L_1 \`glb` L_2@, it must be that:
   --
   -- * @L_3 ``canFlowTo`` L_1@,
   --
@@ -117,18 +117,18 @@ class (Eq l, Show l, Typeable l) => Label l where
   --   such element.
   glb :: l -> l -> l
   -- | Can-flow-to relation. An entity labeled @L_1@ should be allowed
-  -- to affect an entity @L_2@ only if @L_1 ``canFlowTo`` L_2@. This
+  -- to affect an entity @L_2@ only if @L_1 \`canFlowTo` L_2@. This
   -- relation on labels is at least a partial order (see
   -- <https://en.wikipedia.org/wiki/Partially_ordered_set>), and must
   -- satisfy the following rules:
   --
-  -- * Reflexivity: @L_1 ``canFlowTo`` L_1@ for any @L_1@.
+  -- * Reflexivity: @L_1 \`canFlowTo` L_1@ for any @L_1@.
   --
-  -- * Antisymmetry: If @L_1 ``canFlowTo`` L_2@ and
-  --   @L_2 ``canFlowTo`` L_1@ then @L_1 = L_2@.
+  -- * Antisymmetry: If @L_1 \`canFlowTo` L_2@ and
+  --   @L_2 \`canFlowTo` L_1@ then @L_1 = L_2@.
   --
-  -- * Transitivity: If @L_1 ``canFlowTo`` L_2@ and
-  --   @L_2 ``canFlowTo`` L_3@ then @L_1 ``canFlowTo`` L_3@.
+  -- * Transitivity: If @L_1 \`canFlowTo` L_2@ and
+  --   @L_2 \`canFlowTo` L_3@ then @L_1 \`canFlowTo` L_3@.
   canFlowTo :: l -> l -> Bool
 
 -- | A more meaningful name for 'lub'. Note that since the name

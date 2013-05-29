@@ -1,17 +1,18 @@
 {-# LANGUAGE Unsafe #-}
 {- |
 
-This module implements the core of labeled 'IORef's in the 'LIO ad.
-to "Data.IORef", but the operations take place in the 'LIO' monad.  The
-types and functions exported by this module are strictly TCB and do
-not perform any information flow checks. The external, safe interface
-is provided and documented in "LIO.LIORef".
+This module implements the core of labeled 'IORef's.  The functions
+are analogous to "Data.IORef", but the operations take place in the
+'LIO' monad.  The types and functions exported by this module are
+strictly TCB and do not perform any information flow checks. The
+external, safe interface is provided and documented in "LIO.LIORef".
 
 
 Different from many labeled objects (e.g., files or MVars), references
 are uni-directional. This means that reading from a reference can be
 done without being able to write to it; and writing to a refernece can
-be done without raising the current label, as if also performing a read.
+be done without raising the current label (i.e., without also
+performing an implicit read).
 
 -}
 module LIO.LIORef.TCB (

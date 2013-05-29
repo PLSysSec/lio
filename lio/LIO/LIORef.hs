@@ -7,7 +7,7 @@
 Mutable reference in the 'LIO' monad. As with other objects in LIO,
 mutable references have an associated label that is used to impose
 restrictions on its operations. In fact, labeled references
-('LIORef's) are solely labeled 'IORef's with read and write access
+('LIORef's) are simply labeled 'IORef's with read and write access
 restricted according to the label. This module is analogous to
 "Data.IORef", but the operations take place in the 'LIO' monad.
 

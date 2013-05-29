@@ -145,7 +145,7 @@ catchTCB act handler = do
 -- | Lifts an 'IO' computation into the 'LIO' monad.  Note that
 -- exceptions thrown within the 'IO' computation cannot directly be
 -- caught within the 'LIO' computation.  Thus, you will generally want to
--- use 'rtioTCB' exported by "LIO.Exception.TCB" instead of 'ioTCB'.
+-- use 'rethrowIoTCB'.
 ioTCB :: Label l => IO a -> LIO l a
 ioTCB = LIOTCB . lift
 

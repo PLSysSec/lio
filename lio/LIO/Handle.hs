@@ -8,7 +8,7 @@
 
 This module abstracts the basic file 'Handle' methods provided by the
 system library, and provides a 'LabeledHandle' type that can be
-manipulated from within the 'LIO' Monad. A 'LabeledHandle' is imply a
+manipulated from within the 'LIO' Monad. A 'LabeledHandle' is simply a
 file 'Handle' with an associated label that is used to track and
 control the information flowing from and to the file. The API exposed
 by this module is analogous to "System.IO", and the functions mainly

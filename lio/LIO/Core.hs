@@ -24,7 +24,7 @@ a \"top-secret\" thread (see "LIO.Concurrent") then the current label
 will be at least \"top-secret\". The role of the current label is
 two-fold. First, the current label protects all the data in scope --
 it is the label associated with any /unlabeled/ data. For example, the
-current label is the label on contants such as @3@ or @\"tis a
+current label is the label on constants such as @3@ or @\"tis a
 string\"@. More interestingly, consider reading a \"secret\" file:
 
 > bs <- readFile "/secret/file.txt"

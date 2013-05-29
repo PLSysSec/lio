@@ -171,12 +171,12 @@ Making 'Labeled' an instance of 'Functor' is problematic because:
 2. 'LIO' is polymorphic in the label type and thus 'fmap' would is
    susceptible to /refinement attacks/. Superficially if the label type
    contains an integrity component (see for example "LIO.DCLabel")
-   then @fmap (\ -> 3) lv@ would produce a high-integrity labeled @3@
+   then @fmap (const 3) lv@ would produce a high-integrity labeled @3@
    if @lv@ is a high-integrity labeled value without any any authority
    or /endorsement/.
 
-As a result, we provide a class 'LabeledFunctor' that export 'lFmap'
-(labeled 'lFmap') that addressed the above issues. Firstly, each newly
+As a result, we provide a class 'LabeledFunctor' that exports 'lFmap'
+(labeled 'fmap') that addressed the above issues. Firstly, each newly
 created value is in the 'LIO' monad and secondly each label format
 implementation must produce their own definition of 'lFmap' such that
 the end label protects the computation result accordingly.
