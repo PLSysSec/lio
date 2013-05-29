@@ -21,7 +21,7 @@ import LIO.DCLabel
 import LIO.DCLabel.Privs.TCB (allPrivTCB)
 import LIO.LIORef
 import LIO.LIORef.TCB
-import LIO.Privs.TCB (mintTCB)
+import LIO.Privs.TCB
 import LIO.TCB
 
 import Data.Set hiding (map)
@@ -426,8 +426,8 @@ prop_guard_raises_label act = monadicDC $ do
 callGate_correct :: Property
 callGate_correct = forAll arbitrary $ \(d1 :: DCPrivDesc) ->
                    forAll arbitrary $ \(d2 :: DCPrivDesc) ->
-  let p1 = mintTCB d1
-      p2 = mintTCB d2
+  let p1 = MintTCB d1
+      p2 = MintTCB d2
       f = gate $ \d -> if d == privDesc p1 then True else False
   in p1 /= p2 ==> callGate f p1 && (not $ callGate f p2)
 
