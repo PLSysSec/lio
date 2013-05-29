@@ -118,6 +118,3 @@ Library
     LIO.DCLabel.Privs.TCB
     LIO.DCLabel.Serialize
     LIO.DCLabel.DSL
-    -- * File system
-    LIO.Handle
-    LIO.FS.TCB
