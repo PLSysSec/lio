@@ -24,7 +24,7 @@ result of such a sub-computation.
 -}
 module LIO.Concurrent (
     LabeledResult
-  , ThreadId, myThreadId
+  , ThreadId
   -- * Forking new threads
   , forkLIO, lForkP, lFork
   -- * Waiting on threads
@@ -38,7 +38,7 @@ module LIO.Concurrent (
 
 
 import           Control.Monad
-import           Control.Concurrent hiding ( myThreadId, threadDelay )
+import           Control.Concurrent hiding ( threadDelay, ThreadId )
 import qualified Control.Concurrent as C
 import           Control.Exception ( toException
                                    , Exception
@@ -56,10 +56,6 @@ import           LIO.Concurrent.LMVar
 import           LIO.Concurrent.LMVar.TCB (tryTakeLMVarTCB, putLMVarTCB)
 
 
--- | Get the 'ThreadId' of the calling thread.
-myThreadId :: MonadLIO l m => m ThreadId
-myThreadId = liftLIO $ ioTCB C.myThreadId
-
 --
 -- Fork
 --
@@ -69,7 +65,7 @@ myThreadId = liftLIO $ ioTCB C.myThreadId
 forkLIO :: Label l => LIO l () -> LIO l ThreadId
 forkLIO act = do
   s <- getLIOStateTCB
-  ioTCB . forkIO . void $ tryLIO act s
+  ioTCB . fmap ThreadIdTCB . forkIO . void $ tryLIO act s
 
 
 -- | Labeled fork. @lFork@ allows one to invoke computations that
@@ -114,7 +110,7 @@ lForkP p l act = do
   -- Upperbound is between current label and clearance, asserted by
   -- 'newEmptyLMVarP', otherwise add: guardAllocP p l
   mv <- newEmptyLMVarP p l
-  tid <- forkLIO $ do
+  (ThreadIdTCB tid) <- forkLIO $ do
     res      <- (Right `liftM` act) `catchTCB` (return . Left . taintError)
     endLabel <- getLabel
     putLMVarTCB mv $! 
