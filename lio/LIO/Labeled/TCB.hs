@@ -27,7 +27,7 @@ import           LIO.TCB
 -- of a 'Labeled' value is usually just protected by the current
 -- label. (Of course if you have a nested labeled value then the label
 -- on the inner labeled value's label is the outer label.)
-data Labeled l t = LabeledTCB { labelOfLabeled :: !l
+data Labeled l t = LabeledTCB { labelOfLabeledTCB :: !l
                               -- ^ Label of 'Labeled' valued
                               , unlabelTCB     :: !t 
                               -- ^ Extracts the value from an

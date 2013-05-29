@@ -59,7 +59,7 @@ import qualified Control.Exception as E
 
 -- | Returns label of a 'Labeled' type.
 instance LabelOf Labeled where
-  labelOf = labelOfLabeled
+  labelOf = labelOfLabeledTCB
 
 --
 -- Label values
