@@ -12,7 +12,11 @@ import Data.Monoid
 
 import LIO.Label
 
-newtype Priv a = MintTCB a
+newtype Priv a = MintTCB a deriving (Show, Eq)
+
+instance Monoid p => Monoid (Priv p) where
+  mempty = MintTCB mempty
+  mappend (MintTCB m1) (MintTCB m2) = MintTCB $ m1 `mappend` m2
 
 privDesc :: Priv a -> a
 privDesc (MintTCB a) = a
@@ -21,7 +25,7 @@ privDesc (MintTCB a) = a
 -- ('canFlowToP') on labels using privileges. Additionally, it defines
 -- 'partDowngradeP' which is used to downgrage a label up to a limit,
 -- given a set of privilege.
-class (Label l, Monoid p) => PrivDesc l p where
+class (Label l) => PrivDesc l p where
     -- | The \"can-flow-to given privileges\" pre-order used to compare
     -- two labels in the presence of privileges.  If @'canFlowToP' p L_1
     -- L_2@ holds, then privileges @p@ are sufficient to downgrade data
