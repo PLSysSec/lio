@@ -47,7 +47,6 @@ import           Control.Exception
 
 import           LIO
 import           LIO.LIORef
-import           LIO.Labeled.TCB
 
 import           LIO.DCLabel.Core
 import           LIO.DCLabel.Privs
@@ -64,10 +63,6 @@ type DCLabeledException = LabeledException DCLabel
 
 -- | DC 'Labeled' values.
 type DCLabeled = Labeled DCLabel
-
-instance LabeledFunctor DCLabel where
-  lFmap lv f = let l = labelOf lv `upperBound` dcPub
-               in label l $ f (unlabelTCB lv)
 
 -- | DC Labeled 'LIORef's.
 type DCRef = LIORef DCLabel

@@ -34,10 +34,8 @@ module LIO.Labeled (
   , unlabel, unlabelP
   -- * Relabel values
   , relabelLabeledP
-  , taintLabeled, taintLabeledP, untaintLabeledP
-  -- * Labeled functor
-  -- $functor
-  , LabeledFunctor(..)
+  , taintLabeled, taintLabeledP , untaintLabeledP
+  , lFmap
 #ifdef TO_LABELED
   -- * Executing sensitive computation
   -- $toLabeled
@@ -185,14 +183,19 @@ the end label protects the computation result accordingly.
 
 -}
 
--- | IFC-aware functor instance. Since certain label formats may contain
+-- | TODO(alevy): fix docs
+-- IFC-aware functor instance. Since certain label formats may contain
 -- integrity information, this is provided as a class rather than a
 -- function. Such label formats will likely wish to drop endorsements in
 -- the new labeled valued.
-class Label l => LabeledFunctor l where
-  -- | 'fmap'-like funciton that is aware of the current label and
-  -- clearance.
-  lFmap :: MonadLIO l m => Labeled l a -> (a -> b) -> m (Labeled l b)
+lFmap :: MonadLIO l m => Labeled l a -> (a -> b) -> m (Labeled l b)
+lFmap lv f = do
+  lc <- getLabel
+  -- Result label is joined with current label
+  let lres = labelOf lv `lub` lc
+  -- `label` checks for clearance violation then labels
+  label lres $ f (unlabelTCB lv)
+
 
 #ifdef TO_LABELED
 
