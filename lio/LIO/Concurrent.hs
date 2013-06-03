@@ -137,23 +137,23 @@ lForkP p l act = do
 -- example if it violates clearance), the exception is rethrown by
 -- @lWait@. Similarly, if the thread reads values above the result label,
 -- an exception is thrown in place of the result.
-lWait :: MonadLIO l m => LabeledResult l a -> m a
+lWait :: Label l => LabeledResult l a -> LIO l a
 lWait = lWaitP noPrivs
 
 -- | Same as 'lWait', but uses priviliges in label checks and raises.
-lWaitP :: (MonadLIO l m, PrivDesc l p) => Priv p -> LabeledResult l a -> m a
+lWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l a
 lWaitP p m = do
   v <- readLMVarP p $ lresResultTCB m
   case v of
     Right x -> return x
-    Left e  -> liftLIO $ unlabeledThrowTCB e
+    Left e  -> unlabeledThrowTCB e
 
 -- | Same as 'lWait', but does not block waiting for result.
-trylWait :: MonadLIO l m => LabeledResult l a -> m (Maybe a)
+trylWait :: Label l => LabeledResult l a -> LIO l (Maybe a)
 trylWait = trylWaitP noPrivs
 
 -- | Same as 'trylWait', but uses priviliges in label checks and raises.
-trylWaitP :: (MonadLIO l m, PrivDesc l p) => Priv p -> LabeledResult l a -> m (Maybe a)
+trylWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l (Maybe a)
 trylWaitP p m = do
   let mvar = lresResultTCB m
   mv <- tryTakeLMVarP p mvar
@@ -161,13 +161,13 @@ trylWaitP p m = do
     Just v -> do putLMVarP p mvar v
                  case v of
                    Right x -> return $! Just x
-                   Left e  -> liftLIO $ unlabeledThrowTCB e
+                   Left e  -> unlabeledThrowTCB e
     _ -> return Nothing
 
 
 -- | Suspend current thread for a given number of microseconds.
-threadDelay :: MonadLIO l m => Int -> m ()
-threadDelay = liftLIO . ioTCB . C.threadDelay
+threadDelay :: Label l => Int -> LIO l ()
+threadDelay = ioTCB . C.threadDelay
 
 --
 -- Forcing computations
@@ -194,30 +194,30 @@ threadDelay = liftLIO . ioTCB . C.threadDelay
 -- @lBracket@ in part because it is a more descriptive name and to
 -- avoid confusion with the previous @toLabeled@ where time was not 
 -- considered.
-lBracket :: (MonadLIO l m)
+lBracket :: Label l
           => l                -- ^ Label of result
           -> Int              -- ^ Duration of computation in microseconds
           -> LIO l a          -- ^ Computation to execute in separate thread
-          -> m (Labeled l (Maybe a)) -- ^ Labeled result
+          -> LIO l (Labeled l (Maybe a)) -- ^ Labeled result
 lBracket = lBracketP noPrivs
 
 -- | Same as 'lBracket', but uses privileges when forking the new
 -- thread.
-lBracketP :: (MonadLIO l m, PrivDesc l p)
+lBracketP :: PrivDesc l p
            => Priv p           -- ^ Privileges
            -> l                -- ^ Label of result
            -> Int              -- ^ Duration of computation in microseconds
            -> LIO l a          -- ^ Computation to execute in separate thread
-           -> m (Labeled l (Maybe a)) -- ^ Labeled result
+           -> LIO l (Labeled l (Maybe a)) -- ^ Labeled result
 lBracketP p l t act = do
-  f <- liftLIO $ lForkP p l act
+  f <- lForkP p l act
   threadDelay t
   force f
     where force m = do
             let mv = lresResultTCB m
             -- check to see if it wrote to MVar:
             -- kill thread:
-            liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
+            ioTCB . killThread . lresThreadIdTCB $ m
             v <- tryTakeLMVarTCB mv
             return . labelTCB l =<< case v of
               Just (Right x) -> return (Just x)
