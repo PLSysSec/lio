@@ -16,6 +16,7 @@ import qualified Test.HUnit as HU
 
 import LIO.DCLabel
 import LIO
+import LIO.Concurrent.TCB
 import LIO.Labeled.TCB (labelTCB)
 import LIO.DCLabel
 import LIO.DCLabel.Privs.TCB (allPrivTCB)
@@ -46,8 +47,8 @@ import System.IO.Unsafe
 -- | Evaluate LIO computation with starting label bottom
 -- and clearance top
 doEval :: DC a -> IO a
-doEval act = evalLIO act $ LIOState { lioLabel = bottom
-                                    , lioClearance = top }
+doEval act = evalLIO act $ LIOState { lioLabel = dcBottom
+                                    , lioClearance = dcTop }
 
 monadicDC :: PropertyM DC a -> Property
 monadicDC (MkPropertyM m) =
