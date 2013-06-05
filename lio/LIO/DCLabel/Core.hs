@@ -206,6 +206,13 @@ dcPub :: DCLabel
 dcPub = DCLabel { dcSecrecy = dcTrue, dcIntegrity = dcTrue }
 
 --
+-- Bounded by \< True, False \> and \< False, True \>
+--
+instance Bounded DCLabel where
+  minBound = dcBottom
+  maxBound = dcTop
+
+--
 -- Lattice operations
 --
 
