@@ -50,18 +50,18 @@ instance Monoid DCPrivDesc where
   mappend p1 p2 = dcReduce $! p1 `dcAnd` p2
 
 instance PrivDesc DCLabel DCPrivDesc where
-  canFlowToP_desc pd l1 l2
+  canFlowToPrivDesc pd l1 l2
            | pd == dcTrue = canFlowTo l1 l2
            | otherwise =
     let i1 = dcReduce $ dcIntegrity l1 `dcAnd` pd
         s2 = dcReduce $ dcSecrecy l2   `dcAnd` pd
     in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
 
-  partDowngradeP_desc pd la lg
+  partDowngradePrivDesc pd la lg
                | pd == mempty              = la `upperBound` lg
                | pd == privDesc allPrivTCB = lg
                | otherwise = 
-    let sec_a  = dcSecrecy $ la
+    let sec_a  = dcSecrecy la
         int_a  = dcIntegrity la
         sec_g  = dcSecrecy   lg
         int_g  = dcIntegrity lg

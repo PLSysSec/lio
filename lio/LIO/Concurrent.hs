@@ -29,7 +29,6 @@ module LIO.Concurrent (
   -- * Waiting on threads
   , lWaitP, lWait
   , trylWaitP, trylWait
-  , threadDelay
   -- * Forcing computations (EXPERIMENTAL)
   , AsyncException(..)
   , lBracket, lBracketP
@@ -37,8 +36,7 @@ module LIO.Concurrent (
 
 
 import           Control.Monad
-import           Control.Concurrent hiding ( threadDelay, ThreadId )
-import qualified Control.Concurrent as C
+import           Control.Concurrent hiding ( threadDelay )
 import           Control.Exception ( toException
                                    , Exception
                                    , AsyncException(..))
@@ -164,10 +162,6 @@ trylWaitP p m = do
                    Left e  -> unlabeledThrowTCB e
     _ -> return Nothing
 
-
--- | Suspend current thread for a given number of microseconds.
-threadDelay :: Label l => Int -> LIO l ()
-threadDelay = ioTCB . C.threadDelay
 
 --
 -- Forcing computations

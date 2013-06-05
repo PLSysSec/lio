@@ -33,8 +33,8 @@ class (Label l) => PrivDesc l p where
     -- @'canFlowToP' p L_1 L_2@ for all @p@, but for some labels and
     -- privileges, 'canFlowToP' will hold even where 'canFlowTo' does
     -- not.
-    canFlowToP_desc :: p -> l -> l -> Bool
-    canFlowToP_desc p a b = partDowngradeP_desc p a b `canFlowTo` b
+    canFlowToPrivDesc :: p -> l -> l -> Bool
+    canFlowToPrivDesc p a b = partDowngradePrivDesc p a b `canFlowTo` b
 
     -- | Roughly speaking, @L_r = partDowngradeP p L L_g@ computes how
     -- close one can come to downgrading data labeled @L@ to the goal label
@@ -55,14 +55,16 @@ class (Label l) => PrivDesc l p where
     -- goal is to use privileges @p@ to avoid changing the label at all),
     -- and then compute @L_r@ based on the label of data the code is
     -- about to observe. 
-    partDowngradeP_desc :: p  -- ^ Privileges
+    partDowngradePrivDesc :: p  -- ^ Privileges
                    -> l  -- ^ Label from which data must flow
                    -> l  -- ^ Goal label
                    -> l  -- ^ Result
 
+-- | TODO(dm): document
 canFlowToP :: PrivDesc l p => Priv p -> l -> l -> Bool
-canFlowToP priv = canFlowToP_desc (privDesc priv)
+canFlowToP priv = canFlowToPrivDesc (privDesc priv)
 
+-- | TODO(dm): document
 partDowngradeP :: PrivDesc l p => Priv p -> l -> l -> l
-partDowngradeP priv = partDowngradeP_desc (privDesc priv)
+partDowngradeP priv = partDowngradePrivDesc (privDesc priv)
 

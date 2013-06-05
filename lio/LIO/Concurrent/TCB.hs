@@ -10,6 +10,7 @@ of the concurrency abstractions of LIO.
 
 module LIO.Concurrent.TCB (
     LabeledResult(..), forkLIOTCB
+  , threadDelay
   ) where
 
 import Control.Monad
@@ -17,7 +18,8 @@ import LIO.Label
 import LIO.Core
 import LIO.Concurrent.LMVar
 import LIO.TCB
-import Control.Concurrent
+import Control.Concurrent hiding (threadDelay)
+import qualified Control.Concurrent as C
 
 -- | Execute an 'LIO' computation in a new lightweight thread. The
 -- 'ThreadId' of the newly created thread is returned.
@@ -40,4 +42,8 @@ data LabeledResult l a = LabeledResultTCB {
 
 instance LabelOf LabeledResult where
   labelOf = labelOf . lresResultTCB
+
+-- | Suspend current thread for a given number of microseconds.
+threadDelay :: Label l => Int -> LIO l ()
+threadDelay = ioTCB . C.threadDelay
 

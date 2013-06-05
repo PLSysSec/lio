@@ -96,7 +96,8 @@ type DCState = LIOState DCLabel
 -- | Default, starting state for a 'DC' computation. The current label
 -- is public (i.e., 'dcPub') and the current clearance is 'top'.
 defaultState :: DCState
-defaultState = LIOState { lioLabel = dcPub, lioClearance = top }
+defaultState = LIOState { lioLabel = dcPub
+                        , lioClearance = dcTop }
 
 -- | The monad for LIO computations using 'DCLabel' as the label.
 type DC = LIO DCLabel

@@ -86,12 +86,6 @@ import Data.Typeable
 -- can-flow-to partial-order 'canFlowTo' (in literature, written as
 -- &#8849;).
 class (Eq l, Show l, Typeable l) => Label l where
-  -- | Bottom, or minimum, element. It must be that for any label @L@, 
-  -- @bottom ``canFlowTo`` L@.
-  bottom :: l
-  -- | Top, or maximum, element. It must be that for any label @L@, 
-  -- @L ``canFlowTo`` top@.
-  top :: l
   -- | /Least/ upper bound, or join, of two labels. For any two labels
   -- @L_1@ and @L_2@, if @L_3 = L_1 \`lub` L_2@, it must be that:
   --

@@ -1,12 +1,12 @@
 Name:           lio-handle
-Version:        0.9.2.2
+Version:        0.0.0.1
 Cabal-Version:  >= 1.8
 Build-type:     Simple
 License:        GPL
 License-File:   LICENSE
 Author:         Hails team
 Maintainer:	Hails team <hails at scs dot stanford dot edu>
-Synopsis:       Labeled IO Information Flow Control Library
+Synopsis:       Labeled File System interface for LIO
 Category:       Security
 Description:
   A file system interface for LIO

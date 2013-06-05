@@ -52,6 +52,6 @@ instance Monoid NoPrivs where
 -- | With lack of privileges, 'canFlowToP' is simply 'canFlowTo', and
 -- 'partDowngradeP' is the least 'upperBound'.
 instance Label l => PrivDesc l NoPrivs where
-  canFlowToP_desc _ l1 l2    = l1 `canFlowTo` l2
-  partDowngradeP_desc _ l lg = l `upperBound` lg
+  canFlowToPrivDesc _ l1 l2    = l1 `canFlowTo` l2
+  partDowngradePrivDesc _ l lg = l `upperBound` lg
 
