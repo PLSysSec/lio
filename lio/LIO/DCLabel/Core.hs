@@ -53,7 +53,8 @@ module LIO.DCLabel.Core (
   , dcTrue, dcFalse, dcFormula 
   , isTrue, isFalse
   -- * Labels
-  , DCLabel(..), dcLabel, dcLabelNoReduce, dcPub
+  , DCLabel(..), dcLabel, dcLabelNoReduce
+  , dcPub, dcTop, dcBottom
   -- * Internal
   , dcReduce, dcImplies
   , dcAnd, dcOr

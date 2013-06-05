@@ -23,7 +23,8 @@ module LIO.DCLabel (
   , Component, dcTrue, dcFalse, dcFormula
   , isTrue, isFalse
   -- ** Labels
-  , DCLabel, dcSecrecy, dcIntegrity, dcLabel, dcPub
+  , DCLabel, dcSecrecy, dcIntegrity, dcLabel
+  , dcPub, dcTop, dcBottom
   -- ** Privileges
   , module LIO.DCLabel.Privs
   -- ** DSL
@@ -119,3 +120,4 @@ tryDC act = tryLIO act defaultState
 -- | Similar to 'evalLIO', but catches all exceptions.
 paranoidDC :: DC a -> IO (Either SomeException (a, DCState))
 paranoidDC act = paranoidLIO act defaultState
+
