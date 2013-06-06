@@ -53,7 +53,8 @@ module LIO.DCLabel.Core (
   , dcTrue, dcFalse, dcFormula 
   , isTrue, isFalse
   -- * Labels
-  , DCLabel(..), dcLabel, dcLabelNoReduce, dcPub
+  , DCLabel(..), dcLabel, dcLabelNoReduce
+  , dcPub, dcTop, dcBottom
   -- * Internal
   , dcReduce, dcImplies
   , dcAnd, dcOr
@@ -186,6 +187,18 @@ dcLabelNoReduce = DCLabel
 
 
 
+-- | Element in the DCLabel lattice corresponding to the most secret
+-- and least trustworthy data.
+-- @dcTop = \< False, True \> @.
+dcTop :: DCLabel
+dcTop = dcLabel dcFalse dcTrue
+
+-- | Element in the DCLabel lattice corresponding to the least secret
+-- and most trustworthy data.
+-- @dcTop = \< True, False \> @.
+dcBottom :: DCLabel
+dcBottom = dcLabel dcTrue dcFalse
+
 -- | Element in the DCLabel lattice corresponding to public data.
 -- @dcPub = \< True, True \> @. This corresponds to data that is not
 -- secret nor trustworthy.
@@ -193,20 +206,17 @@ dcPub :: DCLabel
 dcPub = DCLabel { dcSecrecy = dcTrue, dcIntegrity = dcTrue }
 
 --
+-- Bounded by \< True, False \> and \< False, True \>
+--
+instance Bounded DCLabel where
+  minBound = dcBottom
+  maxBound = dcTop
+
+--
 -- Lattice operations
 --
 
 instance Label DCLabel where
-  -- | Minimal element of the DCLabel lattice, /bottom/ &#8869;, such
-  -- that @&#8869; &#8849; L@ for any label @L@.
-  -- Bottom is defined as: @ &#8868; = \< False, True \> @
-  bottom = dcLabel dcTrue dcFalse
-
-  -- | Maximum element of the DCLabel lattice, /top/ &#8868;,
-  -- such that @L &#8849; &#8868;@ for any label @L@.
-  -- Top is defined as: @ &#8868; = \< False, True \> @
-  top = DCLabel dcFalse dcTrue
-
   -- | Partial /can-flow-to/ relation on labels.
   canFlowTo l1 l2 = (dcSecrecy l2   `dcImplies` dcSecrecy l1) &&
                     (dcIntegrity l1 `dcImplies` dcIntegrity l2)
@@ -221,7 +231,6 @@ instance Label DCLabel where
   glb l1 l2 = DCLabel
     { dcSecrecy   = dcReduce $ dcSecrecy l1   `dcOr`  dcSecrecy l2
     , dcIntegrity = dcReduce $ dcIntegrity l1 `dcAnd` dcIntegrity l2 }
-
 
 --
 -- Helpers

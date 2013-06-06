@@ -7,7 +7,7 @@
 Mutable reference in the 'LIO' monad. As with other objects in LIO,
 mutable references have an associated label that is used to impose
 restrictions on its operations. In fact, labeled references
-('LIORef's) are solely labeled 'IORef's with read and write access
+('LIORef's) are simply labeled 'IORef's with read and write access
 restricted according to the label. This module is analogous to
 "Data.IORef", but the operations take place in the 'LIO' monad.
 
@@ -39,16 +39,16 @@ import           LIO.LIORef.TCB
 -- below the thread's current clearance and above the current label.
 -- If this is the case, the reference is built. Otherwise an exception
 -- will be thrown by the underlying 'guardAlloc' guard.
-newLIORef :: MonadLIO l m
+newLIORef :: Label l
           => l                  -- ^ Label of reference
           -> a                  -- ^ Initial value
-          -> m (LIORef l a) -- ^ Mutable reference
-newLIORef = newLIORefP NoPrivs
+          -> LIO l (LIORef l a) -- ^ Mutable reference
+newLIORef = newLIORefP noPrivs
 
 -- | Same as 'newLIORef' except @newLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
-newLIORefP :: (MonadLIO l m, Priv l p) => p -> l -> a -> m (LIORef l a)
+newLIORefP :: PrivDesc l p => Priv p -> l -> a -> LIO l (LIORef l a)
 newLIORefP p l a = do
   guardAllocP p l
   newLIORefTCB l a
@@ -62,12 +62,12 @@ newLIORefP p l a = do
 -- the current label is raised to the join of the current label and
 -- the reference label. To avoid failures (introduced by the 'taint'
 ---guard) use 'labelOf' to check that a read will succeed.
-readLIORef :: MonadLIO l m => LIORef l a -> m a
-readLIORef = readLIORefP NoPrivs
+readLIORef :: Label l => LIORef l a -> LIO l a
+readLIORef = readLIORefP noPrivs
 
 -- | Same as 'readLIORef' except @readLIORefP@ takes a privilege object
 -- which is used when the current label is raised.
-readLIORefP :: (MonadLIO l m, Priv l p) => p -> LIORef l a -> m a
+readLIORefP :: PrivDesc l p => Priv p -> LIORef l a -> LIO l a
 readLIORefP p lr = do
   taintP p $! labelOf lr
   readLIORefTCB lr
@@ -80,13 +80,13 @@ readLIORefP p lr = do
 -- the current label can-flow-to the label of the reference, and the
 -- label of the reference can-flow-to the current clearance. Otherwise,
 -- an exception is raised by the underlying 'guardAlloc' guard.
-writeLIORef :: MonadLIO l m => LIORef l a -> a -> m ()
-writeLIORef = writeLIORefP NoPrivs
+writeLIORef :: Label l => LIORef l a -> a -> LIO l ()
+writeLIORef = writeLIORefP noPrivs
 
 -- | Same as 'writeLIORef' except @writeLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
-writeLIORefP :: (MonadLIO l m, Priv l p) => p -> LIORef l a -> a -> m ()
+writeLIORefP :: PrivDesc l p => Priv p -> LIORef l a -> a -> LIO l ()
 writeLIORefP p lr a = do
   guardAllocP p $! labelOf lr 
   writeLIORefTCB lr a
@@ -107,13 +107,13 @@ modifyLIORef :: Label l
              =>  LIORef l a            -- ^ Labeled reference
              -> (a -> a)               -- ^ Modifier
              -> LIO l ()
-modifyLIORef = modifyLIORefP NoPrivs
+modifyLIORef = modifyLIORefP noPrivs
 
 -- | Same as 'modifyLIORef' except @modifyLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
-modifyLIORefP :: (MonadLIO l m, Priv l p)
-              =>  p -> LIORef l a -> (a -> a) -> m ()
+modifyLIORefP :: PrivDesc l p
+              =>  Priv p -> LIORef l a -> (a -> a) -> LIO l ()
 modifyLIORefP p lr f = do
   guardAllocP p $! labelOf lr 
   modifyLIORefTCB lr f
@@ -127,13 +127,14 @@ modifyLIORefP p lr f = do
 -- labels). These checks and label raise are done by 'guardWrite',
 -- which will raise an exception if any of the IFC conditions cannot
 -- be satisfied.
-atomicModifyLIORef :: MonadLIO l m => LIORef l a -> (a -> (a, b)) -> m b
-atomicModifyLIORef = atomicModifyLIORefP NoPrivs
+atomicModifyLIORef :: Label l => LIORef l a -> (a -> (a, b)) -> LIO l b
+atomicModifyLIORef = atomicModifyLIORefP noPrivs
 
 -- | Same as 'atomicModifyLIORef' except @atomicModifyLIORefP@ takes
 -- a set of privileges which are accounted for in label comparisons.
-atomicModifyLIORefP :: (MonadLIO l m, Priv l p)
-                    => p -> LIORef l a -> (a -> (a, b)) -> m b
+atomicModifyLIORefP :: PrivDesc l p
+                    => Priv p -> LIORef l a -> (a -> (a, b)) -> LIO l b
 atomicModifyLIORefP p lr f = do
   guardWriteP p $! labelOf lr 
   atomicModifyLIORefTCB lr f
+

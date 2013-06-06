@@ -24,13 +24,11 @@ result of such a sub-computation.
 -}
 module LIO.Concurrent (
     LabeledResult
-  , ThreadId, myThreadId
   -- * Forking new threads
   , forkLIO, lForkP, lFork
   -- * Waiting on threads
   , lWaitP, lWait
   , trylWaitP, trylWait
-  , threadDelay
   -- * Forcing computations (EXPERIMENTAL)
   , AsyncException(..)
   , lBracket, lBracketP
@@ -38,8 +36,7 @@ module LIO.Concurrent (
 
 
 import           Control.Monad
-import           Control.Concurrent hiding ( myThreadId, threadDelay )
-import qualified Control.Concurrent as C
+import           Control.Concurrent hiding ( threadDelay )
 import           Control.Exception ( toException
                                    , Exception
                                    , AsyncException(..))
@@ -56,20 +53,13 @@ import           LIO.Concurrent.LMVar
 import           LIO.Concurrent.LMVar.TCB (tryTakeLMVarTCB, putLMVarTCB)
 
 
--- | Get the 'ThreadId' of the calling thread.
-myThreadId :: MonadLIO l m => m ThreadId
-myThreadId = liftLIO $ ioTCB C.myThreadId
-
 --
 -- Fork
 --
 
--- | Execute an 'LIO' computation in a new lightweight thread. The
--- 'ThreadId' of the newly created thread is returned.
-forkLIO :: Label l => LIO l () -> LIO l ThreadId
-forkLIO act = do
-  s <- getLIOStateTCB
-  ioTCB . forkIO . void $ tryLIO act s
+-- | Execute an 'LIO' computation in a new lightweight thread.
+forkLIO :: Label l => LIO l () -> LIO l ()
+forkLIO = void . forkLIOTCB
 
 
 -- | Labeled fork. @lFork@ allows one to invoke computations that
@@ -104,17 +94,17 @@ lFork :: Label l
       => l                -- ^ Label of result
       -> LIO l a          -- ^ Computation to execute in separate thread
       -> LIO l (LabeledResult l a) -- ^ Labeled result
-lFork = lForkP NoPrivs
+lFork = lForkP noPrivs
 
 -- | Same as 'lFork', but the supplied set of priviliges are accounted
 -- for when performing label comparisons.
-lForkP :: Priv l p
-       => p -> l -> LIO l a -> LIO l (LabeledResult l a)
+lForkP :: PrivDesc l p
+       => Priv p -> l -> LIO l a -> LIO l (LabeledResult l a)
 lForkP p l act = do
   -- Upperbound is between current label and clearance, asserted by
   -- 'newEmptyLMVarP', otherwise add: guardAllocP p l
   mv <- newEmptyLMVarP p l
-  tid <- forkLIO $ do
+  tid <- forkLIOTCB $ do
     res      <- (Right `liftM` act) `catchTCB` (return . Left . taintError)
     endLabel <- getLabel
     putLMVarTCB mv $! 
@@ -145,41 +135,33 @@ lForkP p l act = do
 -- example if it violates clearance), the exception is rethrown by
 -- @lWait@. Similarly, if the thread reads values above the result label,
 -- an exception is thrown in place of the result.
-lWait :: MonadLIO l m => LabeledResult l a -> m a
-lWait = lWaitP NoPrivs
+lWait :: Label l => LabeledResult l a -> LIO l a
+lWait = lWaitP noPrivs
 
 -- | Same as 'lWait', but uses priviliges in label checks and raises.
-lWaitP :: (MonadLIO l m, Priv l p) => p -> LabeledResult l a -> m a
+lWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l a
 lWaitP p m = do
   v <- readLMVarP p $ lresResultTCB m
-  -- kill thread:
-  liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
   case v of
     Right x -> return x
-    Left e  -> liftLIO $ unlabeledThrowTCB e
+    Left e  -> unlabeledThrowTCB e
 
 -- | Same as 'lWait', but does not block waiting for result.
-trylWait :: MonadLIO l m => LabeledResult l a -> m (Maybe a)
-trylWait = trylWaitP NoPrivs
+trylWait :: Label l => LabeledResult l a -> LIO l (Maybe a)
+trylWait = trylWaitP noPrivs
 
 -- | Same as 'trylWait', but uses priviliges in label checks and raises.
-trylWaitP :: (MonadLIO l m, Priv l p) => p -> LabeledResult l a -> m (Maybe a)
+trylWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l (Maybe a)
 trylWaitP p m = do
   let mvar = lresResultTCB m
   mv <- tryTakeLMVarP p mvar
   case mv of
     Just v -> do putLMVarP p mvar v
-                 -- kill thread:
-                 liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
                  case v of
                    Right x -> return $! Just x
-                   Left e  -> liftLIO $ unlabeledThrowTCB e
+                   Left e  -> unlabeledThrowTCB e
     _ -> return Nothing
 
-
--- | Suspend current thread for a given number of microseconds.
-threadDelay :: MonadLIO l m => Int -> m ()
-threadDelay = liftLIO . ioTCB . C.threadDelay
 
 --
 -- Forcing computations
@@ -206,31 +188,32 @@ threadDelay = liftLIO . ioTCB . C.threadDelay
 -- @lBracket@ in part because it is a more descriptive name and to
 -- avoid confusion with the previous @toLabeled@ where time was not 
 -- considered.
-lBracket :: (MonadLIO l m)
+lBracket :: Label l
           => l                -- ^ Label of result
           -> Int              -- ^ Duration of computation in microseconds
           -> LIO l a          -- ^ Computation to execute in separate thread
-          -> m (Labeled l (Maybe a)) -- ^ Labeled result
-lBracket = lBracketP NoPrivs
+          -> LIO l (Labeled l (Maybe a)) -- ^ Labeled result
+lBracket = lBracketP noPrivs
 
 -- | Same as 'lBracket', but uses privileges when forking the new
 -- thread.
-lBracketP :: (MonadLIO l m, Priv l p)
-           => p                -- ^ Privileges
+lBracketP :: PrivDesc l p
+           => Priv p           -- ^ Privileges
            -> l                -- ^ Label of result
            -> Int              -- ^ Duration of computation in microseconds
            -> LIO l a          -- ^ Computation to execute in separate thread
-           -> m (Labeled l (Maybe a)) -- ^ Labeled result
+           -> LIO l (Labeled l (Maybe a)) -- ^ Labeled result
 lBracketP p l t act = do
-  f <- liftLIO $ lForkP p l act
+  f <- lForkP p l act
   threadDelay t
   force f
     where force m = do
             let mv = lresResultTCB m
             -- check to see if it wrote to MVar:
             -- kill thread:
-            liftLIO . ioTCB . killThread . lresThreadIdTCB $ m
+            ioTCB . killThread . lresThreadIdTCB $ m
             v <- tryTakeLMVarTCB mv
             return . labelTCB l =<< case v of
               Just (Right x) -> return (Just x)
               _  -> return Nothing
+

@@ -75,13 +75,13 @@ prop_dc_meet_glb l1 l2 = forAll (arbitrary :: Gen DCLabel) $ \l3' ->
 
 -- Check that the top is indeed indeed the highest element in the lattice
 prop_dc_top :: DCLabel -> Property
-prop_dc_top l1 = forAll (gen l1) $ \l -> l `canFlowTo` top
+prop_dc_top l1 = forAll (gen l1) $ \l -> l `canFlowTo` dcTop
     where gen :: DCLabel -> Gen DCLabel
           gen _ = arbitrary
 
 -- Check that the bottom is indeed indeed the lowest element in the lattice
 prop_dc_bottom :: DCLabel -> Property
-prop_dc_bottom _ = forAll (arbitrary :: Gen DCLabel) $ \l -> bottom `canFlowTo` l
+prop_dc_bottom _ = forAll (arbitrary :: Gen DCLabel) $ \l -> dcBottom `canFlowTo` l
 
 -- | Test serialization.
 prop_dc_serialize :: DCLabel -> Bool

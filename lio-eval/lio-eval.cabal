@@ -27,7 +27,7 @@ test-suite lio_test
    ,bytestring                 >= 0.9
    ,QuickCheck                 >= 2.3
    ,quickcheck-instances       >= 0.3.0
-   ,lio                        == 0.9.*
+   ,lio
    ,quickcheck-lio-instances   == 0.9.*
    ,HUnit                      >= 1.2.5
    ,test-framework             >= 0.6

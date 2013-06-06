@@ -1,57 +1,70 @@
 {-# LANGUAGE Unsafe #-}
-{-# LANGUAGE MultiParamTypeClasses,
-             FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
-{- | 
-
-This module exports the class 'PrivTCB' which all privilege types must
-be an instance of. This class is in the TCB since privileges can be
-used to bypass label restrictions and untrusted code should not be
-allowed to do do arbitrarily. See "LIO.Privs" for an additional
-description of privileges and their role within "LIO".
-
-In addition to 'PrivTCB' this module exports the class 'PrivDesc'
-which provides a function from privileges to /privilege descriptions/.
-A privilege description is a meaningful and safe interpretation of a
-coresponding privilege (note that the function must be one-to-on).
-Privilege descriptions are used in "LIO.Gate" as \"proof\" of
-privilege ownership.  Additionally, privilege descriptions can be used
-by TCB code to mint new privileges using the 'MintTCB' class.
-
--}
-
-module LIO.Privs.TCB ( 
-    PrivTCB
-  , PrivDesc(..)
-  , MintTCB(..)
+module LIO.Privs.TCB(
+  -- * Privilege descriptions
+    PrivDesc(..), canFlowToP, partDowngradeP
+  -- * Privileges
+  , Priv(..), privDesc
   ) where
 
--- | Zero-method class that imposes a restriction on what code
--- (namely trusted) can make a \"privilege type\".
-class PrivTCB p
+import Data.Monoid
 
--- | Class used to convert a privilege to a privilege description.  This
--- is particularly useful when one piece of code wishes to prove
--- ownership of certain privileges without granting the privilege.
--- NOTE: it (almost) always a security violation if the privilege is
--- also the privilege description.
---
--- Although this class is not part of the TCB there are some security
--- implications that should be considered when making a type an
--- instance of this class. Specifically, if the value constructor for
--- the privilege description type @d@ is exported then some
--- trusted code must be used when \"proving\" ownership of a certain
--- privilege. This is generally a good idea even if the constructor is
--- not made available, since code can (usually) cache such privilege 
--- descriptions. An alternative is to use phantom types to enforce a
--- linear-type-like behavior.
-class (PrivTCB p, Show d) => PrivDesc p d | p -> d, d -> p where
-  -- | Retrive privilege description from a privilege.
-  privDesc :: p -> d
+import LIO.Label
 
--- | The dual of 'PrivDesc'. This class provides @mintTCB@ which may
--- be used to convert, or /mint/, a privilege descriptions into a
--- privilege.  Of course, @mintTCB@ must be restricted to the TCB.
-class (PrivDesc p d) => MintTCB p d where
-  -- | Mint a new privilege values given a privilege description.
-  mintTCB :: d -> p
+newtype Priv a = MintTCB a deriving (Show, Eq)
+
+instance Monoid p => Monoid (Priv p) where
+  mempty = MintTCB mempty
+  mappend (MintTCB m1) (MintTCB m2) = MintTCB $ m1 `mappend` m2
+
+privDesc :: Priv a -> a
+privDesc (MintTCB a) = a
+
+-- | This class defines privileges and the more-permissive relation
+-- ('canFlowToP') on labels using privileges. Additionally, it defines
+-- 'partDowngradeP' which is used to downgrage a label up to a limit,
+-- given a set of privilege.
+class (Label l) => PrivDesc l p where
+    -- | The \"can-flow-to given privileges\" pre-order used to compare
+    -- two labels in the presence of privileges.  If @'canFlowToP' p L_1
+    -- L_2@ holds, then privileges @p@ are sufficient to downgrade data
+    -- from @L_1@ to @L_2@.  Note that @'canFlowTo' L_1 L_2@ implies
+    -- @'canFlowToP' p L_1 L_2@ for all @p@, but for some labels and
+    -- privileges, 'canFlowToP' will hold even where 'canFlowTo' does
+    -- not.
+    canFlowToPrivDesc :: p -> l -> l -> Bool
+    canFlowToPrivDesc p a b = partDowngradePrivDesc p a b `canFlowTo` b
+
+    -- | Roughly speaking, @L_r = partDowngradeP p L L_g@ computes how
+    -- close one can come to downgrading data labeled @L@ to the goal label
+    -- @L_g@, given privileges @p@.  When @p == 'NoPrivs'@, the resulting
+    -- label @L_r == L ``upperBound`` L_g@.  If @p@ contains /all/
+    -- possible privileges, then @L_r == L_g@.
+    --
+    -- More specifically, @L_r@ is the greatest lower bound of the
+    -- set of all labels @L_l@ satisfying:
+    --
+    --   1. @ L_g &#8849; L_l@, and
+    --
+    --   2. @ L &#8849;&#8346; L_l@.
+    --
+    -- Operationally, @partDowngradeP@ captures the minimum change required
+    -- to the current label when viewing data labeled @L_l@.  A common
+    -- pattern is to use the result of 'getLabel' as @L_g@ (i.e., the
+    -- goal is to use privileges @p@ to avoid changing the label at all),
+    -- and then compute @L_r@ based on the label of data the code is
+    -- about to observe. 
+    partDowngradePrivDesc :: p  -- ^ Privileges
+                   -> l  -- ^ Label from which data must flow
+                   -> l  -- ^ Goal label
+                   -> l  -- ^ Result
+
+-- | TODO(dm): document
+canFlowToP :: PrivDesc l p => Priv p -> l -> l -> Bool
+canFlowToP priv = canFlowToPrivDesc (privDesc priv)
+
+-- | TODO(dm): document
+partDowngradeP :: PrivDesc l p => Priv p -> l -> l -> l
+partDowngradeP priv = partDowngradePrivDesc (privDesc priv)
+

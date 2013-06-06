@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, FlexibleInstances #-}
 
 -- | Instances for "QuickCheck"\'s 'Arbitrary' class.
 module LIO.DCLabel.Instances () where
@@ -8,6 +8,7 @@ import Test.QuickCheck
 import Test.QuickCheck.Instances ()
 import LIO.DCLabel.Core
 import LIO.DCLabel.Privs.TCB
+import LIO.Privs.TCB
 import Data.Set hiding (map)
 import qualified Data.ByteString.Char8 as S8
 
@@ -32,4 +33,5 @@ instance Arbitrary DCLabel where
     return (dcLabel s i)
 
 instance Arbitrary DCPriv where
-  arbitrary = DCPrivTCB `liftM` arbitrary
+  arbitrary = MintTCB `liftM` arbitrary
+

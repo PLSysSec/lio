@@ -23,7 +23,8 @@ module LIO.DCLabel (
   , Component, dcTrue, dcFalse, dcFormula
   , isTrue, isFalse
   -- ** Labels
-  , DCLabel, dcSecrecy, dcIntegrity, dcLabel, dcPub
+  , DCLabel, dcSecrecy, dcIntegrity, dcLabel
+  , dcPub, dcTop, dcBottom
   -- ** Privileges
   , module LIO.DCLabel.Privs
   -- ** DSL
@@ -47,7 +48,6 @@ import           Control.Exception
 
 import           LIO
 import           LIO.LIORef
-import           LIO.Labeled.TCB
 
 import           LIO.DCLabel.Core
 import           LIO.DCLabel.Privs
@@ -64,10 +64,6 @@ type DCLabeledException = LabeledException DCLabel
 
 -- | DC 'Labeled' values.
 type DCLabeled = Labeled DCLabel
-
-instance LabeledFunctor DCLabel where
-  lFmap lv f = let l = labelOf lv `upperBound` dcPub
-               in label l $ f (unlabelTCB lv)
 
 -- | DC Labeled 'LIORef's.
 type DCRef = LIORef DCLabel
@@ -101,7 +97,8 @@ type DCState = LIOState DCLabel
 -- | Default, starting state for a 'DC' computation. The current label
 -- is public (i.e., 'dcPub') and the current clearance is 'top'.
 defaultState :: DCState
-defaultState = LIOState { lioLabel = dcPub, lioClearance = top }
+defaultState = LIOState { lioLabel = dcPub
+                        , lioClearance = dcTop }
 
 -- | The monad for LIO computations using 'DCLabel' as the label.
 type DC = LIO DCLabel
@@ -123,3 +120,4 @@ tryDC act = tryLIO act defaultState
 -- | Similar to 'evalLIO', but catches all exceptions.
 paranoidDC :: DC a -> IO (Either SomeException (a, DCState))
 paranoidDC act = paranoidLIO act defaultState
+
