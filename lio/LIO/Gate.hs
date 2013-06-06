@@ -39,8 +39,7 @@ newtype Gate d a = Gate { unGate :: d -> a }
 -- Note that because of currying type 'a' may itself be a function
 -- type and thus gates can take arguments in addition to the privilege
 -- descriptoin.
-gate :: PrivDesc p d
-     => (d -> a)  -- ^ Gate computation
+gate :: (d -> a)  -- ^ Gate computation
      -> Gate d a
 gate = Gate
 
@@ -55,9 +54,8 @@ gate = Gate
 -- provide the privilege description corresponding to the supplied
 -- privilege as \"proof\" without explicitly passing in the privilege.
 -- 
-callGate :: PrivDesc p d
-         => Gate d a -- ^ Gate
-         -> p        -- ^ Privilege used as proof-of-ownership
+callGate :: Gate p a -- ^ Gate
+         -> Priv p   -- ^ Privilege used as proof-of-ownership
          -> a
 callGate g = unGate g . privDesc
 

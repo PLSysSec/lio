@@ -4,11 +4,11 @@
 *~
 /Setup
 /dist
-/lio/dist
-/lio-eval/dist
-/quickcheck-lio-instances/dist
+/*/dist
 /doc
 /ls
 /ps
 /tmp
 /cabal-dev
+/*/.cabal-sandbox
+/*/cabal.sandbox.config
