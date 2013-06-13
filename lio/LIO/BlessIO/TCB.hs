@@ -50,13 +50,13 @@ guardIOPTCB p l io = guardWriteP p l >> rethrowIoTCB io
 
 class (Label l) => BlessIO l io lio | l io -> lio where
   -- | A version of 'blessTCB' that takes privileges.
-  blessPTCB :: (PrivDesc l p) => Priv p -> (a -> io) -> (Blessed l a -> lio)
+  blessPTCB :: (PrivDesc l p) => (a -> io) -> Priv p -> (Blessed l a -> lio)
 instance (Label l) => BlessIO l (IO r) (LIO l r) where
-  blessPTCB p io (BlessedTCB l a) = guardIOPTCB p l (io a)
+  blessPTCB io p (BlessedTCB l a) = guardIOPTCB p l (io a)
 
 #define BLESSIO(types, vals) \
 instance (Label l) => BlessIO l (types -> IO r) (types -> LIO l r) where \
-  blessPTCB p io (BlessedTCB l a) vals = guardIOPTCB p l (io a vals)
+  blessPTCB io p (BlessedTCB l a) vals = guardIOPTCB p l (io a vals)
 
 BLESSIO (b, b)
 BLESSIO (b -> c, b c)
@@ -78,4 +78,4 @@ BLESSIO (b -> c -> d -> e -> f -> g -> h -> i -> j, b c d e f g h i j)
 -- For example, if @io@ is @Int -> String -> IO ()@, then @lio@ must
 -- be @Int -> String -> LIO l ()@.
 blessTCB :: BlessIO l io lio => (a -> io) -> Blessed l a -> lio
-blessTCB = blessPTCB noPrivs
+blessTCB io = blessPTCB io noPrivs
