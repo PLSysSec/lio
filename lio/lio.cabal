@@ -115,4 +115,4 @@ Library
     LIO.DCLabel.Serialize
     LIO.DCLabel.DSL
     -- * Controlled access to IO functions
-    LIO.BlessIO.TCB
+    LIO.GuardIO.TCB
