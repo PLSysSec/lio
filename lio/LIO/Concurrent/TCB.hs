@@ -89,6 +89,10 @@ trylWaitP p (LabeledResultTCB _ rl _ st) =
             then throwLIO ResultExceedsLabel
             else return Nothing
 
+-- | A version of 'timedlWait' that takes privileges.  The privileges
+-- are used both to downgrade the result (if necessary), and to try
+-- catching any 'ResultExceedsLabel' before the timeout period (if
+-- possible).
 timedlWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> Int -> LIO l a
 timedlWaitP p lr@(LabeledResultTCB t _ mvb _) to = trylWaitP p lr >>= go
   where go (Just a) = return a

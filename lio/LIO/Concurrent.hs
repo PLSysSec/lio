@@ -30,7 +30,6 @@ module LIO.Concurrent (
   , lWaitP, lWait
   , trylWaitP, trylWait
   , timedlWaitP, timedlWait
-  , lBracketP, lBracket
   ) where
 
 
@@ -38,10 +37,7 @@ import Control.Monad
 
 import LIO.Concurrent.TCB
 import LIO.Core
-import LIO.Exception
 import LIO.Label
-import LIO.Labeled
-import LIO.Labeled.TCB
 import LIO.Privs
 import LIO.TCB
 
@@ -112,52 +108,12 @@ lWait = lWaitP noPrivs
 trylWait :: Label l => LabeledResult l a -> LIO l (Maybe a)
 trylWait = trylWaitP noPrivs
 
+-- | Like 'lWait', with two differences.  First, a timeout is
+-- specified and the thread is unconditionally killed after this
+-- timeout (if it has not yet returned a value).  Second, if the
+-- thread's result exceeds its label @timedWait@ and exceeds what the
+-- calling thread can observe, consumes the whole timeout and throws a
+-- 'ResultExceedsLabel' exception you can catch (i.e., it never raises
+-- the label above the clearance).
 timedlWait :: Label l => LabeledResult l a -> Int -> LIO l a
 timedlWait = timedlWaitP noPrivs
-
---
--- Forcing computations
---
-
-
--- | Though in most cases using a 'LabeledResult' is sufficient, in
--- certain scenarios it is desirable to produce a pure 'Labeled' value
--- that is the result of other potentially sensitive values. As such, we
--- provide @lBracket@.
--- 
--- @lBracket@ is like 'lFork', but rather than returning a
--- 'LabeledResult', it returns a 'Labeled' value. The key difference
--- between the two is that @lBracket@ takes an additional parameter
--- specifying the number of microseconds the inner computation will take.
--- As such, @lBracket@ will block for the specified duration and the
--- result of the inner computation be /forced/. That is, if the
--- computation terminated /cleanly/, i.e., it did not throw an
--- exception and it finished in the time specified, then 'Just' the
--- result is returned, otherwise 'Nothing' is returned.
---
--- Note that the original LIO (before version 0.9) included a similar
--- \"primitive\" called @toLabeled@. We have chosen to call this
--- @lBracket@ in part because it is a more descriptive name and to
--- avoid confusion with the previous @toLabeled@ where time was not 
--- considered.
-lBracket :: Label l
-          => l                -- ^ Label of result
-          -> Int              -- ^ Duration of computation in microseconds
-          -> LIO l a          -- ^ Computation to execute in separate thread
-          -> LIO l (Labeled l (Either SomeException a)) -- ^ Labeled result
-lBracket = lBracketP noPrivs
-
--- | Same as 'lBracket', but uses privileges when forking the new
--- thread.
-lBracketP :: PrivDesc l p
-           => Priv p           -- ^ Privileges
-           -> l                -- ^ Label of result
-           -> Int              -- ^ Duration of computation in microseconds
-           -> LIO l a          -- ^ Computation to execute in separate thread
-           -> LIO l (Labeled l (Either SomeException a)) -- ^ Labeled result
-lBracketP p l to act = do
-  lr <- lForkP p l act
-  s <- getLIOState
-  ea <- try $ timedlWaitP p lr to
-  putLIOStateTCB s
-  return $ labelTCB l ea

@@ -29,11 +29,12 @@ import           LIO.TCB
 -- on the inner labeled value's label is the outer label.)
 data Labeled l t = LabeledTCB { labelOfLabeledTCB :: !l
                               -- ^ Label of 'Labeled' valued
-                              , unlabelTCB     :: !t 
+                              , unlabelTCB :: t 
                               -- ^ Extracts the value from an
                               -- 'Labeled', discarding the label and any
                               -- protection.
                               } deriving Typeable
+-- Note: unlabelTCB cannot be strict if we want things like lFmap.
 
 -- | Returns label of a 'Labeled' type.
 instance LabelOf Labeled where
