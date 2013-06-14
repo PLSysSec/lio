@@ -53,5 +53,5 @@ instance Monoid NoPrivs where
 -- 'partDowngradeP' is the least 'upperBound'.
 instance Label l => PrivDesc l NoPrivs where
   canFlowToPrivDesc _ l1 l2    = l1 `canFlowTo` l2
-  partDowngradePrivDesc _ l lg = l `upperBound` lg
+  partDowngradePrivDesc _ l lg = l `lub` lg
 

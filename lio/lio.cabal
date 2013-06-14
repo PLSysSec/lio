@@ -1,5 +1,5 @@
 Name:           lio
-Version:        0.10.0.0
+Version:        0.91
 Cabal-Version:  >= 1.8
 Build-type:     Simple
 License:        GPL
@@ -64,24 +64,15 @@ Source-repository head
   Type:     git
   Location: ssh://anonymous@gitstar.com/scs/lio.git
 
-Flag toLabeled
-  Description:
-    Enable toLabeled primitive. This is NOT
-    termination-sensitive non-interferant so use with care.
-  Default: False
-
 Library
   Build-Depends:
-    base         >= 4.5     && < 5.0
-   ,binary       >= 0.5.0.0
-   ,transformers >= 0.2.2
-   ,containers   >= 0.4.2
-   ,bytestring   >= 0.9
+    base          >= 4.5     && < 5.0
+   ,binary        >= 0.5.0.0
+   ,transformers  >= 0.2.2
+   ,containers    >= 0.4.2
+   ,bytestring    >= 0.9
 
   GHC-options: -Wall -fno-warn-orphans
-
-  if flag(toLabeled)
-    CPP-options: -DTO_LABELED
 
   Exposed-modules:
     -- * Top-level exporter
@@ -90,6 +81,7 @@ Library
     LIO.Label
     -- * Core library
     LIO.Core
+    LIO.Exception
     LIO.TCB
     -- * Labeled values
     LIO.Labeled

@@ -32,10 +32,8 @@ module LIO.DCLabel (
   -- * Synonyms for "LIO"
   -- $dcMonad
   , DCState, defaultState
-  , DC, evalDC, runDC, tryDC, paranoidDC
+  , DC, evalDC, runDC, tryDC
   , MonadDC
-  -- ** Exceptions
-  , DCLabeledException
   -- ** Labeled values
   , DCLabeled
   -- ** Labeled references
@@ -58,9 +56,6 @@ import           LIO.DCLabel.Serialize ()
 -- LIO synonyms
 --
 
-
--- | DC Labeled exceptions.
-type DCLabeledException = LabeledException DCLabel
 
 -- | DC 'Labeled' values.
 type DCLabeled = Labeled DCLabel
@@ -114,10 +109,8 @@ runDC act = runLIO act defaultState
 
 -- | Similar to 'evalLIO', but catches any exceptions thrown by
 -- untrusted code with 'throwLIO'.
-tryDC :: DC a -> IO (Either DCLabeledException a, DCState)
-tryDC act = tryLIO act defaultState
-
--- | Similar to 'evalLIO', but catches all exceptions.
-paranoidDC :: DC a -> IO (Either SomeException (a, DCState))
-paranoidDC act = paranoidLIO act defaultState
-
+tryDC :: DC a -> IO (Either SomeException a, DCState)
+tryDC act = runDC act >>= tryit
+  where tryit (a, s) = do
+          ea <- try (evaluate a)
+          return (ea, s)

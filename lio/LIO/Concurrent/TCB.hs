@@ -9,24 +9,22 @@ of the concurrency abstractions of LIO.
 -}
 
 module LIO.Concurrent.TCB (
-    LabeledResult(..), forkLIOTCB
-  , threadDelay
+    LabeledResult(..), LResStatus(..), lForkP, lWaitP, trylWaitP, timedlWaitP
   ) where
 
-import Control.Monad
-import LIO.Label
-import LIO.Core
-import LIO.Concurrent.LMVar
-import LIO.TCB
-import Control.Concurrent hiding (threadDelay)
-import qualified Control.Concurrent as C
+import qualified Control.Concurrent as IO
+import qualified Control.Exception as IO
+import Data.IORef
 
--- | Execute an 'LIO' computation in a new lightweight thread. The
--- 'ThreadId' of the newly created thread is returned.
-forkLIOTCB :: Label l => LIO l () -> LIO l ThreadId
-forkLIOTCB act = do
-  s <- getLIOStateTCB
-  ioTCB . forkIO . void $ tryLIO act s
+import LIO.Core
+import LIO.Label
+import LIO.TCB
+import LIO.Privs
+
+data LResStatus l a = LResEmpty
+                    | LResLabelTooHigh !l
+                    | LResResult a
+                      deriving (Show)
 
 -- | A LabeledResult encapsulates a future result from a computation running
 -- in a thread. It holds the 'ThreadId' and an 'LMVar' where the result is
@@ -34,16 +32,71 @@ forkLIOTCB act = do
 -- 'lresResultTCB' (either with a value or exception), so waiting on the thread
 -- should ensure that a result is ready.
 data LabeledResult l a = LabeledResultTCB {
-    lresThreadIdTCB :: ThreadId
+    lresThreadIdTCB :: !IO.ThreadId
     -- ^ Thread executing the computation
-  , lresResultTCB :: LMVar l (Either (LabeledException l) a) 
-    -- ^ Plecement of computation result
+  , lresLabelTCB :: !l
+    -- ^ Label of the tresult
+  , lresBlockTCB :: !(IO.MVar ())
+  , lresStatusTCB :: !(IORef (LResStatus l a))
+    -- ^ Result (when it is ready), or the label at which the thread
+    -- terminated, if that label could not flow to 'lresLabelTCB'.
   }
 
 instance LabelOf LabeledResult where
-  labelOf = labelOf . lresResultTCB
+  labelOf = lresLabelTCB
 
--- | Suspend current thread for a given number of microseconds.
-threadDelay :: Label l => Int -> LIO l ()
-threadDelay = ioTCB . C.threadDelay
+-- | Same as 'lFork', but the supplied set of priviliges are accounted
+-- for when performing label comparisons.
+lForkP :: PrivDesc l p =>
+          Priv p -> l -> LIO l a -> LIO l (LabeledResult l a)
+lForkP p l lio = do
+  guardAllocP p l
+  mv <- ioTCB IO.newEmptyMVar
+  st <- ioTCB $ newIORef LResEmpty
+  s0 <- getLIOState
+  tid <- ioTCB $ IO.mask $ \unmask -> IO.forkIO $ do
+    sp <- newIORef s0
+    ea <- IO.try $ unmask $ unLIOTCB lio sp
+    LIOState lEnd _ <- readIORef sp
+    writeIORef st $ case ea of
+      _ | not (lEnd `canFlowTo` l) -> LResLabelTooHigh lEnd
+      Left e                       -> LResResult $ IO.throw $ makeCatchable e
+      Right a                      -> LResResult a
+    IO.putMVar mv ()
+  return $ LabeledResultTCB tid l mv st
 
+
+-- | Same as 'lWait', but uses priviliges in label checks and raises.
+lWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l a
+lWaitP p (LabeledResultTCB _ l mv st) = taintP p l >> go
+  where go = ioTCB (readIORef st) >>= check
+        check LResEmpty = ioTCB (IO.readMVar mv) >> go
+        check (LResResult a) = return $! a
+        check (LResLabelTooHigh lnew) = do
+          modifyLIOStateTCB $ \s -> s {
+            lioLabel = partDowngradeP p lnew (lioLabel s) }
+          throwLIO ResultExceedsLabel
+
+-- | Same as 'trylWait', but uses priviliges in label checks and raises.
+trylWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l (Maybe a)
+trylWaitP p (LabeledResultTCB _ rl _ st) =
+  taintP p rl >> ioTCB (readIORef st) >>= check
+  where check LResEmpty = return Nothing
+        check (LResResult a) = return . Just $! a
+        check (LResLabelTooHigh lnew) = do
+          curl <- getLabel
+          if canFlowToP p lnew curl
+            then throwLIO ResultExceedsLabel
+            else return Nothing
+
+timedlWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> Int -> LIO l a
+timedlWaitP p lr@(LabeledResultTCB t _ mvb _) to = trylWaitP p lr >>= go
+  where go (Just a) = return a
+        go Nothing = do
+          mvk <- ioTCB $ IO.newEmptyMVar
+          tk <- ioTCB $ IO.forkIO $ IO.finally (IO.threadDelay to) $
+                IO.putMVar mvk () >> IO.throwTo t (Uncatchable IO.ThreadKilled)
+          ioTCB $ IO.readMVar mvb
+          trylWaitP p lr >>= maybe
+            (ioTCB (IO.takeMVar mvk) >> throwLIO ResultExceedsLabel)
+            (\a -> ioTCB (IO.killThread tk) >> return a)

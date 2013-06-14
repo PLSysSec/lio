@@ -35,6 +35,10 @@ data Labeled l t = LabeledTCB { labelOfLabeledTCB :: !l
                               -- protection.
                               } deriving Typeable
 
+-- | Returns label of a 'Labeled' type.
+instance LabelOf Labeled where
+  labelOf = labelOfLabeledTCB
+
 -- | Trusted constructor that creates labeled values.
 labelTCB :: Label l => l -> a -> Labeled l a
 labelTCB = LabeledTCB

@@ -125,6 +125,8 @@ class (Eq l, Show l, Typeable l) => Label l where
   --   @L_2 \`canFlowTo` L_3@ then @L_1 \`canFlowTo` L_3@.
   canFlowTo :: l -> l -> Bool
 
+{-# DEPRECATED upperBound, lowerBound "use lub/glb instead" #-}
+
 -- | A more meaningful name for 'lub'. Note that since the name
 -- does not imply /least/ upper bound it is not a method of 'Label'.
 upperBound :: Label l => l -> l -> l

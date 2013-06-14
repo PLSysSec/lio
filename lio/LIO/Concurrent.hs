@@ -29,28 +29,21 @@ module LIO.Concurrent (
   -- * Waiting on threads
   , lWaitP, lWait
   , trylWaitP, trylWait
-  -- * Forcing computations (EXPERIMENTAL)
-  , AsyncException(..)
-  , lBracket, lBracketP
+  , timedlWaitP, timedlWait
+  , lBracketP, lBracket
   ) where
 
 
-import           Control.Monad
-import           Control.Concurrent hiding ( threadDelay )
-import           Control.Exception ( toException
-                                   , Exception
-                                   , AsyncException(..))
-                 
-import           LIO.Label
-import           LIO.Core
-import           LIO.Labeled
-import           LIO.Labeled.TCB
-import           LIO.Privs
-import           LIO.TCB
-                 
-import           LIO.Concurrent.TCB
-import           LIO.Concurrent.LMVar
-import           LIO.Concurrent.LMVar.TCB (tryTakeLMVarTCB, putLMVarTCB)
+import Control.Monad
+
+import LIO.Concurrent.TCB
+import LIO.Core
+import LIO.Exception
+import LIO.Label
+import LIO.Labeled
+import LIO.Labeled.TCB
+import LIO.Privs
+import LIO.TCB
 
 
 --
@@ -58,9 +51,10 @@ import           LIO.Concurrent.LMVar.TCB (tryTakeLMVarTCB, putLMVarTCB)
 --
 
 -- | Execute an 'LIO' computation in a new lightweight thread.
-forkLIO :: Label l => LIO l () -> LIO l ()
-forkLIO = void . forkLIOTCB
-
+forkLIO :: LIO l () -> LIO l ()
+forkLIO lio = do
+  s <- getLIOState
+  ioTCB $ void $ runLIO lio s
 
 -- | Labeled fork. @lFork@ allows one to invoke computations that
 -- would otherwise raise the current label, but without actually
@@ -71,13 +65,13 @@ forkLIO = void . forkLIOTCB
 -- raise the current label. Of couse,  this can be postponed until the
 -- result is needed.
 --
--- @lFork@ takes a label, which corresponds to the label of the result.
--- It is require that this label is above the current label, and below
--- the current clearance as enforced by the underlying 'guardAlloc'.
--- Moreover, the supplied computation must not read anything more
--- sensitive (i.e., with a label above the supplied label) ---  doing so
--- will result in an exception (whose label will reflect this
--- observation) being thrown. 
+-- @lFork@ takes a label, which corresponds to the label of the
+-- result.  It is required that this label be between the current
+-- label and clearance as enforced by a call to 'guardAlloc'.
+-- Moreover, the supplied computation must not terminate with its
+-- label above the result label; doing so will result in an exception
+-- (whose label will reflect this observation) being thrown in the
+-- thread reading the result.
 --
 -- If an exception is thrown in the inner computation, the exception
 -- label will be raised to the join of the result label and original
@@ -96,30 +90,6 @@ lFork :: Label l
       -> LIO l (LabeledResult l a) -- ^ Labeled result
 lFork = lForkP noPrivs
 
--- | Same as 'lFork', but the supplied set of priviliges are accounted
--- for when performing label comparisons.
-lForkP :: PrivDesc l p
-       => Priv p -> l -> LIO l a -> LIO l (LabeledResult l a)
-lForkP p l act = do
-  -- Upperbound is between current label and clearance, asserted by
-  -- 'newEmptyLMVarP', otherwise add: guardAllocP p l
-  mv <- newEmptyLMVarP p l
-  tid <- forkLIOTCB $ do
-    res      <- (Right `liftM` act) `catchTCB` (return . Left . taintError)
-    endLabel <- getLabel
-    putLMVarTCB mv $! 
-      let le = endLabel `upperBound` l
-          m = "End label does not flow to specified upper bound"
-          e = VMonitorFailure { monitorFailure = CanFlowToViolation
-                              , monitorMessage = m }
-      in if canFlowToP p endLabel l
-           then res
-           else Left $! LabeledExceptionTCB le (toException e)
-  return $ LabeledResultTCB { lresThreadIdTCB = tid, lresResultTCB = mv }
-    where -- raise the label of the exception to the join of the
-          -- exception label and supplied lForkP upper bound
-          taintError (LabeledExceptionTCB le e) =
-            LabeledExceptionTCB (le `upperBound` l) e
 
 --
 -- Wait
@@ -138,30 +108,12 @@ lForkP p l act = do
 lWait :: Label l => LabeledResult l a -> LIO l a
 lWait = lWaitP noPrivs
 
--- | Same as 'lWait', but uses priviliges in label checks and raises.
-lWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l a
-lWaitP p m = do
-  v <- readLMVarP p $ lresResultTCB m
-  case v of
-    Right x -> return x
-    Left e  -> unlabeledThrowTCB e
-
 -- | Same as 'lWait', but does not block waiting for result.
 trylWait :: Label l => LabeledResult l a -> LIO l (Maybe a)
 trylWait = trylWaitP noPrivs
 
--- | Same as 'trylWait', but uses priviliges in label checks and raises.
-trylWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l (Maybe a)
-trylWaitP p m = do
-  let mvar = lresResultTCB m
-  mv <- tryTakeLMVarP p mvar
-  case mv of
-    Just v -> do putLMVarP p mvar v
-                 case v of
-                   Right x -> return $! Just x
-                   Left e  -> unlabeledThrowTCB e
-    _ -> return Nothing
-
+timedlWait :: Label l => LabeledResult l a -> Int -> LIO l a
+timedlWait = timedlWaitP noPrivs
 
 --
 -- Forcing computations
@@ -192,7 +144,7 @@ lBracket :: Label l
           => l                -- ^ Label of result
           -> Int              -- ^ Duration of computation in microseconds
           -> LIO l a          -- ^ Computation to execute in separate thread
-          -> LIO l (Labeled l (Maybe a)) -- ^ Labeled result
+          -> LIO l (Labeled l (Either SomeException a)) -- ^ Labeled result
 lBracket = lBracketP noPrivs
 
 -- | Same as 'lBracket', but uses privileges when forking the new
@@ -202,18 +154,10 @@ lBracketP :: PrivDesc l p
            -> l                -- ^ Label of result
            -> Int              -- ^ Duration of computation in microseconds
            -> LIO l a          -- ^ Computation to execute in separate thread
-           -> LIO l (Labeled l (Maybe a)) -- ^ Labeled result
-lBracketP p l t act = do
-  f <- lForkP p l act
-  threadDelay t
-  force f
-    where force m = do
-            let mv = lresResultTCB m
-            -- check to see if it wrote to MVar:
-            -- kill thread:
-            ioTCB . killThread . lresThreadIdTCB $ m
-            v <- tryTakeLMVarTCB mv
-            return . labelTCB l =<< case v of
-              Just (Right x) -> return (Just x)
-              _  -> return Nothing
-
+           -> LIO l (Labeled l (Either SomeException a)) -- ^ Labeled result
+lBracketP p l to act = do
+  lr <- lForkP p l act
+  s <- getLIOState
+  ea <- try $ timedlWaitP p lr to
+  putLIOStateTCB s
+  return $ labelTCB l ea

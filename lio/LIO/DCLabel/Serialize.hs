@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-} -- just just move the instances
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE StandaloneDeriving,
              GeneralizedNewtypeDeriving #-}

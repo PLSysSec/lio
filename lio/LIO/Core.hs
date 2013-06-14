@@ -71,28 +71,13 @@ module LIO.Core (
     LIO
   , MonadLIO(..)
   -- ** Execute LIO actions
-  , evalLIO, runLIO, tryLIO, paranoidLIO
-  -- ** Internal state
-  , LIOState(..)
-  -- *** Current label
+  , LIOState(..), getLIOState, evalLIO, runLIO
+  -- ** Manipulating label state
   , getLabel, setLabel, setLabelP
-  -- *** Current clerance
+  -- ** Manipulating clearance
   , getClearance, setClearance, setClearanceP
-  , withClearance, withClearanceP
-  -- * Exceptions
-  -- $exceptions
-  , LabeledException
-  -- ** Throwing exceptions
-  , throwLIO
-  -- ** Catching exceptions
-  , catchLIO, catchLIOP
-  -- ** Utilities
-  -- $utils
-  , onException, onExceptionP
-  , finally, finallyP
-  , bracket, bracketP
-  , evaluate
-  -- ** Exceptions thrown by LIO
+  , scopeClearance, withClearance, withClearanceP
+  -- * Exceptions thrown by LIO
   -- $lioExceptions
   , MonitorFailure(..)
   , VMonitorFailure(..)
@@ -106,71 +91,17 @@ module LIO.Core (
   , guardWrite, guardWriteP
   ) where
 
-import           Data.Typeable
 
-import           Control.Monad
-import           Control.Monad.Trans.State.Strict
-import qualified Control.Exception as E
-import           Control.Exception hiding ( finally
-                                          , onException
-                                          , bracket
-                                          , evaluate )
+import qualified Control.Exception as IO
+import Control.Monad
+import Data.IORef
+import Data.Typeable
 
-import           LIO.TCB
-import           LIO.Label
-import           LIO.Privs
+import LIO.Exception
+import LIO.TCB
+import LIO.Label
+import LIO.Privs
 
-
---
--- Execute LIO actions
---
-
--- | Given an 'LIO' computation and some initial state, return an
--- IO action which when executed will perform the IFC-safe LIO
--- computation.
---
--- Because untrusted code cannot execute 'IO' computations, this function
--- should only be useful within trusted code.  No harm is done from
--- exposing the @evalLIO@ symbol to untrusted code.  (In general,
--- untrusted code is free to produce 'IO' computations, but it cannot
--- execute them.)
-evalLIO :: Label l
-        => LIO l a       
-        -- ^ LIO computation
-        -> LIOState l
-        -- ^ Initial state
-        -> IO a
-evalLIO act s = fst `liftM` runLIO act s
-
--- | Execute an 'LIO' action, returning the final state.
--- See 'evalLIO'.
-runLIO :: Label l
-       => LIO l a
-        -- ^ LIO computation that may throw an exception
-       -> LIOState l
-        -- ^ Initial state
-       -> IO (a, LIOState l)
-runLIO act s = runStateT (unLIOTCB act) s
-
--- | Similar to 'evalLIO', but catches all exceptions, including
--- language level exceptions.
-paranoidLIO :: Label l
-            => LIO l a
-             -- ^ LIO computation that may throw an exception
-            -> LIOState l
-             -- ^ Initial state
-            -> IO (Either SomeException (a, LIOState l))
-paranoidLIO act s = (Right `liftM` runLIO act s) `E.catch` (return . Left)
-
--- | Similar to 'evalLIO', but catches all exceptions exceptions
--- thrown with 'throwLIO'.
-tryLIO :: Label l
-       => LIO l a
-        -- ^ LIO computation that may throw an exception
-       -> LIOState l
-        -- ^ Initial state
-       -> IO (Either (LabeledException l) a, LIOState l)
-tryLIO act = runLIO (Right `liftM` act `catchTCB` (return . Left))
 
 --
 -- Internal state
@@ -178,7 +109,7 @@ tryLIO act = runLIO (Right `liftM` act `catchTCB` (return . Left))
 
 -- | Returns the current value of the thread's label.
 getLabel :: Label l => LIO l l
-getLabel = lioLabel `liftM` getLIOStateTCB
+getLabel = lioLabel `liftM` getLIOState
 
 
 -- | Raise the current label to the provided label, which must be
@@ -192,13 +123,13 @@ setLabel = setLabelP noPrivs
 -- newLabel ``canFlowTo`` clearance@.
 setLabelP :: PrivDesc l p => Priv p -> l -> LIO l ()
 setLabelP p l = do
-  guardAllocP p l `catchLIO`
+  guardAllocP p l `catch`
       \(_ :: MonitorFailure) -> throwLIO InsufficientPrivs
-  updateLIOStateTCB $ \s -> s { lioLabel = l }
+  modifyLIOStateTCB $ \s -> s { lioLabel = l }
 
 -- | Returns the current value of the thread's clearance.
 getClearance :: Label l => LIO l l
-getClearance = lioClearance `liftM` getLIOStateTCB
+getClearance = lioClearance `liftM` getLIOState
 
 -- | Lower the current clearance. The new clerance must be between
 -- the current label and clerance. One cannot raise the current label
@@ -215,211 +146,49 @@ setClearance = setClearanceP noPrivs
 -- clearance, i.e., @l ``canFlowTo`` cnew@ must hold.
 setClearanceP :: PrivDesc l p => Priv p -> l -> LIO l ()
 setClearanceP p cnew = do
-  l <- getLabel
-  c <- getClearance
+  LIOState l c <- getLIOState
   unless (canFlowToP p cnew c) $! throwLIO InsufficientPrivs
   unless (l `canFlowTo` cnew)  $! throwLIO CurrentLabelViolation
-  updateLIOStateTCB $ \s -> s { lioClearance = cnew }
+  putLIOStateTCB $ LIOState l cnew
 
--- | Lowers the clearance of a computation, then restores the clearance to its
--- previous value (actually, to the upper bound of the current label and previous
--- value).  Useful to wrap around a computation if you want to be sure you can
--- catch exceptions thrown by it. The supplied clearance label must be bounded by
--- the current label and clearance as enforced by 'guardAlloc'.
+-- | Runs an 'LIO' action and re-sets the current clearance to its
+-- previous value once the action returns.  In particular, if the
+-- action lowers the current clearance, the clearance will be restored
+-- upon return.
+--
+-- Note that @scopeClearance@ always restores the clearance.  If
+-- that causes the clearance to drop below the current label, a
+-- 'ClearanceViolation' exception is thrown.  That exception can only
+-- be caught outside a second @scopeClearance@ that restores the
+-- clearance to higher than the current label.
+scopeClearance :: Label l => LIO l a -> LIO l a
+scopeClearance lio = LIOTCB $ \sp -> do
+  LIOState _ c <- readIORef sp
+  ea <- IO.try $ unLIOTCB lio sp
+  LIOState l _ <- readIORef sp
+  writeIORef sp (LIOState l c)
+  if l `canFlowTo` c
+    then either (IO.throwIO :: SomeException -> IO a) return ea
+    else IO.throwIO ClearanceViolation
+
+-- | Lowers the clearance of a computation, then restores the
+-- clearance to its previous value (actually, to the upper bound of
+-- the current label and previous value).  Useful to wrap around a
+-- computation if you want to be sure you can catch exceptions thrown
+-- by it. The supplied clearance label must be bounded by the current
+-- label and clearance as enforced by 'guardAlloc'.
 -- 
 -- Note that if the computation inside @withClearance@ acquires any
 -- 'Priv's, it may still be able to raise its clearance above the
 -- supplied argument using 'setClearanceP'.
 withClearance :: Label l => l -> LIO l a -> LIO l a
-withClearance = withClearanceP noPrivs
+withClearance c lio = scopeClearance $ setClearance c >> lio
 
 -- | Same as 'withClearance', but uses privileges when applying
 -- 'guardAllocP' to the supplied label.
 withClearanceP :: PrivDesc l p => Priv p -> l -> LIO l a -> LIO l a
-withClearanceP p l act = do
-  c <- getClearance
-  setClearanceP p l
-  act `finally` (updateLIOStateTCB $ \s ->
-                   s { lioClearance = c `lub` lioLabel s })
+withClearanceP p c lio = scopeClearance $ setClearanceP p c >> lio
 
---
--- Exceptions
---
-
-{- $exceptions
-
-   We must define 'throwIO'- and 'catch'-like functions to work in
-   the 'LIO' monad.  A complication is that exceptions could
-   potentially leak information.  For instance, one might examine a
-   secret bit, and throw an exception when the bit is 1 but not 0.
-   Allowing untrusted code to catch the exception leaks the bit.
-
-   The solution is to wrap exceptions up with a label.  The exception
-   may be caught, but only if the label of the exception can flow to
-   the label at the point the catch statement began execution.
-   Arbitrary code can use 'throwLIO' to throw an exception that will
-   be labeled with the current label, while 'catchLIO' can be used to
-   catch exceptions (whose label flows to the current clearance).
-   Wherever possible, code should use the 'catchLIOP' and
-   'onExceptionP' variants that use privileges to downgrade the
-   exception. 
-
-   If an exception is uncaught in the 'LIO' monad, the 'evalLIO'
-   function will re-throw the exception, so that it is okay to throw
-   exceptions from within the 'LIO' monad and catch them within the
-   'IO' monad.  Of course, code in the 'IO' monad must be careful not
-   to let the 'LIO' code exploit it to exfiltrate information.  Hence,
-   we recommend the use of 'paranoidLIO' to execute 'LIO' actions as
-   to prevent accidental, but unwanted crashes.
-
-
-   /Note/:  Do not use 'throw' (as opposed to 'throwLIO') within the
-   'LIO' monad.  Because 'throw' can be invoked from pure code, it has
-   no notion of current label and so cannot assign an appropriate
-   label to the exception.  As a result, the exception will not be
-   catchable within the 'LIO' monad and will propagate all the way out
-   to the executing 'IO' layer.  Similarly, asynchronous exceptions
-   (such as divide by zero or undefined values in lazily evaluated
-   expressions) cannot be caught within the 'LIO' monad.
-
--}
-
---
--- Throwing exceptions
---
-
--- | Throw an exception. The label on the exception is the current
--- label.
-throwLIO :: (Exception e, Label l) => e -> LIO l a
-throwLIO e = do
-  l <- getLabel
-  unlabeledThrowTCB $! LabeledExceptionTCB l (toException e)
-
---
--- Catching exceptions
---
-
-
--- | Same as 'catchLIO' but does not use privileges when raising the
--- current label to the join of the current label and exception label.
-catchLIOP :: (Exception e, PrivDesc l p)
-          => Priv p
-          -> LIO l a
-          -> (e -> LIO l a)
-          -> LIO l a
-catchLIOP p act handler = do 
-  clr <- getClearance
-  act `catchTCB` \se@(LabeledExceptionTCB l seInner) -> 
-    case fromException seInner of
-     Just e | l `canFlowTo` clr -> taintP p l >> handler e
-     _                          -> unlabeledThrowTCB se
-
--- | Catches an exception, so long as the label at the point where the
--- exception was thrown can flow to the clearance at which @catchLIO@ is
--- invoked. Note that the handler raises the current label to the join
--- ('upperBound') of the current label and exception label.
-catchLIO :: (Exception e, Label l)
-         => LIO l a
-         -> (e -> LIO l a)
-         -> LIO l a
-catchLIO = catchLIOP noPrivs 
-
---
--- Utilities
---
-
-{- $utils
-
-Similar to "Control.Exception" we export 'onException', 'finally' and
-'bracket' which should be used by programmers to properly acquire and
-release resources in the presence of exceptions.  Different from
-"Control.Exception" our non-TCB utilities are not implemented in terms
-of 'mask', and thus untrusted threads may be killed (and thus garbage
-collected) with synchronous exceptions. Of course, only trusted code
-may has access to 'throwTo'-like functionality.
-
--}
-
--- | Performs an action only if there was an exception raised by the
--- computation. Note that the exception is rethrown after the final
--- computation is executed.
-onException :: Label l
-            => LIO l a -- ^ The computation to run
-            -> LIO l b -- ^ Computation to run on exception
-            -> LIO l a -- ^ Result if no exception thrown
-onException = onExceptionP noPrivs
-
--- | Privileged version of 'onExceptionP'.  'onException' cannot run its
--- handler if the label was raised in the computation that threw the
--- exception.  This variant allows privileges to be supplied, so as to
--- catch exceptions thrown with a \"higher\" label.
-onExceptionP :: PrivDesc l p
-             => Priv p       -- ^ Privileges to downgrade exception
-             -> LIO l a -- ^ The computation to run
-             -> LIO l b -- ^ Computation to run on exception
-             -> LIO l a -- ^ Result if no exception thrown
-onExceptionP p act1 act2 = 
-    catchLIOP p act1 (\(e :: SomeException) -> do
-                       void act2
-                       throwLIO e )
-
--- | Execute a computation and a finalizer, which is executed even if
--- an exception is raised in the first computation.
-finally :: Label l
-        => LIO l a -- ^ The computation to run firstly
-        -> LIO l b -- ^ Final computation to run (even if exception is thrown)
-        -> LIO l a -- ^ Result of first action
-finally = finallyP noPrivs
-
--- | Version of 'finally' that uses privileges when handling
--- exceptions thrown in the first computation.
-finallyP :: PrivDesc l p
-         => Priv p       -- ^ Privileges to downgrade exception
-         -> LIO l a -- ^ The computation to run firstly
-         -> LIO l b -- ^ Final computation to run (even if exception is thrown)
-         -> LIO l a -- ^ Result of first action
-finallyP p act1 act2 = do
-  r <- onExceptionP p act1 act2
-  void act2
-  return r
-
--- | The @bracket@ function is used in patterns where you acquire a
--- resource, perform a computation on it, and then release the resource.
--- The function releases the resource even if an exception is raised in
--- the computation. An example of its use case is file handling:
---
--- >  bracket
--- >    (openFile ... {- open file -} )
--- >    (\handle -> {- close file -} )
--- >    (\handle -> {- computation on handle -})
---
--- Note: @bracket@ does not use 'mask' and thus asynchronous may leave
--- the resource unreleased if the thread is killed in during release.
--- An interface for arbitrarily killing threads is not provided by LIO.
-bracket :: Label l
-        => LIO l a           -- ^ Computation to run first
-        -> (a -> LIO l c)    -- ^ Computation to run last
-        -> (a -> LIO l b)    -- ^ Computation to run in-between
-        -> LIO l b
-bracket = bracketP noPrivs
-
--- | Like 'bracket', but uses privileges to downgrade the label of any
--- raised exception.
-bracketP :: PrivDesc l p
-         => Priv p                 -- ^ Priviliges used to downgrade
-         -> LIO l a           -- ^ Computation to run first
-         -> (a -> LIO l c)    -- ^ Computation to run last
-         -> (a -> LIO l b)    -- ^ Computation to run in-between
-         -> LIO l b
-bracketP p first third second = do
-  x <- first
-  finallyP p (second x) (third x)
-
--- | Forces its argument to be evaluated to weak head normal form when the
--- resultant LIO action is executed. This is simply a wrapper for 
--- "Control.Exception"'s @evaluate@.
-evaluate :: Label l => a -> LIO l a
-evaluate = rethrowIoTCB . E.evaluate
 
 --
 -- Exceptions thrown by LIO
@@ -451,6 +220,7 @@ data MonitorFailure = ClearanceViolation
                     | CanFlowToViolation
                     -- ^ Generic can-flow-to failure, use with
                     -- 'VMonitorFailure'
+                    | ResultExceedsLabel
                     deriving (Show, Typeable)
 
 instance Exception MonitorFailure
@@ -568,7 +338,7 @@ taintP p newl = do
   l <- getLabel
   let l' = partDowngradeP p newl l
   unless (l' `canFlowTo` c) $! throwLIO ClearanceViolation
-  updateLIOStateTCB $ \s -> s { lioLabel = l' }
+  modifyLIOStateTCB $ \s -> s { lioLabel = l' }
 
 
 -- | Use @guardWrite l@ in any (trusted) code before modifying an

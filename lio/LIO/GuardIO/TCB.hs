@@ -103,4 +103,4 @@ TypesVals (GUARDIO)
 blessTCB :: (GuardIO l r io lio, PrivDesc l p) =>
             (a -> io) -> Priv p -> (LObj l a) -> lio
 blessTCB io p (LObjTCB l a) = guardIO lifter (io a)
-  where lifter r = guardWriteP p l >> rethrowIoTCB r
+  where lifter r = guardWriteP p l >> ioTCB r

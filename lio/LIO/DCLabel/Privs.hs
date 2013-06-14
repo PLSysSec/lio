@@ -58,7 +58,7 @@ instance PrivDesc DCLabel DCPrivDesc where
     in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
 
   partDowngradePrivDesc pd la lg
-               | pd == mempty              = la `upperBound` lg
+               | pd == mempty              = la `lub` lg
                | pd == privDesc allPrivTCB = lg
                | otherwise = 
     let sec_a  = dcSecrecy la

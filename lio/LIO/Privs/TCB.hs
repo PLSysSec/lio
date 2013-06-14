@@ -37,9 +37,9 @@ class (Label l) => PrivDesc l p where
     canFlowToPrivDesc p a b = partDowngradePrivDesc p a b `canFlowTo` b
 
     -- | Roughly speaking, @L_r = partDowngradeP p L L_g@ computes how
-    -- close one can come to downgrading data labeled @L@ to the goal label
-    -- @L_g@, given privileges @p@.  When @p == 'NoPrivs'@, the resulting
-    -- label @L_r == L ``upperBound`` L_g@.  If @p@ contains /all/
+    -- close one can come to downgrading data labeled @L@ to the goal
+    -- label @L_g@, given privileges @p@.  When @p == 'NoPrivs'@, the
+    -- resulting label @L_r == L ``lub`` L_g@.  If @p@ contains /all/
     -- possible privileges, then @L_r == L_g@.
     --
     -- More specifically, @L_r@ is the greatest lower bound of the
