@@ -45,7 +45,6 @@ Extra-source-files:
   examples/dclabel.hs
   examples/gate.hs
   examples/waitAndCatch.hs
-  examples/bracket.hs
 
 
 Source-repository head
