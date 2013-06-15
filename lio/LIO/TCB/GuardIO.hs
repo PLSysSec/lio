@@ -48,6 +48,9 @@ data LObj label object = LObjTCB !label !object deriving (Typeable)
 instance LabelOf LObj where
   labelOf (LObjTCB l _) = l
 
+instance (Label l, Show t) => ShowTCB (LObj l t) where
+  showTCB (LObjTCB l t) = show t ++ " {" ++ show l ++ "}"
+
 #if 0
 genTypesVals :: Int -> IO ()
 genTypesVals n0 =

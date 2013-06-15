@@ -9,10 +9,13 @@ This module exports
 * The definition of the 'LIO' monad and relevant trusted state
   access/modifying functions.
 
+* Various other types whose constructors are privileged and must be
+  hidden from untrusted code.
+
 * Uncatchable exceptions used to pop threads out of the 'LIO' monad
   unconditionally.
 
-* Combinators for executing 'IO' actions.
+* Combinators for executing 'IO' actions within the 'LIO' monad.
 
 The documentation and external, safe 'LIO' interface is provided in
 "LIO.Core".
