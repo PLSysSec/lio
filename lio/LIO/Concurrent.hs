@@ -30,20 +30,23 @@ module LIO.Concurrent (
   , lWaitP, lWait
   , trylWaitP, trylWait
   , timedlWaitP, timedlWait
+  -- * Labeled MVars
+  , module LIO.Concurrent.LMVar
   ) where
 
 
-import Control.Monad
 import qualified Control.Concurrent as IO
 import qualified Control.Exception as IO
 import Data.IORef
+import Control.Monad
 
-import LIO.TCB.Concurrent
+import LIO.Concurrent.LMVar
 import LIO.Core
 import LIO.Exception
 import LIO.Label
 import LIO.Privs
 import LIO.TCB
+import LIO.TCB.Concurrent
 
 
 --
