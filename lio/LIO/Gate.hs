@@ -33,7 +33,11 @@ import           LIO.Privs
 -- arbitrary type @a@. Applying the gate is accomplished with 'callGate'
 -- which takes a privilege argument that is converted to a description
 -- before invoking the gate computation.
-newtype Gate d a = Gate { unGate :: d -> a }
+newtype Gate d a = GateTCB (d -> a)
+-- Note GateTCB is trusted by convention.  Anyone with access to the
+-- symbol can call any gate while claiming arbitrary privileges.  In
+-- the absence of gates, however, GateTCB doesn't provide any
+-- particular privileges.
 
 -- | Create a gate given a computation from a privilege description.
 -- Note that because of currying type 'a' may itself be a function
@@ -41,7 +45,8 @@ newtype Gate d a = Gate { unGate :: d -> a }
 -- descriptoin.
 gate :: (d -> a)  -- ^ Gate computation
      -> Gate d a
-gate = Gate
+{-# INLINE gate #-}
+gate = GateTCB
 
 -- | Given a gate and privilege, execute the gate computation.  It is
 -- important to note that @callGate@ invokes the gate computation with
@@ -57,7 +62,8 @@ gate = Gate
 callGate :: Gate p a -- ^ Gate
          -> Priv p   -- ^ Privilege used as proof-of-ownership
          -> a
-callGate g = unGate g . privDesc
+{-# INLINE callGate #-}
+callGate (GateTCB g) = g . privDesc
 
 {- $example
 
