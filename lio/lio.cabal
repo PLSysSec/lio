@@ -95,10 +95,11 @@ Library
     LIO.DCLabel
     LIO.DCLabel.Core
     LIO.DCLabel.Privs
-    LIO.DCLabel.Serialize
     LIO.DCLabel.DSL
     -- * Privileged internals
     LIO.TCB
     LIO.TCB.GuardIO
     LIO.TCB.Concurrent
     LIO.TCB.DCLabel
+  Other-modules:
+    LIO.DCLabel.Serialize
