@@ -15,8 +15,6 @@ import Data.Typeable
 import Data.IORef
 import Control.Concurrent.MVar
 
-import Control.Exception hiding (onException)
-
 import Test.QuickCheck hiding (label)
 import Test.QuickCheck.Instances ()
 import LIO.DCLabel.Instances ()
@@ -29,6 +27,7 @@ import LIO.Labeled.TCB
 import LIO.DCLabel
 import LIO.Concurrent.LMVar
 import LIO.Concurrent.LMVar.TCB (newLMVarTCB, unlabelLMVarTCB)
+import LIO.Exception
 
 import System.IO.Unsafe
 
@@ -118,11 +117,11 @@ lioActs = [ return . DCAction $ return ()
         catchAllAct = do
           (DCAction act) <- arbitrary
           a <- arbitrary
-          return . DCAction $ act `catchLIO` (\(_::SomeException) -> return a)
+          return . DCAction $ act `catch` (\(_::SomeException) -> return a)
         catchNoneAct = do
           (DCAction act) <- arbitrary
           a <- arbitrary
-          return . DCAction $ act `catchLIO` (\(_::DoNotThrow) -> return a)
+          return . DCAction $ act `catch` (\(_::DoNotThrow) -> return a)
         onExceptionAct = do
           (DCAction act1) <- arbitrary
           (DCAction act2) <- arbitrary

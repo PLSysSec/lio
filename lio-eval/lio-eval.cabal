@@ -1,5 +1,5 @@
 Name:           lio-eval
-Version:        0.9.1.0
+Version:        0.91
 Cabal-Version:  >= 1.8
 Build-type:     Simple
 License:        GPL
@@ -28,7 +28,7 @@ test-suite lio_test
    ,QuickCheck                 >= 2.3
    ,quickcheck-instances       >= 0.3.0
    ,lio
-   ,quickcheck-lio-instances   == 0.9.*
+   ,quickcheck-lio-instances
    ,HUnit                      >= 1.2.5
    ,test-framework             >= 0.6
    ,test-framework-quickcheck2 >= 0.2.11
@@ -49,8 +49,8 @@ test-suite dclabel_test
    ,bytestring                 >= 0.9
    ,QuickCheck                 >= 2.3
    ,quickcheck-instances       >= 0.3.0
-   ,lio                        == 0.9.*
-   ,quickcheck-lio-instances   == 0.9.*
+   ,lio
+   ,quickcheck-lio-instances
    ,HUnit                      >= 1.2.5
    ,test-framework             >= 0.6
    ,test-framework-quickcheck2 >= 0.2.11
@@ -70,6 +70,6 @@ benchmark dclabel_bench
    ,bytestring                 >= 0.9
    ,QuickCheck                 >= 2.3
    ,quickcheck-instances       >= 0.3.0
-   ,lio                        == 0.9.*
-   ,quickcheck-lio-instances   == 0.9.*
+   ,lio
+   ,quickcheck-lio-instances
    ,criterion                  >= 0.6.0.1
