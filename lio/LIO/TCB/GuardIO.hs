@@ -2,6 +2,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE CPP #-}
 
 -- | This module provides routines for safely exposing IO functions in
@@ -24,7 +25,9 @@
 --
 -- Then application-specific trusted code can wrap a specific label
 -- around each 'Handle' using the 'LObjTCB' constructor.
-module LIO.GuardIO.TCB (LObj(..), blessTCB, GuardIO(..)) where
+module LIO.TCB.GuardIO (LObj(..), blessTCB, blessPTCB, GuardIO(..)) where
+
+import Data.Typeable
 
 import safe LIO.Core
 import safe LIO.Label
@@ -40,7 +43,7 @@ import LIO.TCB
 -- abstraction combined with its blessed IO operations (see
 -- 'blessTCB') cannot be used to communicate with code running at
 -- different labels.
-data LObj label object = LObjTCB !label !object
+data LObj label object = LObjTCB !label !object deriving (Typeable)
 
 instance LabelOf LObj where
   labelOf (LObjTCB l _) = l
@@ -77,18 +80,18 @@ genTypesVals n0 =
   macro(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> a9 -> a10, \
         a1 a2 a3 a4 a5 a6 a7 a8 a9 a10)
 
-class GuardIO l r io lio | l io -> r lio where
-  -- | Wraps a lifter function around the result of a function
-  -- returning an 'IO' action to turn it into a function returning an
-  -- 'LIO' action.  Internally 'blessTCB' uses this method, supplying
-  -- a lifter that check the current label (with 'guardWriteP') and
-  -- lifts the 'IO' action (with 'rethrowIoTCB').
-  guardIO :: (IO r -> LIO l r) -> io -> lio
-instance GuardIO l r (IO r) (LIO l r) where
-  guardIO lifter io = lifter io
+class GuardIO l io lio | l io -> lio where
+  -- | Lifts an 'IO' action in the 'LIO' monad, executing a guard
+  -- before calling the function.
+  guardIOTCB :: (LIO l ()) -> io -> lio
+instance GuardIO l (IO r) (LIO l r) where
+  {-# INLINE guardIOTCB #-}
+  guardIOTCB guard io = guard >> ioTCB io
 #define GUARDIO(types, vals) \
-instance GuardIO l r (types -> IO r) (types -> LIO l r) where \
-  { guardIO lifter io vals = lifter $ io vals }
+instance GuardIO l (types -> IO r) (types -> LIO l r) where { \
+  {-# INLINE guardIOTCB #-}; \
+  guardIOTCB guard io vals = guard >> ioTCB (io vals); \
+}
 TypesVals (GUARDIO)
 
 -- | This function can be used to turn an 'IO' function into an 'LIO'
@@ -100,7 +103,12 @@ TypesVals (GUARDIO)
 -- arguments), which must be the same in all types except the monad.
 -- For example, if @io@ is @Int -> String -> IO ()@, then @lio@ must
 -- be @Int -> String -> LIO l ()@.
-blessTCB :: (GuardIO l r io lio, PrivDesc l p) =>
-            (a -> io) -> Priv p -> (LObj l a) -> lio
-blessTCB io p (LObjTCB l a) = guardIO lifter (io a)
-  where lifter r = guardWriteP p l >> ioTCB r
+blessTCB :: (GuardIO l io lio, Label l) => (a -> io) -> (LObj l a) -> lio
+{-# INLINE blessTCB #-}
+blessTCB io (LObjTCB l a) = guardIOTCB (guardWrite l) (io a)
+
+-- | A variant of 'blessTCB' that takes a privilege argument.
+blessPTCB :: (GuardIO l io lio, PrivDesc l p) =>
+             (a -> io) -> Priv p -> (LObj l a) -> lio
+{-# INLINE blessPTCB #-}
+blessPTCB io p (LObjTCB l a) = guardIOTCB (guardWriteP p l) (io a)

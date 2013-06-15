@@ -34,9 +34,13 @@ module LIO.Concurrent (
 
 
 import Control.Monad
+import qualified Control.Concurrent as IO
+import qualified Control.Exception as IO
+import Data.IORef
 
-import LIO.Concurrent.TCB
+import LIO.TCB.Concurrent
 import LIO.Core
+import LIO.Exception
 import LIO.Label
 import LIO.Privs
 import LIO.TCB
@@ -86,6 +90,27 @@ lFork :: Label l
       -> LIO l (LabeledResult l a) -- ^ Labeled result
 lFork = lForkP noPrivs
 
+-- | Same as 'lFork', but the supplied set of priviliges are accounted
+-- for when performing label comparisons.
+lForkP :: PrivDesc l p =>
+          Priv p -> l -> LIO l a -> LIO l (LabeledResult l a)
+lForkP p l lio = do
+  guardAllocP p l
+  mv <- ioTCB IO.newEmptyMVar
+  st <- ioTCB $ newIORef LResEmpty
+  s0 <- getLIOStateTCB
+  tid <- ioTCB $ IO.mask $ \unmask -> IO.forkIO $ do
+    sp <- newIORef s0
+    ea <- IO.try $ unmask $ unLIOTCB lio sp
+    LIOState lEnd _ <- readIORef sp
+    writeIORef st $ case ea of
+      _ | not (lEnd `canFlowTo` l) -> LResLabelTooHigh lEnd
+      Left e                       -> LResResult $ IO.throw $ makeCatchable e
+      Right a                      -> LResResult a
+    IO.putMVar mv ()
+  return $ LabeledResultTCB tid l mv st
+
+
 
 --
 -- Wait
@@ -104,9 +129,35 @@ lFork = lForkP noPrivs
 lWait :: Label l => LabeledResult l a -> LIO l a
 lWait = lWaitP noPrivs
 
+-- | Same as 'lWait', but uses priviliges in label checks and raises.
+lWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l a
+lWaitP p (LabeledResultTCB _ l mv st) = taintP p l >> go
+  where go = ioTCB (readIORef st) >>= check
+        check LResEmpty = ioTCB (IO.readMVar mv) >> go
+        check (LResResult a) = return $! a
+        check (LResLabelTooHigh lnew) = do
+          modifyLIOStateTCB $ \s -> s {
+            lioLabel = partDowngradeP p lnew (lioLabel s) }
+          throwLIO ResultExceedsLabel
+
+
 -- | Same as 'lWait', but does not block waiting for result.
 trylWait :: Label l => LabeledResult l a -> LIO l (Maybe a)
 trylWait = trylWaitP noPrivs
+
+-- | Same as 'trylWait', but uses priviliges in label checks and raises.
+trylWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l (Maybe a)
+trylWaitP p (LabeledResultTCB _ rl _ st) =
+  taintP p rl >> ioTCB (readIORef st) >>= check
+  where check LResEmpty = return Nothing
+        check (LResResult a) = return . Just $! a
+        check (LResLabelTooHigh lnew) = do
+          curl <- getLabel
+          if canFlowToP p lnew curl
+            then throwLIO ResultExceedsLabel
+            else return Nothing
+
+
 
 -- | Like 'lWait', with two differences.  First, a timeout is
 -- specified and the thread is unconditionally killed after this
@@ -117,3 +168,20 @@ trylWait = trylWaitP noPrivs
 -- the label above the clearance).
 timedlWait :: Label l => LabeledResult l a -> Int -> LIO l a
 timedlWait = timedlWaitP noPrivs
+
+-- | A version of 'timedlWait' that takes privileges.  The privileges
+-- are used both to downgrade the result (if necessary), and to try
+-- catching any 'ResultExceedsLabel' before the timeout period (if
+-- possible).
+timedlWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> Int -> LIO l a
+timedlWaitP p lr@(LabeledResultTCB t _ mvb _) to = trylWaitP p lr >>= go
+  where go (Just a) = return a
+        go Nothing = do
+          mvk <- ioTCB $ IO.newEmptyMVar
+          tk <- ioTCB $ IO.forkIO $ IO.finally (IO.threadDelay to) $ do
+            IO.putMVar mvk ()
+            IO.throwTo t (UncatchableTCB IO.ThreadKilled)
+          ioTCB $ IO.readMVar mvb
+          trylWaitP p lr >>= maybe
+            (ioTCB (IO.takeMVar mvk) >> throwLIO ResultExceedsLabel)
+            (\a -> ioTCB (IO.killThread tk) >> return a)

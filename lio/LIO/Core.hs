@@ -1,6 +1,9 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE ScopedTypeVariables,
-             DeriveDataTypeable #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 {- | 
 
@@ -101,6 +104,7 @@ import LIO.Exception
 import LIO.TCB
 import LIO.Label
 import LIO.Privs
+import LIO.Run
 
 
 --
@@ -361,4 +365,16 @@ guardWriteP :: PrivDesc l p => Priv p -> l -> LIO l ()
 guardWriteP p newl = do
   taintP      p newl
   guardAllocP p newl
+
+--
+-- Monad base
+--
+
+-- | Synonym for monad in which 'LIO' is the base monad.
+class (Monad m, Label l) => MonadLIO l m | m -> l where
+  -- | Lift an 'LIO' computation.
+  liftLIO :: LIO l a -> m a
+
+instance Label l => MonadLIO l (LIO l) where
+  liftLIO = id
 

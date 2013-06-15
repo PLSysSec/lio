@@ -82,29 +82,23 @@ Library
     -- * Core library
     LIO.Core
     LIO.Exception
-    LIO.TCB
     -- * Labeled values
     LIO.Labeled
-    LIO.Labeled.TCB
     -- * Labeled IORefs
     LIO.LIORef
-    LIO.LIORef.TCB
-    -- * Gates
-    LIO.Gate
     -- * LIO privileges
     LIO.Privs
-    LIO.Privs.TCB
     -- * Concurrency
     LIO.Concurrent
-    LIO.Concurrent.TCB
     LIO.Concurrent.LMVar
-    LIO.Concurrent.LMVar.TCB
     -- * DCLabels
     LIO.DCLabel
     LIO.DCLabel.Core
     LIO.DCLabel.Privs
-    LIO.DCLabel.Privs.TCB
     LIO.DCLabel.Serialize
     LIO.DCLabel.DSL
-    -- * Controlled access to IO functions
-    LIO.GuardIO.TCB
+    -- * Privileged internals
+    LIO.TCB
+    LIO.TCB.GuardIO
+    LIO.TCB.Concurrent
+    LIO.TCB.DCLabel

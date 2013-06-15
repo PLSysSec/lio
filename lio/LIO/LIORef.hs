@@ -28,12 +28,24 @@ module LIO.LIORef (
   , atomicModifyLIORef, atomicModifyLIORefP
   ) where
 
-import           LIO
-import           LIO.LIORef.TCB
+import Data.IORef
+import LIO.Core
+import LIO.Label
+import LIO.Privs
+import LIO.TCB
+import LIO.TCB.GuardIO
 
 --
 -- Create labeled 'IORef's
 --
+
+-- | An @LIORef@ is an @IORef@ with an associated, fixed label.  The
+-- restriction to an immutable label come from the fact that it is
+-- possible to leak information through the label itself, if we wish to
+-- allow @LIORef@ to be an instance of 'LabelOf'.  Of course, you can
+-- create an @LIORef@ of 'Labeled' to get a limited form of
+-- flow-sensitivity.
+type LIORef l a = LObj l (IORef a)
 
 -- | To create a new reference the label of the reference must be
 -- below the thread's current clearance and above the current label.
@@ -49,9 +61,7 @@ newLIORef = newLIORefP noPrivs
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
 newLIORefP :: PrivDesc l p => Priv p -> l -> a -> LIO l (LIORef l a)
-newLIORefP p l a = do
-  guardAllocP p l
-  newLIORefTCB l a
+newLIORefP p l a = guardAllocP p l >> ioTCB (LObjTCB l `fmap` newIORef a)
 
 --
 -- Read 'LIORef's
@@ -63,14 +73,12 @@ newLIORefP p l a = do
 -- the reference label. To avoid failures (introduced by the 'taint'
 ---guard) use 'labelOf' to check that a read will succeed.
 readLIORef :: Label l => LIORef l a -> LIO l a
-readLIORef = readLIORefP noPrivs
+readLIORef (LObjTCB l r) = taint l >> ioTCB (readIORef r)
 
 -- | Same as 'readLIORef' except @readLIORefP@ takes a privilege object
 -- which is used when the current label is raised.
 readLIORefP :: PrivDesc l p => Priv p -> LIORef l a -> LIO l a
-readLIORefP p lr = do
-  taintP p $! labelOf lr
-  readLIORefTCB lr
+readLIORefP p (LObjTCB l r) = taintP p l >> ioTCB (readIORef r)
 
 --
 -- Write 'LIORef's
@@ -81,15 +89,13 @@ readLIORefP p lr = do
 -- label of the reference can-flow-to the current clearance. Otherwise,
 -- an exception is raised by the underlying 'guardAlloc' guard.
 writeLIORef :: Label l => LIORef l a -> a -> LIO l ()
-writeLIORef = writeLIORefP noPrivs
+writeLIORef (LObjTCB l r) a = guardAlloc l >> ioTCB (writeIORef r a)
 
 -- | Same as 'writeLIORef' except @writeLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
 writeLIORefP :: PrivDesc l p => Priv p -> LIORef l a -> a -> LIO l ()
-writeLIORefP p lr a = do
-  guardAllocP p $! labelOf lr 
-  writeLIORefTCB lr a
+writeLIORefP p (LObjTCB l r) a = guardAllocP p l >> ioTCB (writeIORef r a)
 
 --
 -- Modify 'LIORef's
@@ -107,16 +113,14 @@ modifyLIORef :: Label l
              =>  LIORef l a            -- ^ Labeled reference
              -> (a -> a)               -- ^ Modifier
              -> LIO l ()
-modifyLIORef = modifyLIORefP noPrivs
+modifyLIORef (LObjTCB l r) f = guardAlloc l >> ioTCB (modifyIORef r f)
 
 -- | Same as 'modifyLIORef' except @modifyLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of
 -- the reference to the current label and clearance.
 modifyLIORefP :: PrivDesc l p
               =>  Priv p -> LIORef l a -> (a -> a) -> LIO l ()
-modifyLIORefP p lr f = do
-  guardAllocP p $! labelOf lr 
-  modifyLIORefTCB lr f
+modifyLIORefP p (LObjTCB l r) f = guardAllocP p l >> ioTCB (modifyIORef r f)
 
 -- | Atomically modifies the contents of an 'LIORef'. It is required
 -- that the label of the reference be above the current label, but
@@ -128,13 +132,11 @@ modifyLIORefP p lr f = do
 -- which will raise an exception if any of the IFC conditions cannot
 -- be satisfied.
 atomicModifyLIORef :: Label l => LIORef l a -> (a -> (a, b)) -> LIO l b
-atomicModifyLIORef = atomicModifyLIORefP noPrivs
+atomicModifyLIORef = blessTCB atomicModifyIORef
 
 -- | Same as 'atomicModifyLIORef' except @atomicModifyLIORefP@ takes
 -- a set of privileges which are accounted for in label comparisons.
 atomicModifyLIORefP :: PrivDesc l p
                     => Priv p -> LIORef l a -> (a -> (a, b)) -> LIO l b
-atomicModifyLIORefP p lr f = do
-  guardWriteP p $! labelOf lr 
-  atomicModifyLIORefTCB lr f
+atomicModifyLIORefP = blessPTCB atomicModifyIORef
 

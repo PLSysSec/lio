@@ -1,5 +1,6 @@
 {-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-|
 
 This module implements Disjunction Category Labels (DCLabels).
@@ -61,13 +62,14 @@ module LIO.DCLabel.Core (
   ) where
 
 import qualified Data.ByteString.Char8 as S8
-import           Data.Typeable
-import           Data.Set (Set)
+import Data.List (intercalate)
+import Data.Monoid
+import Data.Set (Set)
 import qualified Data.Set as Set
+import Data.Typeable
 
-import           Data.List (intercalate)
-
-import           LIO.Label
+import LIO.Label
+import LIO.Privs
 
 type S8 = S8.ByteString
 
@@ -132,6 +134,37 @@ instance Show Component where
          | otherwise = let cs = map show . Set.toList $! unDCFormula c
                        in parens . intercalate " /\\ " $! cs
     where parens x = "{" ++ x ++ "}"
+
+-- | Privileges can be combined using 'mappend'
+instance Monoid Component where
+  mempty = dcTrue
+  mappend p1 p2 = dcReduce $! p1 `dcAnd` p2
+
+instance PrivDesc DCLabel Component where
+  canFlowToPrivDesc pd l1 l2
+           | pd == dcTrue = canFlowTo l1 l2
+           | otherwise =
+    let i1 = dcReduce $ dcIntegrity l1 `dcAnd` pd
+        s2 = dcReduce $ dcSecrecy l2   `dcAnd` pd
+    in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
+
+  partDowngradePrivDesc pd la lg
+               | pd == mempty  = la `lub` lg
+               | pd == dcFalse = lg
+               | otherwise = 
+    let sec_a  = dcSecrecy la
+        int_a  = dcIntegrity la
+        sec_g  = dcSecrecy   lg
+        int_g  = dcIntegrity lg
+        sec_a' = dcFormula . Set.filter f $ unDCFormula sec_a
+        sec_res  = if isFalse sec_a
+                then sec_a
+                else sec_a' `dcAnd` sec_g
+        int_res  = (pd `dcAnd` int_a) `dcOr` int_g
+    in dcLabel sec_res int_res
+      where f c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
+
+
 
 -- | Logical @True@.
 dcTrue :: Component

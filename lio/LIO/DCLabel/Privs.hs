@@ -1,6 +1,4 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE MultiParamTypeClasses,
-             TypeSynonymInstances #-}
 {- |
 
 Privileges allow a piece of code to bypass certain information flow
@@ -36,42 +34,21 @@ module LIO.DCLabel.Privs (
   , dcOwns
   ) where
 
-import           Data.Monoid
 import qualified Data.Set as Set
 
-import           LIO
-import           LIO.Privs.TCB
-import           LIO.DCLabel.Core
-import           LIO.DCLabel.Privs.TCB
+import LIO
+import LIO.DCLabel.Core
+import LIO.TCB
 
--- | Privileges can be combined using 'mappend'
-instance Monoid DCPrivDesc where
-  mempty = dcTrue
-  mappend p1 p2 = dcReduce $! p1 `dcAnd` p2
+-- | A privilege description is simply a conjunction of disjunctions.
+-- Unlike (actually minted) privileges (see 'DCPriv'), privilege
+-- descriptions may be created by untrusted code.
+type DCPrivDesc = Component
 
-instance PrivDesc DCLabel DCPrivDesc where
-  canFlowToPrivDesc pd l1 l2
-           | pd == dcTrue = canFlowTo l1 l2
-           | otherwise =
-    let i1 = dcReduce $ dcIntegrity l1 `dcAnd` pd
-        s2 = dcReduce $ dcSecrecy l2   `dcAnd` pd
-    in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
-
-  partDowngradePrivDesc pd la lg
-               | pd == mempty              = la `lub` lg
-               | pd == privDesc allPrivTCB = lg
-               | otherwise = 
-    let sec_a  = dcSecrecy la
-        int_a  = dcIntegrity la
-        sec_g  = dcSecrecy   lg
-        int_g  = dcIntegrity lg
-        sec_a' = dcFormula . Set.filter f $ unDCFormula sec_a
-        sec_res  = if isFalse sec_a
-                then sec_a
-                else sec_a' `dcAnd` sec_g
-        int_res  = (pd `dcAnd` int_a) `dcOr` int_g
-    in dcLabel sec_res int_res
-      where f c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
+-- | A privilege is a minted and protected privilege description
+-- ('DCPrivDesc') that may only be created by trusted code or
+-- delegated from an existing @DCPriv@.
+type DCPriv = Priv DCPrivDesc
 
 --
 -- Helpers

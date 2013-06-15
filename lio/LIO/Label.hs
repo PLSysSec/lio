@@ -74,7 +74,6 @@ module LIO.Label (
  , LabelOf(..) 
  ) where
 
-import Data.Typeable
 
 -- | This class defines a label format, corresponding to a bounded
 -- lattice (see <https://en.wikipedia.org/wiki/Bounded_lattice>).
@@ -85,7 +84,7 @@ import Data.Typeable
 -- 'glb' (in literature, written as &#8851;), and of course the
 -- can-flow-to partial-order 'canFlowTo' (in literature, written as
 -- &#8849;).
-class (Eq l, Show l, Typeable l) => Label l where
+class (Eq l, Show l) => Label l where
   -- | /Least/ upper bound, or join, of two labels. For any two labels
   -- @L_1@ and @L_2@, if @L_3 = L_1 \`lub` L_2@, it must be that:
   --
@@ -152,5 +151,4 @@ lowerBound = glb
 -- >   labelOf (LValTCB lv) = fst lv
 class LabelOf t where
   -- | Get the label of a type kinded @* -> *@
-  labelOf :: Label l => t l a -> l
-  
+  labelOf :: t l a -> l

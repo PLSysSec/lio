@@ -35,15 +35,16 @@ module LIO.Labeled (
   -- * Relabel values
   , relabelLabeledP
   , taintLabeled, taintLabeledP , untaintLabeledP
-  , lFmap
+  , lFmap, lAp
   ) where
 
-import           LIO.TCB
-import           LIO.Label
-import           LIO.Core
-import           LIO.Privs
-import           LIO.Labeled.TCB
-import           Control.Monad
+import Control.Monad
+
+import LIO.Exception
+import LIO.TCB
+import LIO.Label
+import LIO.Core
+import LIO.Privs
 
 --
 -- Label values
@@ -68,7 +69,7 @@ label = labelP noPrivs
 labelP :: PrivDesc l p => Priv p -> l -> a -> LIO l (Labeled l a)
 labelP p l a = do
   guardAllocP p l
-  return $! labelTCB l a
+  return $ LabeledTCB l a
 
 --
 -- Unlabel values
@@ -93,18 +94,34 @@ unlabel = unlabelP noPrivs
 -- raised.  Function will throw 'ClearanceViolation' under the same
 -- circumstances as 'unlabel'.
 unlabelP :: PrivDesc l p => Priv p -> Labeled l a -> LIO l a
-unlabelP p lv = do
-  taintP p $! labelOf lv
-  return $! unlabelTCB lv
+unlabelP p (LabeledTCB l v) = taintP p l >> return v
 
 --
 -- Relabel values
 --
 
 -- | Relabels a 'Labeled' value to the supplied label if the given
--- privilege privileges permits it. It must be that the original
--- label and new label are equal, modulo the supplied privileges. In
--- other words the label remains in the same congruence class.
+-- privilege privileges permits it.  An exception is thrown unless the
+-- following two conditions hold:
+--
+--   1. The new label must be between the current label and clearance
+--      (modulo privileges), as enforced by 'guardAllocP'.
+--
+--   2. The old label must flow to the new label (again modulo
+--      privileges), as enforced by 'canFlowToP'.
+--
+relabelLabeledP :: PrivDesc l p
+                => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
+relabelLabeledP p newl (LabeledTCB oldl v) = do
+  guardAllocP p newl
+  unless (canFlowToP p oldl newl) $ throwLIO InsufficientPrivs
+  return $ LabeledTCB newl v
+
+-- XXX the old behavior was:
+--
+-- It must be that the original label and new label are equal, modulo
+-- the supplied privileges. In other words the label remains in the
+-- same congruence class.
 --
 -- Consequently @relabelP p l lv@ throws an 'InsufficientPrivs'
 -- exception if
@@ -112,13 +129,13 @@ unlabelP p lv = do
 -- @'canFlowToP' p l ('labelOf' lv) && 'canFlowToP' p ('labelOf' lv) l@
 --
 -- does not hold.
-relabelLabeledP :: PrivDesc l p
-                => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
+{-
 relabelLabeledP p newl lv = do
   let origl = labelOf lv
   unless (canFlowToP p newl origl &&
           canFlowToP p origl newl) $ throwLIO InsufficientPrivs
   return . labelTCB newl $! unlabelTCB lv
+-}
 
 -- | Raises the label of a 'Labeled' to the 'upperBound' of it's current
 -- label and the value supplied.  The label supplied must be bounded by
@@ -135,12 +152,16 @@ taintLabeled = taintLabeledP noPrivs
 -- the supplied privileges.
 taintLabeledP :: PrivDesc l p
               => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
-taintLabeledP p l lv = do
-  guardAllocP p l
-  return . labelTCB (l `lub` labelOf lv) $! unlabelTCB lv
+taintLabeledP p l (LabeledTCB lold v) = do
+  let lnew = lold `lub` l
+  guardAllocP p lnew
+  return $ LabeledTCB lnew v
+-- XXX changed semantics.  The old version allowed creation of Labeled
+-- objects above the current clearance and forced value v.  The new
+-- version bounds lnew with guardAllocP (which is not the same thing
+-- as bounding l!) but does not force evaluation of v.
 
--- | Same as 'untaintLabeled' but uses the supplied privileges when
--- downgrading the label of the labeled value.
+-- | Downgrades a label.
 untaintLabeledP :: PrivDesc l p
                 => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
 untaintLabeledP p target lv =
@@ -175,11 +196,18 @@ the end label protects the computation result accordingly.
 -- function. Such label formats will likely wish to drop endorsements in
 -- the new labeled valued.
 lFmap :: Label l => Labeled l a -> (a -> b) -> LIO l (Labeled l b)
-lFmap lv f = do
-  lc <- getLabel
+lFmap (LabeledTCB lold v) f = do
+  l <- getLabel
   -- Result label is joined with current label
-  let lres = labelOf lv `lub` lc
+  let lnew = lold `lub` l
   -- `label` checks for clearance violation then labels
-  label lres $ f (unlabelTCB lv)
+  label lnew $ f v
 
 
+-- | What the heck, if we're providing a pseudo-functor with 'lFmap',
+-- why not make it applicative?
+lAp :: Label l => Labeled l (a -> b) -> Labeled l a -> LIO l (Labeled l b)
+lAp (LabeledTCB lf f) (LabeledTCB la a) = do
+  l <- getLabel
+  let lnew = l `lub` lf `lub` la
+  label lnew $ f a

@@ -42,15 +42,16 @@ module LIO.DCLabel (
   , DCGate
   ) where
 
-import           Control.Exception
+import qualified Control.Exception as IO
 
-import           LIO
-import           LIO.LIORef
-
-import           LIO.DCLabel.Core
-import           LIO.DCLabel.Privs
-import           LIO.DCLabel.DSL
-import           LIO.DCLabel.Serialize ()
+import LIO.Core
+import LIO.Labeled
+import LIO.Privs
+import LIO.LIORef
+import LIO.DCLabel.Core
+import LIO.DCLabel.Privs
+import LIO.DCLabel.DSL
+import LIO.DCLabel.Serialize ()
 
 --
 -- LIO synonyms
@@ -61,7 +62,7 @@ import           LIO.DCLabel.Serialize ()
 type DCLabeled = Labeled DCLabel
 
 -- | DC Labeled 'LIORef's.
-type DCRef = LIORef DCLabel
+type DCRef a = LIORef DCLabel a
 
 
 -- | DC 'Gate'.
@@ -109,8 +110,8 @@ runDC act = runLIO act defaultState
 
 -- | Similar to 'evalLIO', but catches any exceptions thrown by
 -- untrusted code with 'throwLIO'.
-tryDC :: DC a -> IO (Either SomeException a, DCState)
+tryDC :: DC a -> IO (Either IO.SomeException a, DCState)
 tryDC act = runDC act >>= tryit
   where tryit (a, s) = do
-          ea <- try (evaluate a)
+          ea <- IO.try (IO.evaluate a)
           return (ea, s)
