@@ -17,19 +17,32 @@ import Control.Concurrent.MVar
 
 import Test.QuickCheck hiding (label)
 import Test.QuickCheck.Instances ()
-import LIO.DCLabel.Instances ()
+import LIO.DCLabel
+import LIO.DCLabel.Instances
 
 import LIO
 import LIO.LIORef
-import LIO.LIORef.TCB (newLIORefTCB, unlabelLIORefTCB)
-import LIO.TCB (showTCB)
-import LIO.Labeled.TCB
+-- import LIO.LIORef.TCB (newLIORefTCB, unlabelLIORefTCB)
+import LIO.TCB
 import LIO.DCLabel
 import LIO.Concurrent.LMVar
-import LIO.Concurrent.LMVar.TCB (newLMVarTCB, unlabelLMVarTCB)
+import LIO.TCB.GuardIO
+-- import LIO.Concurrent.LMVar.TCB (newLMVarTCB, unlabelLMVarTCB)
 import LIO.Exception
 
 import System.IO.Unsafe
+
+newLMVarTCB :: l -> a -> LIO l (LMVar l a)
+newLMVarTCB l a = LObjTCB l `fmap` ioTCB (newMVar a)
+
+unlabelLIORefTCB (LObjTCB _ r) = r
+unlabelLMVarTCB (LObjTCB _ mv) = mv
+labelTCB = LabeledTCB
+unlabelTCB (LabeledTCB _ v) = v
+
+newLIORefTCB :: l -> a -> LIO l (LIORef l a)
+newLIORefTCB l a = LObjTCB l `fmap` ioTCB (newIORef a)
+
 
 instance (Eq a, Label l) => Eq (Labeled l a) where
   lv1 == lv2 = labelOf lv1 == labelOf lv2 &&

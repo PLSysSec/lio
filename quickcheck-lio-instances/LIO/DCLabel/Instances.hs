@@ -7,10 +7,12 @@ import Control.Monad (liftM)
 import Test.QuickCheck
 import Test.QuickCheck.Instances ()
 import LIO.DCLabel.Core
-import LIO.DCLabel.Privs.TCB
-import LIO.Privs.TCB
+import LIO.DCLabel
+-- import LIO.DCLabel.Privs.TCB
+-- import LIO.Privs.TCB
 import Data.Set hiding (map)
 import qualified Data.ByteString.Char8 as S8
+import LIO.TCB
 
 instance Arbitrary Principal where
   arbitrary = oneof $ map (\x -> return . Principal . S8.singleton $ x) ['A'..'Z']
