@@ -209,8 +209,8 @@ instance Show DCLabel where
                i = dcIntegrity l
            in "< " ++ show s ++ " , " ++ show i ++ " >"
 
--- | Label constructor. Note that each component is first reduced to
--- CNF.
+-- | @dcLabel secrecyComponent integrityComponent@ creates a label,
+-- reducing each component to CNF.
 dcLabel :: Component -> Component -> DCLabel
 dcLabel c1 c2 = DCLabel (dcReduce c1) (dcReduce c2)
 
