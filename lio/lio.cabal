@@ -1,5 +1,5 @@
 Name:           lio
-Version:        0.91
+Version:        0.10.0.0
 Cabal-Version:  >= 1.8
 Build-type:     Simple
 License:        GPL
@@ -40,37 +40,25 @@ Description:
   should have type 'LIO', which trusted code can safely execute with
   'evalLIO'. See "LIO" for a description of the core library API.
 
-  .
-
-  The paper that describes the core of LIO, including motivation and
-  formal modeling/proofs, is available here:
-  <http://arxiv.org/abs/1207.1457>
-
 
 Extra-source-files:
   examples/dclabel.hs
   examples/gate.hs
   examples/waitAndCatch.hs
   examples/bracket.hs
-  examples/fsExample.hs
-  examples/LambdaChair/LambdaChair.hs
-  examples/LambdaChair/LambdaChair/TCB.hs
-  examples/LambdaChair/AliceCode.hs
-  examples/LambdaChair/BobCode.hs
-  examples/LambdaChair/Main.hs
 
 
 Source-repository head
   Type:     git
-  Location: ssh://anonymous@gitstar.com/scs/lio.git
+  Location: git://github.com/scslab/lio.git
 
 Library
   Build-Depends:
     base          >= 4.5     && < 5.0
-   ,binary        >= 0.5.0.0
-   ,transformers  >= 0.2.2
-   ,containers    >= 0.4.2
-   ,bytestring    >= 0.9
+   ,binary
+   ,transformers
+   ,containers
+   ,bytestring
 
   GHC-options: -Wall -fno-warn-orphans
 
@@ -102,5 +90,3 @@ Library
     LIO.TCB.GuardIO
     LIO.TCB.Concurrent
     LIO.TCB.DCLabel
-  Other-modules:
-    LIO.DCLabel.Serialize

@@ -69,7 +69,7 @@ implementations provide an instance.
 
 module LIO.Label (
   -- * Labels
-    Label(..), upperBound, lowerBound
+    Label(..)
   -- * Accessing label of labeled values
  , LabelOf(..) 
  ) where
@@ -123,19 +123,6 @@ class (Eq l, Show l) => Label l where
   -- * Transitivity: If @L_1 \`canFlowTo` L_2@ and
   --   @L_2 \`canFlowTo` L_3@ then @L_1 \`canFlowTo` L_3@.
   canFlowTo :: l -> l -> Bool
-
-{-# DEPRECATED upperBound, lowerBound "use lub/glb instead" #-}
-
--- | A more meaningful name for 'lub'. Note that since the name
--- does not imply /least/ upper bound it is not a method of 'Label'.
-upperBound :: Label l => l -> l -> l
-upperBound = lub
-
--- | A more meaningful name for 'glb'. Note that since the name
--- does not imply /greatest/ lower bound it is not a method of
--- 'Label'.
-lowerBound :: Label l => l -> l -> l
-lowerBound = glb
 
 -- | Generic class used to get the type of labeled objects. For,
 -- instance, if you wish to associate a label with a pure value (as in

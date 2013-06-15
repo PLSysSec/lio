@@ -165,9 +165,9 @@ the above issues.
 
 -}
 
--- | IFC-aware 'fmap'. The label of the returned value is the least
--- upper bound of the current label and label of the supplied labeled
--- value.
+-- | Similar to 'fmap', apply function to the 'Labeled' value. The
+-- label of the returned value is the least upper bound of the current
+-- label and label of the supplied labeled value.
 lFmap :: Label l => Labeled l a -> (a -> b) -> LIO l (Labeled l b)
 lFmap (LabeledTCB lold v) f = do
   l <- getLabel
@@ -177,9 +177,10 @@ lFmap (LabeledTCB lold v) f = do
   label lnew $ f v
 
 
--- | IFC-aware 'ap'. The label of the returned value is the least
--- upper bound of the current label, label of the supplied labeled
--- value, and label of the supplied function.
+-- | Similar to 'ap', apply function (wrapped by 'Labeled') to the
+-- labeld value. The label of the returned value is the least upper
+-- bound of the current label, label of the supplied labeled value,
+-- and label of the supplied function.
 lAp :: Label l => Labeled l (a -> b) -> Labeled l a -> LIO l (Labeled l b)
 lAp (LabeledTCB lf f) (LabeledTCB la a) = do
   l <- getLabel

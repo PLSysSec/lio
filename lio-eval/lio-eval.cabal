@@ -1,5 +1,5 @@
 Name:           lio-eval
-Version:        0.91
+Version:        0.10.0.0
 Cabal-Version:  >= 1.8
 Build-type:     Simple
 License:        GPL
@@ -22,17 +22,17 @@ test-suite lio_test
     -threaded -rtsopts
 
   build-depends:
-    base                       >= 4.5     && < 5.0
-   ,containers                 >= 0.4.2
-   ,bytestring                 >= 0.9
-   ,QuickCheck                 >= 2.3
-   ,quickcheck-instances       >= 0.3.0
+    base                       >= 4.5
+   ,containers
+   ,bytestring
+   ,QuickCheck
+   ,quickcheck-instances
    ,lio
    ,quickcheck-lio-instances
-   ,HUnit                      >= 1.2.5
-   ,test-framework             >= 0.6
-   ,test-framework-quickcheck2 >= 0.2.11
-   ,test-framework-hunit       >= 0.2.7
+   ,HUnit
+   ,test-framework
+   ,test-framework-quickcheck2
+   ,test-framework-hunit
 
 test-suite dclabel_test
   type: exitcode-stdio-1.0
@@ -44,17 +44,17 @@ test-suite dclabel_test
 
   build-depends:
     base                       >= 4.5
-   ,binary                     >= 0.5.0.0
-   ,containers                 >= 0.4.2
-   ,bytestring                 >= 0.9
-   ,QuickCheck                 >= 2.3
-   ,quickcheck-instances       >= 0.3.0
+   ,binary
+   ,containers
+   ,bytestring
+   ,QuickCheck
+   ,quickcheck-instances
    ,lio
    ,quickcheck-lio-instances
-   ,HUnit                      >= 1.2.5
-   ,test-framework             >= 0.6
-   ,test-framework-quickcheck2 >= 0.2.11
-   ,test-framework-hunit       >= 0.2.7
+   ,HUnit
+   ,test-framework
+   ,test-framework-quickcheck2
+   ,test-framework-hunit
 
 benchmark dclabel_bench
   type: exitcode-stdio-1.0
@@ -66,10 +66,10 @@ benchmark dclabel_bench
 
   build-depends:
     base                       >= 4.5
-   ,containers                 >= 0.4.2
-   ,bytestring                 >= 0.9
-   ,QuickCheck                 >= 2.3
-   ,quickcheck-instances       >= 0.3.0
+   ,containers
+   ,bytestring
+   ,QuickCheck
+   ,quickcheck-instances
    ,lio
    ,quickcheck-lio-instances
-   ,criterion                  >= 0.6.0.1
+   ,criterion

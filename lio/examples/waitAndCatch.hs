@@ -16,13 +16,13 @@ m = dcLabel (toComponent "M") dcTrue
 h = dcLabel ("A" /\ "B")      dcTrue
 
 main =  do
-  (_,lr) <- runDC $ do
+  lr <- evalDC $ do
     lb <- label m (6 :: Int)
     f <- lFork (if doFail then l else m) $ do
       v <- unlabel lb
       return (3+v)
-    catchLIO (do r <- lWait f
-                 ioTCB . putStrLn $ "No exception: " ++ show r 
-             ) (\(_::SomeException) -> ioTCB . putStrLn $ "Exception")
+    catch (do r <- lWait f
+              ioTCB . putStrLn $ "No exception: " ++ show r 
+          ) (\(_::SomeException) -> ioTCB . putStrLn $ "Exception")
   print lr
     where doFail = not True

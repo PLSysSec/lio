@@ -199,9 +199,9 @@ principals. Otherwise, it simply returns @Nothing@.
 > 
 > 
 > alice, bob, clark :: DCPriv
-> alice = mintTCB . dcPrivDesc $ "Alice"
-> bob   = mintTCB . dcPrivDesc $ "Bob"
-> clark = mintTCB . dcPrivDesc $ "Clark"
+> alice = MintTCB . dcPrivDesc $ "Alice"
+> bob   = MintTCB . dcPrivDesc $ "Bob"
+> clark = MintTCB . dcPrivDesc $ "Clark"
 > 
 > main = putStrLn . show $ 
 >   [ callGate addGate alice 1 2 -- Just 3

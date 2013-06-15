@@ -51,7 +51,6 @@ import LIO.LIORef
 import LIO.DCLabel.Core
 import LIO.DCLabel.Privs
 import LIO.DCLabel.DSL
-import LIO.DCLabel.Serialize ()
 
 --
 -- LIO synonyms
