@@ -29,9 +29,29 @@ application is using (e.g., `LIO.DCLabel`). All untrusted code
 should have type `LIO`, which trusted code can safely execute with
 `evalLIO`. See `LIO` for a description of the core library API.
 
-The paper that describes the core of LIO, including motivation and
-formal modeling/proofs, is available
-[here](http://arxiv.org/abs/1207.1457)
+The papers that describes the core of LIO, including motivation and
+formal modeling/proofs, are available here:
+
+Deian Stefan, Alejandro Russo, Pablo Buiras, Amit Levy, John C. Mitchell, David Mazieres.
+_Addressing Covert Termination and Timing Channels in Concurrent Information Flow Systems._
+_In Proceedings of The 17th ACM SIGPLAN International Conference on Functional Programming (ICFP), ACM, 2012._
+[PDF](http://www.deian.net/pubs/stefan:2012:addressing.pdf)
+
+Deian Stefan, Alejandro Russo, John C. Mitchell, David Mazieres.
+_Flexible Dynamic Information Flow Control in Haskell._
+_In Proceedings of Haskell Symposium , ACM SIGPLAN . September 2011._
+[PDF](http://www.deian.net/pubs/stefan:2011:flexible.pdf)
+
+Deian Stefan, Alejandro Russo, John C. Mitchell, David Mazieres.
+_Flexible Dynamic Information Flow Control in the Presence of Exceptions._
+In _Arxiv preprint arXiv:1207.1457.  2012._
+[PDF](http://arxiv.org/abs/1207.1457v1)
+
+Deian Stefan, Alejandro Russo, David Mazieres, John C. Mitchell.
+_Disjunction Category Labels._
+_In Proceedings of 16th Nordic Conference on Security IT Systems, NordSec , Springer LNCS. October 2011._
+[PDF](http://www.deian.net/pubs/stefan:2011:dclabels.pdf)
+
 
 Structure of repository
 =============
@@ -49,21 +69,9 @@ This repository is divided into three packages:
 Acknowledgements
 =============
 
-Contributors to the design and/or implementation of LIO:
--------------
-
-- [Amit Levy](http://www.scs.stanford.edu/~alevy/)
-- [David Mazieres](http://www.scs.stanford.edu/~dm/)
-- [John C. Mitchell](http://www.stanford.edu/~jcm/)
-- [Deian Stefan](http://www.scs.stanford.edu/~deian/)
-- [Alejandro Russo](http://www.cse.chalmers.se/~russo/)
-
-Acknowledgments
--------------
-
-We thank Daniel Griffin, Catalin Hritcu, Benjamin Pierce, and David
-Terei for insightful comments on both the design and implementation of
-LIO. This work was funded by the DARPA Clean-Slate Design of
-Resilient, Adaptive, Secure Hosts (CRASH) program, BAA-10-70.  Deian
-Stefan was funded by The National Defense Science and Engineering
-Graduate (NDSEG) Fellowship while working on LIO.
+We thank  Catalin Hritcu, Benjamin Pierce, and Jeremy Planul for
+insightful comments on both the design and implementation of LIO. This
+work was funded by the DARPA Clean-Slate Design of Resilient,
+Adaptive, Secure Hosts (CRASH) program, BAA-10-70.  Deian Stefan was
+funded by The National Defense Science and Engineering Graduate
+(NDSEG) Fellowship while working on LIO.
