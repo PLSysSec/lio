@@ -14,16 +14,16 @@ import qualified Test.QuickCheck.Monadic as Q
 import Test.HUnit hiding (Test)
 import qualified Test.HUnit as HU
 
-import LIO.DCLabel
 import LIO
-import LIO.Concurrent.TCB
-import LIO.Labeled.TCB (labelTCB)
-import LIO.DCLabel
-import LIO.DCLabel.Privs.TCB (allPrivTCB)
+import LIO.Exception
 import LIO.LIORef
-import LIO.LIORef.TCB
-import LIO.Privs.TCB
+import LIO.Concurrent
+import LIO.Concurrent.LMVar
+import LIO.DCLabel
 import LIO.TCB
+import LIO.TCB.GuardIO
+import LIO.TCB.Concurrent
+import LIO.TCB.DCLabel
 
 import Data.Set hiding (map)
 import Data.Typeable
@@ -31,23 +31,11 @@ import Data.Typeable
 import Control.Concurrent hiding (threadDelay)
 import Control.Concurrent hiding (threadDelay)
 import Control.Monad
-{-
-import Control.Exception hiding ( throwIO
-                                , catch 
-                                , finally
-                                , onException
-                                , bracket)
--}
 import qualified Control.Exception as IO
 
 import LIO.DCLabel.Instances -- DCLabel instances
 import LIO.Instances -- LIO instances
-import LIO.Concurrent
 import qualified Control.Concurrent as IO
-import LIO.Concurrent.LMVar
-import LIO.Concurrent.LMVar.TCB
-import LIO.Exception
-import LIO.TCB
 
 import System.IO.Unsafe
 
@@ -66,6 +54,25 @@ monadicDC (MkPropertyM m) =
   where f = const . return . return .  property $ True
 
 
+--
+--
+--
+
+newLIORefTCB :: DCLabel -> a -> DC (LIORef DCLabel a)
+newLIORefTCB = newLIORefP allPrivTCB
+
+readLIORefTCB :: LIORef DCLabel a -> DC a
+readLIORefTCB = readLIORefP allPrivTCB
+
+writeLIORefTCB :: LIORef DCLabel a -> a -> DC ()
+writeLIORefTCB = writeLIORefP allPrivTCB
+
+newEmptyLMVarTCB = newEmptyLMVarP allPrivTCB
+newLMVarTCB = newLMVarP allPrivTCB
+
+--
+--
+--
 
 
 main :: IO ()
@@ -83,8 +90,8 @@ tests = [
     ]
   , testGroup "Labeled" [
         testProperty "unlabel raises current label" $
-                      prop_gen_raises_label label $ Left (liftJust unlabel)
-      , testProperty "label fails if label is above clearance" $
+                      prop_gen_raises_label' label $ Left (liftJust unlabel)
+      ,  testProperty "label fails if label is above clearance" $
                      prop_guard_fail_if_label_above_clearance $
                      \l -> void $ label l ()
       , testProperty "label fails if label is not above current label" $
@@ -92,7 +99,7 @@ tests = [
                      \l -> void $ label l ()
       , testProperty "unlabel fails if label is above clearance" $
                      prop_guard_fail_if_label_above_clearance $
-                     \l -> unlabel (labelTCB l ())
+                     \l -> unlabel (LabeledTCB l ())
     ]
   , testGroup "LIORef" [
         testProperty "readLIORef raises current label" $
@@ -177,11 +184,11 @@ tests = [
     ]
   , testGroup "LabeledResult" [
         testProperty "lWait raises current label" $
-                      prop_gen_raises_label (\l v -> lFork l (return v))
-                                            (Left $ liftJust lWait)
+                      prop_gen_raises_label' (\l v -> lFork l (return v))
+                                             (Left $ liftJust lWait)
       , testProperty "trylWait raises current label" $
-                      prop_gen_raises_label (\l v -> lFork l (return v))
-                                            (Left $ \v -> (threadDelay 5000) >> trylWait v)
+                      prop_gen_raises_label' (\l v -> lFork l (return v))
+                                             (Left $ \v -> (threadDelay 5000) >> trylWait v)
 
       , testProperty "lFork fails if label is below current label" $ 
                      prop_guard_fail_if_label_below_current $
@@ -205,13 +212,10 @@ tests = [
                      test_throwA_catchLIOA 
       , testCase     "catchLIO respects SomeException"
                      test_throwA_catchLIOSomeException
-{-
       , testCase     "catchLIO respects mis-matching types"
                      test_throwB_catchLIOA 
--}
       , testProperty "catchLIO does not untaint computation"
                      prop_catch_preserves_taint
-{-
       , testCase     "onException executes final action"
                      test_onException_executes_final_action
       , testCase     "finally executes final action (noException)" $
@@ -222,7 +226,6 @@ tests = [
                      test_bracket_executes_final_action (return ())
       , testCase     "bracket executes final action (throwLIO A)" $
                      test_bracket_executes_final_action (throwLIO A)
--}
   ]
   , testGroup "Guards" [
         testProperty "Alloc guard fails if argument above clerance" $
@@ -302,11 +305,28 @@ test_paranoidDC_catch_undefined = do
 -- | Check that the current label is raised when reading/writing
 -- labeled object
 prop_gen_raises_label :: (LabelOf t)
-                        => (DCLabel -> Int -> DC (t DCLabel Int)) -- constructor
-                        -> Either (t DCLabel Int -> DC (Maybe Int)) -- reader
-                                  (t DCLabel Int -> Int -> DC ())   -- writer
-                        -> Property
+  => (DCLabel -> Int -> DC (t DCLabel (f Int)))
+  -- constructor
+  -> Either (t DCLabel (f Int) -> DC (Maybe Int)) -- reader
+            (t DCLabel (f Int) -> Int -> DC ())   -- writer
+  -> Property
 prop_gen_raises_label constr rw = monadicDC $ do
+  l    <- pick arbitrary
+  x    <- pick arbitrary
+  lx   <- run $ constr l x
+  x'   <- run $ case rw of
+                  Left reader -> reader lx
+                  Right writer -> writer lx x >> return (Just x) 
+  lbl1 <- run $ getLabel
+  Q.assert $ lbl1 == l && x' == Just x
+
+prop_gen_raises_label' :: (LabelOf t)
+  => (DCLabel -> Int -> DC (t DCLabel Int))
+  -- constructor
+  -> Either (t DCLabel Int -> DC (Maybe Int)) -- reader
+            (t DCLabel Int -> Int -> DC ())   -- writer
+  -> Property
+prop_gen_raises_label' constr rw = monadicDC $ do
   l    <- pick arbitrary
   x    <- pick arbitrary
   lx   <- run $ constr l x
@@ -342,15 +362,13 @@ test_throwA_catchLIOA :: Assertion
 test_throwA_catchLIOA = do
   doEval $ throwLIO A `catch`(\(_ :: A) -> return ())
 
-{-
 -- | throw A and catch B should fail
 test_throwB_catchLIOA :: Assertion
 test_throwB_catchLIOA = do
   doEval $ (throwLIO B `catch`(\(_ :: A) -> return ())) `catch`
-            (\(LabeledExceptionTCB _ se) -> case fromException se of
-                                              (Just B) -> return ()
-                                              _ -> ioTCB $ assertFailure "mismatch")
--}
+            (\se -> case fromException se of
+                      (Just B) -> return ()
+                      _ -> ioTCB $ assertFailure "mismatch")
 
 -- | throw and catch type correctness
 test_throwA_catchLIOSomeException :: Assertion
@@ -368,13 +386,12 @@ prop_catch_preserves_taint = monadicDC $ do
   l'' <- run $ getLabel
   Q.assert $ l == l' && l == l''
 
-{-
 -- | onException executes final action
 test_onException_executes_final_action :: Assertion
 test_onException_executes_final_action = do
   (res, _) <- tryDC $ throwLIO A `onException` throwLIO B
   case res of
-    (Left (LabeledExceptionTCB _ x)) | fromException x == Just B -> return ()
+    (Left x) | fromException x == Just B -> return ()
     _ -> assertFailure "should have thrown B"
 
 -- | finally executes final action
@@ -382,7 +399,7 @@ test_finally_executes_final_action :: DC () -> Assertion
 test_finally_executes_final_action act = do
   (res, _) <- tryDC $ act `finally` throwLIO B
   case res of
-    (Left (LabeledExceptionTCB _ x)) | fromException x == Just B -> return ()
+    (Left x) | fromException x == Just B -> return ()
     _ -> assertFailure "should have thrown B"
 
 -- | bracket executes final action
@@ -390,9 +407,8 @@ test_bracket_executes_final_action :: DC () -> Assertion
 test_bracket_executes_final_action act = do
   (res, _) <- tryDC $ bracket (return ()) (const $ throwLIO B) (const act)
   case res of
-    (Left (LabeledExceptionTCB _ x)) | fromException x == Just B -> return ()
+    (Left x) | fromException x == Just B -> return ()
     _ -> assertFailure "should have thrown B"
--}
 
 --
 -- Guards
@@ -406,7 +422,7 @@ prop_guard_fail_if_label_above_clearance act = monadicDC $
     l     <- run getLabel
     pre $ l `canFlowTo` newc
     -- reset clearance from top:
-    run $ updateLIOStateTCB $ \s -> s { lioClearance = newc }
+    run $ modifyLIOStateTCB $ \s -> s { lioClearance = newc }
     pre . not $ ldata `canFlowTo` newc
     res <- run $ ( act ldata >> return False) `catch`
            (\(SomeException _) -> return True)
@@ -420,7 +436,7 @@ prop_guard_fail_if_label_below_current act = monadicDC $
     c    <- run getClearance
     pre $ newl `canFlowTo` c
     -- reset current label from blottom:
-    run $ updateLIOStateTCB $ \s -> s { lioLabel = newl }
+    run $ modifyLIOStateTCB $ \s -> s { lioLabel = newl }
     pre $ (not $ newl `canFlowTo` ldata) && ldata `canFlowTo` c
     res <- run $ ( act ldata >> return False) `catch`
            (\(SomeException _) -> return True)
@@ -432,7 +448,7 @@ prop_guard_raises_label act = monadicDC $ do
   ldata <- pick arbitrary
   l1    <- run getLabel
   c     <- run getClearance
-  let lres = ldata `upperBound` l1
+  let lres = ldata `lub` l1
   pre $ lres `canFlowTo` c
   run $ act lres
   l2    <- run getLabel

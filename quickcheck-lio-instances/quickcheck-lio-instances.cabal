@@ -1,5 +1,5 @@
 Name:           quickcheck-lio-instances
-Version:        0.91
+Version:        0.10.0.0
 Cabal-Version:  >= 1.8
 Build-type:     Simple
 License:        GPL
@@ -13,12 +13,12 @@ Description:
 
 Library
   Build-Depends:
-    base                 >= 4.5     && < 5.0,
-    containers           >= 0.4.2.1 && < 1.0,
-    bytestring           >= 0.9.2.1 && < 1.0,
-    QuickCheck           >= 2.3     && < 2.6,
-    quickcheck-instances >= 0.3.0   && < 1.0,
-    lio                  >= 0.91
+    base  >= 4.5
+   ,containers
+   ,bytestring
+   ,QuickCheck
+   ,quickcheck-instances
+   ,lio
 
   Ghc-options: -Wall -fno-warn-orphans
 

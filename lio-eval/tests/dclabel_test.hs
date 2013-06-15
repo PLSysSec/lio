@@ -50,7 +50,7 @@ prop_dc_mappendPrivs l1 l2 p1 = forAll (arbitrary :: Gen DCPriv) $ \p2 ->
 
 -- Check that labels flow to their join for DCLabels
 prop_dc_join :: DCLabel -> DCLabel -> Bool
-prop_dc_join l1 l2  = let l3 = l1 `upperBound` l2
+prop_dc_join l1 l2  = let l3 = l1 `lub` l2
                           t1 = l1 `canFlowTo` l3
                           t2 = l2 `canFlowTo` l3
                       in t1 && t2
@@ -58,12 +58,12 @@ prop_dc_join l1 l2  = let l3 = l1 `upperBound` l2
 -- Check that join is the least upper bound for DCLabels
 prop_dc_join_lub ::  DCLabel -> DCLabel -> Property
 prop_dc_join_lub l1 l2 = forAll (arbitrary :: Gen DCLabel) $ \l3' ->
- (l1 `canFlowTo` l3') && (l2 `canFlowTo` l3') ==> (l1 `upperBound` l2) `canFlowTo` l3'
+ (l1 `canFlowTo` l3') && (l2 `canFlowTo` l3') ==> (l1 `lub` l2) `canFlowTo` l3'
                   
 
 -- Check that meet flows to the labels making it, for DCLabels
 prop_dc_meet ::  DCLabel -> DCLabel -> Bool
-prop_dc_meet  l1 l2  = let l3 = l1 `lowerBound` l2
+prop_dc_meet  l1 l2  = let l3 = l1 `glb` l2
                            t1 = l3 `canFlowTo` l1
                            t2 = l3 `canFlowTo` l2
                        in t1 && t2
@@ -71,7 +71,7 @@ prop_dc_meet  l1 l2  = let l3 = l1 `lowerBound` l2
 -- Check that meet the greatest lower bound for DCLabels
 prop_dc_meet_glb :: DCLabel -> DCLabel -> Property
 prop_dc_meet_glb l1 l2 = forAll (arbitrary :: Gen DCLabel) $ \l3' ->
- (l3' `canFlowTo` l1) && (l3' `canFlowTo` l2) ==> l3' `canFlowTo` (l1 `lowerBound` l2)
+ (l3' `canFlowTo` l1) && (l3' `canFlowTo` l2) ==> l3' `canFlowTo` (l1 `glb` l2)
 
 -- Check that the top is indeed indeed the highest element in the lattice
 prop_dc_top :: DCLabel -> Property
@@ -82,11 +82,6 @@ prop_dc_top l1 = forAll (gen l1) $ \l -> l `canFlowTo` dcTop
 -- Check that the bottom is indeed indeed the lowest element in the lattice
 prop_dc_bottom :: DCLabel -> Property
 prop_dc_bottom _ = forAll (arbitrary :: Gen DCLabel) $ \l -> dcBottom `canFlowTo` l
-
--- | Test serialization.
-prop_dc_serialize :: DCLabel -> Bool
-prop_dc_serialize l = case decode (encode l) of
-                        l' -> l' == l
 
 main :: IO ()
 main = defaultMain tests
@@ -105,7 +100,6 @@ tests = [
     , testProperty "DC labels form a partial order"             prop_dc_porder
     , testProperty "Flow check with privs is less restricting"  prop_dc_canFlowToP 
     , testProperty "Combined privileges are stronger"           prop_dc_mappendPrivs
-    , testProperty "Serialization of DC labels"                 prop_dc_serialize
     ]
   ]
 
