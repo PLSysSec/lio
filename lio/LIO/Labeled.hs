@@ -117,26 +117,6 @@ relabelLabeledP p newl (LabeledTCB oldl v) = do
   unless (canFlowToP p oldl newl) $ throwLIO InsufficientPrivs
   return $ LabeledTCB newl v
 
--- XXX the old behavior was:
---
--- It must be that the original label and new label are equal, modulo
--- the supplied privileges. In other words the label remains in the
--- same congruence class.
---
--- Consequently @relabelP p l lv@ throws an 'InsufficientPrivs'
--- exception if
---
--- @'canFlowToP' p l ('labelOf' lv) && 'canFlowToP' p ('labelOf' lv) l@
---
--- does not hold.
-{-
-relabelLabeledP p newl lv = do
-  let origl = labelOf lv
-  unless (canFlowToP p newl origl &&
-          canFlowToP p origl newl) $ throwLIO InsufficientPrivs
-  return . labelTCB newl $! unlabelTCB lv
--}
-
 -- | Raises the label of a 'Labeled' to the 'upperBound' of it's current
 -- label and the value supplied.  The label supplied must be bounded by
 -- the current label and clearance, though the resulting label may not be
@@ -156,10 +136,6 @@ taintLabeledP p l (LabeledTCB lold v) = do
   let lnew = lold `lub` l
   guardAllocP p lnew
   return $ LabeledTCB lnew v
--- XXX changed semantics.  The old version allowed creation of Labeled
--- objects above the current clearance and forced value v.  The new
--- version bounds lnew with guardAllocP (which is not the same thing
--- as bounding l!) but does not force evaluation of v.
 
 -- | Downgrades a label.
 untaintLabeledP :: PrivDesc l p
@@ -182,19 +158,16 @@ Making 'Labeled' an instance of 'Functor' is problematic because:
    if @lv@ is a high-integrity labeled value without any any authority
    or /endorsement/.
 
-As a result, we provide a class 'LabeledFunctor' that exports 'lFmap'
-(labeled 'fmap') that addressed the above issues. Firstly, each newly
-created value is in the 'LIO' monad and secondly each label format
-implementation must produce their own definition of 'lFmap' such that
-the end label protects the computation result accordingly.
+Similarly, defining an instance of 'Applicative' is an issue.
+
+Instead, we provide 'lFmap' (labeled 'fmap') and 'lAp' that address
+the above issues.
 
 -}
 
--- | TODO(alevy): fix docs
--- IFC-aware functor instance. Since certain label formats may contain
--- integrity information, this is provided as a class rather than a
--- function. Such label formats will likely wish to drop endorsements in
--- the new labeled valued.
+-- | IFC-aware 'fmap'. The label of the returned value is the least
+-- upper bound of the current label and label of the supplied labeled
+-- value.
 lFmap :: Label l => Labeled l a -> (a -> b) -> LIO l (Labeled l b)
 lFmap (LabeledTCB lold v) f = do
   l <- getLabel
@@ -204,8 +177,9 @@ lFmap (LabeledTCB lold v) f = do
   label lnew $ f v
 
 
--- | What the heck, if we're providing a pseudo-functor with 'lFmap',
--- why not make it applicative?
+-- | IFC-aware 'ap'. The label of the returned value is the least
+-- upper bound of the current label, label of the supplied labeled
+-- value, and label of the supplied function.
 lAp :: Label l => Labeled l (a -> b) -> Labeled l a -> LIO l (Labeled l b)
 lAp (LabeledTCB lf f) (LabeledTCB la a) = do
   l <- getLabel
