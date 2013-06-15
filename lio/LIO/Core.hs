@@ -71,7 +71,7 @@ module LIO.Core (
     LIO
   , MonadLIO(..)
   -- ** Execute LIO actions
-  , LIOState(..), getLIOState, evalLIO, runLIO
+  , LIOState(..), evalLIO, runLIO
   -- ** Manipulating label state
   , getLabel, setLabel, setLabelP
   -- ** Manipulating clearance
@@ -109,7 +109,7 @@ import LIO.Privs
 
 -- | Returns the current value of the thread's label.
 getLabel :: Label l => LIO l l
-getLabel = lioLabel `liftM` getLIOState
+getLabel = lioLabel `liftM` getLIOStateTCB
 
 
 -- | Raise the current label to the provided label, which must be
@@ -129,7 +129,7 @@ setLabelP p l = do
 
 -- | Returns the current value of the thread's clearance.
 getClearance :: Label l => LIO l l
-getClearance = lioClearance `liftM` getLIOState
+getClearance = lioClearance `liftM` getLIOStateTCB
 
 -- | Lower the current clearance. The new clerance must be between
 -- the current label and clerance. One cannot raise the current label
@@ -146,7 +146,7 @@ setClearance = setClearanceP noPrivs
 -- clearance, i.e., @l ``canFlowTo`` cnew@ must hold.
 setClearanceP :: PrivDesc l p => Priv p -> l -> LIO l ()
 setClearanceP p cnew = do
-  LIOState l c <- getLIOState
+  LIOState l c <- getLIOStateTCB
   unless (canFlowToP p cnew c) $! throwLIO InsufficientPrivs
   unless (l `canFlowTo` cnew)  $! throwLIO CurrentLabelViolation
   putLIOStateTCB $ LIOState l cnew

@@ -26,7 +26,7 @@ module LIO.TCB (
   -- * LIO monad
     LIOState(..), LIO(..), runLIO, evalLIO, MonadLIO(..)
   -- ** Accessing internal state
-  , getLIOState, putLIOStateTCB, modifyLIOStateTCB, updateLIOStateTCB 
+  , getLIOStateTCB, putLIOStateTCB, modifyLIOStateTCB, updateLIOStateTCB 
   -- * Executing IO actions
   , ioTCB
   -- * Exception handling
@@ -137,9 +137,9 @@ instance Label l => MonadLIO l (LIO l) where
 -- | Get internal state. This function is not actually unsafe, but
 -- to avoid future security bugs we leave all direct access to the
 -- internal state to trusted code.
-getLIOState :: LIO l (LIOState l)
-{-# INLINE getLIOState #-}
-getLIOState = LIOTCB readIORef
+getLIOStateTCB :: LIO l (LIOState l)
+{-# INLINE getLIOStateTCB #-}
+getLIOStateTCB = LIOTCB readIORef
 
 -- | Set internal state.
 putLIOStateTCB :: LIOState l -> LIO l ()
@@ -150,7 +150,7 @@ putLIOStateTCB s = LIOTCB $ \sp -> writeIORef sp $! s
 modifyLIOStateTCB :: Label l => (LIOState l -> LIOState l) -> LIO l ()
 {-# INLINE modifyLIOStateTCB #-}
 modifyLIOStateTCB f = do
-  s <- getLIOState
+  s <- getLIOStateTCB
   putLIOStateTCB (f s)
 
 {-# DEPRECATED updateLIOStateTCB "Use modifyLIOStateTCB instead" #-}
@@ -212,7 +212,7 @@ catch io h =
   where uncatchableType = typeOf (undefined :: Uncatchable)
         safeh e@(SomeException einner) = do
           when (typeOf einner == uncatchableType) $ throwLIO e
-          LIOState l c <- getLIOState
+          LIOState l c <- getLIOStateTCB
           unless (l `canFlowTo` c) $ throwLIO e
           maybe (throwLIO e) h $ fromException e
 

@@ -49,7 +49,7 @@ import LIO.TCB
 -- | Execute an 'LIO' computation in a new lightweight thread.
 forkLIO :: LIO l () -> LIO l ()
 forkLIO lio = do
-  s <- getLIOState
+  s <- getLIOStateTCB
   ioTCB $ void $ runLIO lio s
 
 -- | Labeled fork. @lFork@ allows one to invoke computations that

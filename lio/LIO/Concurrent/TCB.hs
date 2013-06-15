@@ -53,7 +53,7 @@ lForkP p l lio = do
   guardAllocP p l
   mv <- ioTCB IO.newEmptyMVar
   st <- ioTCB $ newIORef LResEmpty
-  s0 <- getLIOState
+  s0 <- getLIOStateTCB
   tid <- ioTCB $ IO.mask $ \unmask -> IO.forkIO $ do
     sp <- newIORef s0
     ea <- IO.try $ unmask $ unLIOTCB lio sp
