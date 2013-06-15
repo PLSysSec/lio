@@ -46,7 +46,7 @@ import LIO.Label
 import LIO.Core
 import LIO.Privs
 import LIO.TCB
-import LIO.TCB.GuardIO
+import LIO.TCB.LObj
 
 --
 -- Creating labeled 'MVar's

@@ -25,7 +25,7 @@
 --
 -- Then application-specific trusted code can wrap a specific label
 -- around each 'Handle' using the 'LObjTCB' constructor.
-module LIO.TCB.GuardIO (LObj(..), blessTCB, blessPTCB, GuardIO(..)) where
+module LIO.TCB.LObj (LObj(..), blessTCB, blessPTCB, GuardIO(..)) where
 
 import Data.Typeable
 

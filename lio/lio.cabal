@@ -84,6 +84,6 @@ Library
     LIO.DCLabel.DSL
     -- * Privileged internals
     LIO.TCB
-    LIO.TCB.GuardIO
+    LIO.TCB.LObj
     LIO.TCB.Concurrent
     LIO.TCB.DCLabel
