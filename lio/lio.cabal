@@ -54,8 +54,6 @@ Source-repository head
 Library
   Build-Depends:
     base          >= 4.5     && < 5.0
-   ,binary
-   ,transformers
    ,containers
    ,bytestring
 
