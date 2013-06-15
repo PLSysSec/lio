@@ -286,7 +286,7 @@ prop_guard_curLabel_flowsTo_curClearance = monadicDC $ do
 -- | paranoidDC catches exceptions thrown by 'throw'
 test_paranoidDC_catch_throw :: Assertion
 test_paranoidDC_catch_throw = do
-  res <- evalDC (IO.throw A)
+  res <- IO.try $ evalDC (IO.throw A)
   case res of
     Left se -> HU.assert $ fromException se == Just A
     _ -> assertFailure "did not catch exception"
@@ -294,9 +294,9 @@ test_paranoidDC_catch_throw = do
 -- | paranoidDC catches 'undefined'
 test_paranoidDC_catch_undefined :: Assertion
 test_paranoidDC_catch_undefined = do
-  res <- evalDC undefined
+  res <- IO.try $ evalDC undefined
   case res of
-    Left _ -> return ()
+    Left (SomeException _) -> return ()
     _ -> assertFailure "did not catch exception"
 
 -- | Check that the current label is raised when reading/writing
