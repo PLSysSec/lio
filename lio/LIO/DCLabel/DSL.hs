@@ -2,9 +2,20 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 {-|
-  This module implements a ``nano``, very simple, embedded domain
-  specific language to create 'Component's, privilage descriptions
-  and labels from conjunctions of principal disjunctions.
+  This module implements a simple, embedded domain specific language
+  to create 'Component's, privilage descriptions and labels from
+  conjunctions of principal disjunctions.
+
+  A 'DCLabel' consists of a secrecy 'Component' and an integrity
+  'Component'.  The '%%' operator allows one to construct a 'DCLabel'
+  by joining a secrecy 'Component' (on the left) with an integrity
+  'Component' on the right.  This is similar to 'dcLabel', except that
+  the arguments can also be instances of 'ToComponent'.  For example,
+  the following expresses data that can be exported by the principal
+  \"Alice\" and written by anybody:  @\"Alice\" '%%' 'True'@.  (The
+  component 'True' or 'dcTrue' indicates a trivially satisfiable label
+  component, which in this case means a label with no integrity
+  guarantees.)
 
   A 'Component' or 'DCPrivDesc' is created using the ('\/') and ('/\')
   operators.  The disjunction operator ('\/') is used to create a
@@ -41,22 +52,23 @@
   Consider the following, example:
 
   @
-     l1 = \"Alice\" '\/' \"Bob\" '/\' \"Carla\"
-     l2 = \"Alice\" '/\' \"Carla\"
-     dc1 = 'dcLabel' l1 l2
-     dc2 = 'dcLabel' ('toComponent' \"Djon\") ('toComponent' \"Alice\")
-     pr = 'dcPrivTCB' . 'dcPrivDesc' $ \"Alice\" '/\' \"Carla\"
+l1 = \"Alice\" '\/' \"Bob\" '/\' \"Carla\"
+l2 = \"Alice\" '/\' \"Carla\"
+dc1 = 'dcLabel' l1 l2
+dc2 = 'dcLabel' ('toComponent' \"Djon\") ('toComponent' \"Alice\")
+pr = PrivTCB $ toComponent $ \"Alice\" '/\' \"Carla\"
   @
 
-where
+  This will result in the following:
 
-  * @ dc1 = \<{[\"Alice\" &#8897; \"Bob\"] &#8896; [\"Carla\"]} , {[\"Alice\"] &#8896; [\"Carla\"]}\>@
-  
-  * @ dc2 = \<{[\"Djon\"]} , {[\"Alice\"]}\>@
-
-  * @ 'canFlowTo' dc1 dc2 = False @
-
-  * @ 'canFlowToP' pr dc1 dc2 = True@
+>>> dc1
+"Carla" /\ ("Alice" \/ "Bob") %% "Alice" /\ "Carla"
+>>> dc2
+"Djon" %% "Alice"
+>>> canFlowTo dc1 dc2
+False
+>>> canFlowToP pr dc1 dc2
+True
 
 -}
 
@@ -64,12 +76,9 @@ module LIO.DCLabel.DSL (
   -- * Operators
     (%%), (\/), (/\), ToComponent(..)
   , fromList, toList
-  -- * Aliases
-  , everybody, anybody
   ) where
 
 import qualified Data.Set as Set
-import qualified Data.ByteString.Char8 as S8
 
 import LIO.Privs
 import LIO.DCLabel.Core
@@ -89,7 +98,7 @@ infix 5 %%
 -- @
 --
 -- @
--- infixl 5 %%
+-- infix 5 %%
 -- @
 (%%) :: (ToComponent a, ToComponent b) => a -> b -> DCLabel
 (%%) sec int = dcLabel (toComponent sec) (toComponent int)
@@ -110,14 +119,16 @@ instance ToComponent Principal where
 
 -- | Convert singleton 'Principal' (in the form of a 'String')to 'Component'.
 instance ToComponent String where
-  toComponent = toComponent . S8.pack
+  toComponent = toComponent . principal
 
+{-
 -- | Convert singleton 'Principal' (in the form of a @ByteString@)to
 -- 'Component'.
 instance ToComponent S8.ByteString where
   toComponent = toComponent . Principal
 -- XXX we should consider eliminating S8.ByteString instance, as it
 -- makes it hard to use toComponent with OverloadedStrings
+-}
 
 instance ToComponent Bool where
   {-# INLINE toComponent #-}
@@ -145,9 +156,16 @@ a /\ b = dcReduce $! toComponent a `dcAnd` toComponent b
 (\/) :: (ToComponent a, ToComponent b) => a -> b -> Component
 a \/ b = dcReduce $! toComponent a `dcOr` toComponent b
 
+{-
 --
 -- Aliases
 --
+
+XXX - These are bad, because in English saying "everybody can read"
+and "anybody can read" sound like the same thing.  If we are going to
+have aliases (though I don't think we should), they should be
+something like impossible or unsatisfiable (for dcFalse) and open or
+unrestricted (for dcTrue).
 
 -- | Logical falsehood can be thought of as the component containing
 -- every possible principal:
@@ -164,11 +182,12 @@ everybody = dcFalse
 --
 anybody :: Component
 anybody = dcTrue
+-}
 
 
 -- | Convert a 'Component' to a list of list of 'Principal's if the
 -- 'Component' does not have the value 'DCFalse'. In the latter case
--- the function returns 'Nothing'.
+-- the function returns an exception.
 toList :: Component -> [[Principal]]
 toList DCFalse        = error "toList: Invalid use, expected DCFormula"
 toList (DCFormula cs) = map (Set.toList . unClause) $! Set.toList cs
