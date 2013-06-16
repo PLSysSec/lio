@@ -57,7 +57,7 @@ type DCPriv = Priv DCPrivDesc
 -- | The empty privilege, or no privileges, corresponds to logical
 -- @True@.
 noPriv :: DCPriv
-noPriv = MintTCB dcTrue
+noPriv = PrivTCB dcTrue
 
 -- | Given a privilege and a privilege description turn the privilege
 -- description into a privilege (i.e., mint). Such delegation succeeds
@@ -65,7 +65,7 @@ noPriv = MintTCB dcTrue
 dcDelegatePriv :: DCPriv -> DCPrivDesc -> Maybe DCPriv
 dcDelegatePriv p pd = let c  = privDesc $! p
                       in if c `dcImplies` pd
-                           then Just $! MintTCB pd
+                           then Just $! PrivTCB pd
                            else Nothing
 
 -- | We say a piece of code having a privilege object (of type 'DCPriv')
