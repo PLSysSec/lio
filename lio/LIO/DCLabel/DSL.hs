@@ -74,8 +74,6 @@ import           LIO.DCLabel.Core
 import qualified Data.Set as Set
 import qualified Data.ByteString.Char8 as S8
 
-type S8 = S8.ByteString
-
 -- | Convert a type (e.g., 'Clause', 'Principal') to a label component.
 class ToComponent a where
   -- | Convert to 'Component'
@@ -86,6 +84,7 @@ class ToComponent a where
 
 -- | Identity of 'Component'.
 instance ToComponent Component where
+  {-# INLINE toComponent #-}
   toComponent = id
 -- | Convert singleton 'Clause' to 'Component'.
 instance ToComponent Clause    where
@@ -94,11 +93,16 @@ instance ToComponent Clause    where
 instance ToComponent Principal where
   toComponent p = toComponent . Clause $! Set.singleton p
 -- | Convert singleton 'Principal' (in the form of a @ByteString@)to 'Component'.
-instance ToComponent S8 where
+instance ToComponent S8.ByteString where
   toComponent = toComponent . Principal
 -- | Convert singleton 'Principal' (in the form of a 'String')to 'Component'.
 instance ToComponent String where
   toComponent = toComponent . S8.pack
+
+instance ToComponent Bool where
+  {-# INLINE toComponent #-}
+  toComponent True = DCFormula Set.empty
+  toComponent False = DCFalse
 
 infixl 7 \/
 infixl 6 /\
