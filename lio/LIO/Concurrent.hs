@@ -25,7 +25,7 @@ result of such a sub-computation.
 module LIO.Concurrent (
     LabeledResult
   -- * Forking new threads
-  , forkLIO, lForkP, lFork
+  , lForkP, lFork
   -- * Waiting on threads
   , lWaitP, lWait
   , trylWaitP, trylWait
@@ -38,7 +38,6 @@ module LIO.Concurrent (
 import qualified Control.Concurrent as IO
 import qualified Control.Exception as IO
 import Data.IORef
-import Control.Monad
 
 import LIO.Concurrent.LMVar
 import LIO.Core
@@ -52,12 +51,6 @@ import LIO.TCB.Concurrent
 --
 -- Fork
 --
-
--- | Execute an 'LIO' computation in a new lightweight thread.
-forkLIO :: LIO l () -> LIO l ()
-forkLIO lio = do
-  s <- getLIOStateTCB
-  ioTCB $ void $ runLIO lio s
 
 -- | Labeled fork. @lFork@ allows one to invoke computations that
 -- would otherwise raise the current label, but without actually
