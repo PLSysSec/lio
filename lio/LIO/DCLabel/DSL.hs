@@ -1,6 +1,5 @@
 {-# LANGUAGE Safe #-}
-{-# LANGUAGE TypeSynonymInstances,
-             FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 {-|
   This module implements a ``nano``, very simple, embedded domain
@@ -69,18 +68,16 @@ module LIO.DCLabel.DSL (
   , everybody, anybody
   ) where
 
-import           LIO.DCLabel.Privs
-import           LIO.DCLabel.Core
 import qualified Data.Set as Set
 import qualified Data.ByteString.Char8 as S8
+
+import LIO.Privs
+import LIO.DCLabel.Core
 
 -- | Convert a type (e.g., 'Clause', 'Principal') to a label component.
 class ToComponent a where
   -- | Convert to 'Component'
   toComponent :: a -> Component
-  -- | Trivial synonym for 'toComponent'. Convert to a 'DCPrivDesc'.
-  dcPrivDesc :: a -> DCPrivDesc
-  dcPrivDesc = toComponent
 
 infix 5 %%
 
@@ -101,18 +98,26 @@ infix 5 %%
 instance ToComponent Component where
   {-# INLINE toComponent #-}
   toComponent = id
+instance ToComponent (Priv Component) where
+  {-# INLINE toComponent #-}
+  toComponent = privDesc
 -- | Convert singleton 'Clause' to 'Component'.
 instance ToComponent Clause    where
   toComponent c = DCFormula $! Set.singleton c
 -- | Convert singleton 'Principal' to 'Component'.
 instance ToComponent Principal where
   toComponent p = toComponent . Clause $! Set.singleton p
--- | Convert singleton 'Principal' (in the form of a @ByteString@)to 'Component'.
-instance ToComponent S8.ByteString where
-  toComponent = toComponent . Principal
+
 -- | Convert singleton 'Principal' (in the form of a 'String')to 'Component'.
 instance ToComponent String where
   toComponent = toComponent . S8.pack
+
+-- | Convert singleton 'Principal' (in the form of a @ByteString@)to
+-- 'Component'.
+instance ToComponent S8.ByteString where
+  toComponent = toComponent . Principal
+-- XXX we should consider eliminating S8.ByteString instance, as it
+-- makes it hard to use toComponent with OverloadedStrings
 
 instance ToComponent Bool where
   {-# INLINE toComponent #-}
