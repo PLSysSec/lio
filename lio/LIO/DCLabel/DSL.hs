@@ -4,9 +4,9 @@
 
 {-|
   This module implements a ``nano``, very simple, embedded domain
-  specific language to create 'Component's and privilage descriptions
-  from conjunctions of principal disjunctions.
-  
+  specific language to create 'Component's, privilage descriptions
+  and labels from conjunctions of principal disjunctions.
+
   A 'Component' or 'DCPrivDesc' is created using the ('\/') and ('/\')
   operators.  The disjunction operator ('\/') is used to create a
   'Clause' from 'Principal's, ByteStrings, or a disjunctive
@@ -85,7 +85,15 @@ class ToComponent a where
 infix 5 %%
 
 -- | Create a `DCLabel` from a secrecy `ToComponent` and integrity
--- `ToComponent`
+-- `ToComponent`. E.g.:
+--
+-- @
+--   \"secrecy\" %% \"integrity\"
+-- @
+--
+-- @
+-- infixl 5 %%
+-- @
 (%%) :: (ToComponent a, ToComponent b) => a -> b -> DCLabel
 (%%) sec int = dcLabel (toComponent sec) (toComponent int)
 
