@@ -63,7 +63,7 @@ where
 
 module LIO.DCLabel.DSL (
   -- * Operators
-    (\/), (/\), ToComponent(..)
+    (%%), (\/), (/\), ToComponent(..)
   , fromList, toList
   -- * Aliases
   , everybody, anybody
@@ -83,6 +83,13 @@ class ToComponent a where
   -- | Trivial synonym for 'toComponent'. Convert to a 'DCPrivDesc'.
   dcPrivDesc :: a -> DCPrivDesc
   dcPrivDesc = toComponent
+
+infix 5 %%
+
+-- | Create a `DCLabel` from a secrecy `ToComponent` and integrity
+-- `ToComponent`
+(%%) :: (ToComponent a, ToComponent b) => a -> b -> DCLabel
+(%%) sec int = dcLabel (toComponent sec) (toComponent int)
 
 -- | Identity of 'Component'.
 instance ToComponent Component where
