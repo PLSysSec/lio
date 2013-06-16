@@ -76,6 +76,8 @@ module LIO.DCLabel.DSL (
   -- * Operators
     (%%), (\/), (/\), ToComponent(..)
   , fromList, toList
+  -- * Aliases
+  , impossible, unrestricted
   ) where
 
 import qualified Data.Set as Set
@@ -121,15 +123,6 @@ instance ToComponent Principal where
 instance ToComponent String where
   toComponent = toComponent . principal
 
-{-
--- | Convert singleton 'Principal' (in the form of a @ByteString@)to
--- 'Component'.
-instance ToComponent S8.ByteString where
-  toComponent = toComponent . Principal
--- XXX we should consider eliminating S8.ByteString instance, as it
--- makes it hard to use toComponent with OverloadedStrings
--}
-
 instance ToComponent Bool where
   {-# INLINE toComponent #-}
   toComponent True = DCFormula Set.empty
@@ -156,34 +149,25 @@ a /\ b = dcReduce $! toComponent a `dcAnd` toComponent b
 (\/) :: (ToComponent a, ToComponent b) => a -> b -> Component
 a \/ b = dcReduce $! toComponent a `dcOr` toComponent b
 
-{-
 --
 -- Aliases
 --
 
-XXX - These are bad, because in English saying "everybody can read"
-and "anybody can read" sound like the same thing.  If we are going to
-have aliases (though I don't think we should), they should be
-something like impossible or unsatisfiable (for dcFalse) and open or
-unrestricted (for dcTrue).
-
 -- | Logical falsehood can be thought of as the component containing
--- every possible principal:
+-- every possible principal, hence impossible to express:
 --
--- > everybody = dcFalse
+-- > impossible = dcFalse
 --
-everybody :: Component
-everybody = dcFalse
+impossible :: Component
+impossible = dcFalse
 
 -- | Logical truth can be thought of as the component containing
--- no specific principal:
+-- no specific principal, hence imposing no restrictions:
 --
--- > anybody = dcTrue
+-- > unrestricted = dcTrue
 --
-anybody :: Component
-anybody = dcTrue
--}
-
+unrestricted :: Component
+unrestricted = dcTrue
 
 -- | Convert a 'Component' to a list of list of 'Principal's if the
 -- 'Component' does not have the value 'DCFalse'. In the latter case
