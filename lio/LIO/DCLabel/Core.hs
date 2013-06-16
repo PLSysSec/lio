@@ -83,7 +83,7 @@ newtype Principal = Principal { principalName :: S8.ByteString
                               } deriving (Eq, Ord, Typeable)
 
 instance Show Principal where
-  show = S8.unpack . principalName
+  showsPrec _ = shows . principalName
 
 -- | Generate a principal from a 'String'.  (To create one from a
 -- 'S8.ByteString', just use the 'Principal' constructor directly.)
@@ -107,9 +107,12 @@ instance Ord Clause where
       _ -> Set.size c1 < Set.size c2
 
 instance Show Clause where
-  show c = let ps = map show . Set.toList $! unClause c
-           in parens . intercalate " \\/ " $! ps
-    where parens x = "[" ++ x ++ "]"
+  show c@(Clause uc)
+         | Set.size uc == 1 = show . head . Set.toList $ uc
+         | otherwise =
+              let ps = map show . Set.toList $! unClause c
+              in parens . intercalate " \\/ " $! ps
+    where parens x = "(" ++ x ++ ")"
 
 -- | Clause constructor
 clause :: Set Principal -> Clause
@@ -127,11 +130,10 @@ data Component = DCFalse
   deriving (Eq, Typeable)
 
 instance Show Component where
-  show c | isFalse c = "|False"
-         | isTrue c  = "|True"
+  show c | isFalse c = show False
+         | isTrue c  = show True
          | otherwise = let cs = map show . Set.toList $! unDCFormula c
-                       in parens . intercalate " /\\ " $! cs
-    where parens x = "{" ++ x ++ "}"
+                       in intercalate " /\\ " $! cs
 
 -- | Privileges can be combined using 'mappend'
 instance Monoid Component where
@@ -203,9 +205,10 @@ data DCLabel = DCLabel { dcSecrecy   :: !Component
                        } deriving (Eq, Typeable)
 
 instance Show DCLabel where 
-  show l = let s = dcSecrecy l
-               i = dcIntegrity l
-           in "< " ++ show s ++ " , " ++ show i ++ " >"
+  showsPrec d l = showParen (d > 5) $
+    let s = dcSecrecy l
+        i = dcIntegrity l
+    in showsPrec (d + 1) s . showString " %% " . showsPrec (d + 1) i
 
 -- | @dcLabel secrecyComponent integrityComponent@ creates a label,
 -- reducing each component to CNF.
