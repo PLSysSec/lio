@@ -1,7 +1,7 @@
 module Main where 
 
 import LIO
-import LIO.TCB (Priv (MintTCB) )
+import LIO.TCB
 import LIO.DCLabel
 
 -- | Simple secrecy component example
@@ -22,7 +22,7 @@ l2 = dcLabel (toComponent "Djon") (toComponent "Alice")
 
 -- | Creating privilege using constructor from TCB
 p :: DCPriv
-p = MintTCB  $ "Alice" /\ "Carla"
+p = PrivTCB  $ "Alice" /\ "Carla"
 
 main = do
   putStrLn $ "Label 1: " ++ show l1
