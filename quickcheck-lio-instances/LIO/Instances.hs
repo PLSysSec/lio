@@ -26,7 +26,7 @@ import LIO.LIORef
 import LIO.TCB
 import LIO.DCLabel
 import LIO.Concurrent.LMVar
-import LIO.TCB.GuardIO
+import LIO.TCB.LObj
 -- import LIO.Concurrent.LMVar.TCB (newLMVarTCB, unlabelLMVarTCB)
 import LIO.Exception
 
