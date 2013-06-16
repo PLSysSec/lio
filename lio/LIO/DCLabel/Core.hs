@@ -85,7 +85,8 @@ newtype Principal = Principal { principalName :: S8.ByteString
 instance Show Principal where
   show = S8.unpack . principalName
 
--- | Principal constructor.
+-- | Generate a principal from a 'String'.  (To create one from a
+-- 'S8.ByteString', just use the 'Principal' constructor directly.)
 principal :: String -> Principal
 principal = Principal . S8.pack
 
