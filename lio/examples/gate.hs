@@ -1,7 +1,7 @@
 import LIO
 import LIO.DCLabel
 
-import LIO.TCB (Priv (MintTCB) )
+import LIO.TCB
 
 
 -- | Add two numbers if the computation is invoked by Alice or Bob.
@@ -13,9 +13,9 @@ addGate = gate $ \pd a b ->
 
 
 alice, bob, clark :: DCPriv
-alice = MintTCB . dcPrivDesc $ "Alice"
-bob   = MintTCB . dcPrivDesc $ "Bob"
-clark = MintTCB . dcPrivDesc $ "Clark"
+alice = PrivTCB . dcPrivDesc $ "Alice"
+bob   = PrivTCB . dcPrivDesc $ "Bob"
+clark = PrivTCB . dcPrivDesc $ "Clark"
 
 main = putStrLn . show $ 
   [ callGate addGate alice 1 2 -- Just 3
