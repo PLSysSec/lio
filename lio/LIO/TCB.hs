@@ -161,16 +161,16 @@ makeCatchable e@(SomeException einner) =
 
 -- | A newtype wrapper that can be used by trusted code to bless
 -- privileges.  Privilege-related functions are defined in
--- "LIO.Privs", but the constructor, 'MintTCB', allows one to mint
+-- "LIO.Privs", but the constructor, 'PrivTCB', allows one to mint
 -- arbitrary privileges and hence must be located in this file.
-newtype Priv a = MintTCB a deriving (Show, Eq, Typeable)
+newtype Priv a = PrivTCB a deriving (Show, Eq, Typeable)
 
 instance Monoid p => Monoid (Priv p) where
-  mempty = MintTCB mempty
+  mempty = PrivTCB mempty
   {-# INLINE mappend #-}
-  mappend (MintTCB m1) (MintTCB m2) = MintTCB $ m1 `mappend` m2
+  mappend (PrivTCB m1) (PrivTCB m2) = PrivTCB $ m1 `mappend` m2
   {-# INLINE mconcat #-}
-  mconcat ps = MintTCB $ mconcat $ map (\(MintTCB p) -> p) ps
+  mconcat ps = PrivTCB $ mconcat $ map (\(PrivTCB p) -> p) ps
 
 --
 -- Pure labeled values

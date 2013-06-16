@@ -53,7 +53,7 @@ import LIO.TCB
 --
 
 privDesc :: Priv a -> a
-privDesc (MintTCB a) = a
+privDesc (PrivTCB a) = a
 
 -- | This class defines privileges and the more-permissive relation
 -- ('canFlowToP') on labels using privileges. Additionally, it defines
@@ -107,7 +107,7 @@ partDowngradeP priv = partDowngradePrivDesc (privDesc priv)
 data NoPrivs = NoPrivs deriving (Show, Read)
 
 noPrivs :: Priv NoPrivs
-noPrivs = MintTCB NoPrivs
+noPrivs = PrivTCB NoPrivs
 
 instance Monoid NoPrivs where
   mempty      = NoPrivs
@@ -199,9 +199,9 @@ principals. Otherwise, it simply returns @Nothing@.
 > 
 > 
 > alice, bob, clark :: DCPriv
-> alice = MintTCB . dcPrivDesc $ "Alice"
-> bob   = MintTCB . dcPrivDesc $ "Bob"
-> clark = MintTCB . dcPrivDesc $ "Clark"
+> alice = PrivTCB . dcPrivDesc $ "Alice"
+> bob   = PrivTCB . dcPrivDesc $ "Bob"
+> clark = PrivTCB . dcPrivDesc $ "Clark"
 > 
 > main = putStrLn . show $ 
 >   [ callGate addGate alice 1 2 -- Just 3

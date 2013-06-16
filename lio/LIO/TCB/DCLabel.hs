@@ -18,5 +18,5 @@ import LIO.TCB
 
 -- | The all privilege corresponds to logical @False@
 allPrivTCB :: DCPriv
-allPrivTCB = MintTCB dcFalse
+allPrivTCB = PrivTCB dcFalse
 
