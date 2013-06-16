@@ -71,9 +71,6 @@ import Data.Typeable
 import LIO.Label
 import LIO.Privs
 
-type S8 = S8.ByteString
-
-
 --
 -- Principals
 --
@@ -81,7 +78,7 @@ type S8 = S8.ByteString
 -- | A @Principal@ is a simple string representing a source of
 -- authority. Any piece of code can create principals, regardless of how
 -- untrusted it is.
-newtype Principal = Principal { principalName :: S8 
+newtype Principal = Principal { principalName :: S8.ByteString
                                 -- ^ Get the principal name.
                               } deriving (Eq, Ord, Typeable)
 
@@ -89,8 +86,8 @@ instance Show Principal where
   show = S8.unpack . principalName
 
 -- | Principal constructor.
-principal :: S8 -> Principal
-principal = Principal
+principal :: String -> Principal
+principal = Principal . S8.pack
 
 --
 -- Category - disjunction clauses

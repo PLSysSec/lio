@@ -95,7 +95,7 @@ instance ToComponent Principal where
   toComponent p = toComponent . Clause $! Set.singleton p
 -- | Convert singleton 'Principal' (in the form of a @ByteString@)to 'Component'.
 instance ToComponent S8 where
-  toComponent = toComponent . principal
+  toComponent = toComponent . Principal
 -- | Convert singleton 'Principal' (in the form of a 'String')to 'Component'.
 instance ToComponent String where
   toComponent = toComponent . S8.pack
