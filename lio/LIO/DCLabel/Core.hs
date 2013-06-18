@@ -164,6 +164,7 @@ instance PrivDesc DCLabel Component where
     in dcLabel sec_res int_res
       where f c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
 
+  downgradePrivDesc p l = partDowngradePrivDesc p l dcBottom
 
 
 -- | Logical @True@.
