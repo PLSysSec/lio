@@ -46,6 +46,7 @@ import LIO.TCB
 data LObj label object = LObjTCB !label !object deriving (Typeable)
 
 instance LabelOf LObj where
+  {-# INLINE labelOf #-}
   labelOf (LObjTCB l _) = l
 
 instance (Label l, Show t) => ShowTCB (LObj l t) where

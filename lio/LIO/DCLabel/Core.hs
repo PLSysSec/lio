@@ -118,6 +118,13 @@ instance Show Clause where
 clause :: Set Principal -> Clause
 clause = Clause
 
+{- $component
+   A 'Component' is a conjunction of disjunctions of 'Principal's. A
+   'DCLabel' is simply a pair of such 'Component's. Hence, we define
+   almost all operations in terms of this construct, from which the
+   'DCLabel' implementation follows almost trivially.
+-}
+
 -- | A component is a set of clauses, i.e., a formula (conjunction of
 -- disjunction of 'Principal's). @DCFalse@ corresponds to logical
 -- @False@, while @DCFormula Set.empty@ corresponds to logical @True@.
@@ -139,6 +146,44 @@ instance Show Component where
 instance Monoid Component where
   mempty = dcTrue
   mappend p1 p2 = dcReduce $! p1 `dcAnd` p2
+
+
+-- | Logical @True@.
+dcTrue :: Component
+dcTrue = DCFormula Set.empty
+
+-- | Logical @False@.
+dcFalse :: Component
+dcFalse = DCFalse
+
+-- | Arbitrary formula from a clause.
+dcFormula :: Set Clause -> Component
+dcFormula = DCFormula
+
+-- | Is the component @True@.
+isTrue :: Component -> Bool
+isTrue = (== dcTrue)
+
+-- | Is the component @False@.
+isFalse :: Component -> Bool
+isFalse = (== dcFalse)
+
+--
+-- Labels
+--
+
+-- | A @DCLabel@ is a pair of secrecy and integrity 'Component's.
+data DCLabel = DCLabel { dcSecrecy   :: !Component
+                         -- ^ Extract secrecy component of a label
+                       , dcIntegrity :: !Component
+                         -- ^ Extract integrity component of a label
+                       } deriving (Eq, Typeable)
+
+instance Show DCLabel where 
+  showsPrec d l = showParen (d > 5) $
+    let s = dcSecrecy l
+        i = dcIntegrity l
+    in showsPrec (d + 1) s . showString " %% " . showsPrec (d + 1) i
 
 instance PrivDesc DCLabel Component where
   canFlowToPrivDesc pd l1 l2
@@ -166,50 +211,6 @@ instance PrivDesc DCLabel Component where
 
   downgradePrivDesc p l = partDowngradePrivDesc p l dcBottom
 
-
--- | Logical @True@.
-dcTrue :: Component
-dcTrue = DCFormula Set.empty
-
--- | Logical @False@.
-dcFalse :: Component
-dcFalse = DCFalse
-
--- | Arbitrary formula from a clause.
-dcFormula :: Set Clause -> Component
-dcFormula = DCFormula
-
--- | Is the component @True@.
-isTrue :: Component -> Bool
-isTrue = (== dcTrue)
-
--- | Is the component @False@.
-isFalse :: Component -> Bool
-isFalse = (== dcFalse)
-
---
--- Labels
---
-
-{- $component
-   A 'Component' is a conjunction of disjunctions of 'Principal's. A
-   'DCLabel' is simply a pair of such 'Component's. Hence, we define
-   almost all operations in terms of this construct, from which the
-   'DCLabel' implementation follows almost trivially.
--}
-
--- | A @DCLabel@ is a pair of secrecy and integrity 'Component's.
-data DCLabel = DCLabel { dcSecrecy   :: !Component
-                         -- ^ Extract secrecy component of a label
-                       , dcIntegrity :: !Component
-                         -- ^ Extract integrity component of a label
-                       } deriving (Eq, Typeable)
-
-instance Show DCLabel where 
-  showsPrec d l = showParen (d > 5) $
-    let s = dcSecrecy l
-        i = dcIntegrity l
-    in showsPrec (d + 1) s . showString " %% " . showsPrec (d + 1) i
 
 -- | @dcLabel secrecyComponent integrityComponent@ creates a label,
 -- reducing each component to CNF.
@@ -288,16 +289,16 @@ dcImplies f1@(DCFormula cs1) f2@(DCFormula cs2)
 -- | Logical conjunction
 dcAnd :: Component -> Component -> Component 
 dcAnd x y | isFalse x || isFalse y = dcFalse
-          | otherwise = DCFormula $! unDCFormula x `Set.union` unDCFormula y
+          | otherwise = DCFormula $ unDCFormula x `Set.union` unDCFormula y
 
 -- | Logical disjunction
 dcOr :: Component -> Component -> Component 
 dcOr x y | isTrue x || isTrue y = dcTrue
-dcOr x y | isFalse x = y
+         | isFalse x = y
          | isFalse y = x
          | otherwise = let cs1 = unDCFormula x
                            cs2 = unDCFormula y
-                       in DCFormula $! doOr cs1 cs2
+                       in DCFormula $ doOr cs1 cs2
   where -- | Perform disjunction of two components.
         doOr :: Set Clause -> Set Clause -> Set Clause
         doOr cs1 cs2 = Set.foldl' disjFunc Set.empty cs2

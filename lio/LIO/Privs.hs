@@ -5,29 +5,32 @@
 {- | 
 
 Privileges are objects the possesion of which allows code to bypass
-some label protections.  An in instance of class 'PrivDesc' describes
+certain label protections.  An instance of class 'PrivDesc' describes
 a pre-order among labels in which certain unequal labels become
-equivalent.  When wrapped in a 'Priv' type (whose constructor is
-private) a 'PrivDesc' allows code to treat those labels as equivalent.
+equivalent.  A 'Priv' object containing a 'PrivDesc' instance allows
+code to make those unequal labels equivalent for the purposes of many
+library functions.  Effectively a 'PrivDesc' instance /describes/
+privileges, while a 'Priv' object /embodies/ them.  Security is
+enforced by preventing safe code from importing the constructor for
+'Priv' (called 'PrivTCB').
 
-Put another way, privileges represent the ability to bypass the
-protection of certain labels.  Specifically, privilege allows you to
-behave as if @L_1 ``canFlowTo`` L_2@ even when that is not the case.
-The process of making data labeled @L_1@ affect data labeled @L_2@
-when @not (L_1 ``canFlowTo`` L_2)@ is called /downgrading/.
+Put another way, privileges allow you to behave as if @L_1
+``canFlowTo`` L_2@ even when that is not the case, but only for
+certain pairs of labels @L_1@ and @L_2@; which pairs depends on the
+specific privileges.  The process of allowing data labeled @L_1@ to
+infulence data labeled @L_2@ when @(L_1 ``canFlowTo`` L_2) == False@
+is known as /downgrading/.
 
-The basic method of the 'PrivDesc' class is 'canFlowToP', which
-performs a more permissive can-flow-to check by exercising particular
-privileges (in literature this relation is a pre-order, commonly
-written as &#8849;&#8346;).  Almost all 'LIO' operations have variants
-ending @...P@ that take a privilege argument to act in a more
-permissive way.
+The central function in this module is 'canFlowToP', which performs a
+more permissive can-flow-to check by exercising particular privileges
+(in literature this relation is commonly written @&#8849;&#8346;@ for
+privileges @p@).  Most core 'LIO' function have variants ending @...P@
+that take a privilege argument to act in a more permissive way.
+'canFlowToP' is defined in terms of the method 'canFlowToPrivDesc',
+which performs the same check on a 'PrivDesc' instance.
 
-By convention, all 'PrivDesc' instances are also be instances of
-'Monoid', allowing privileges to be combined with 'mappend'.  The
-creation of 'PrivDesc' values is specific to the particular label type
-in use; the method used is 'mintTCB', but the arguments depend on the
-particular label type.
+By convention, all 'PrivDesc' instances should also be instances of
+'Monoid', allowing privileges to be combined with 'mappend'.
 
 -}
 
@@ -53,40 +56,76 @@ import LIO.TCB
 --
 
 privDesc :: Priv a -> a
+{-# INLINE privDesc #-}
 privDesc (PrivTCB a) = a
 
--- | This class defines privilege descriptions, used by the
--- more-permissive relation ('canFlowToP') on labels using privileges.
--- Additionally, it defines 'partDowngradeP' which is used to
--- downgrade a label, given a set of privilege.  This class only
--- requires the 'downgradePrivDesc' to be defined.
+-- | This class represents privilege descriptions, which define a
+-- pre-order on labels in which distinct labels become equivalent.
+-- The pre-oder implied by a privilege description is specified by the
+-- method 'canFlowToPrivDesc'.  In addition, this this class defines
+-- methods 'downgradePrivDesc' and 'partDowngradePrivDesc', which are
+-- important for finding least labels satisfying some privilege
+-- equivalence.
+--
+-- Minimal complete definition: 'downgradePrivDesc'.
+--
+-- (The 'downgradePrivDesc' requirement represents the fact that a
+-- generic 'canFlowToPrivDesc' can be implemented efficiently in terms
+-- of 'downgradePrivDesc', but not vice-versa.)
 class (Label l) => PrivDesc l p where
-    -- | @downgradePrivDesc p l@ downgrades label @l@ using privilege
-    -- description @p@.
-    downgradePrivDesc :: p  -- ^ Privileges
+    -- | Privileges are described in terms of a pre-order on labels in
+    -- which sets of distinct labels become equivalent.
+    -- @downgradePrivDesc p l@ returns the lowest of all labels
+    -- equivalent to @l@ under privilege description @p@.
+    --
+    -- Less formally, @downgradePrivDesc p l@ returns a label
+    -- representing the furthest you can downgrade data labeled @l@
+    -- given privileges described by @p@.
+    --
+    -- Yet another way to view this function is that
+    -- @downgradePrivDesc p l@ returns the greatest lower bound (under
+    -- 'canFlowTo') of the set of all labels @l'@ such that
+    -- @'canFlowToPrivDesc' p l' l@.
+    downgradePrivDesc :: p  -- ^ Privilege description
                       -> l  -- ^ Label to downgrade
-                      -> l  -- ^ Completely downgraded label
+                      -> l  -- ^ Lowest label equivelent to input
 
-    -- | See 'partDowngradeP'. This function uses privilege
-    -- descriptions instead of privileges.
-    partDowngradePrivDesc :: p  -- ^ Privileges description
+    -- | See 'partDowngradeP'. This method uses privilege descriptions
+    -- instead of privileges.  The default definition is:
+    --
+    -- > partDowngradePrivDesc p l1 l2 = downgradePrivDesc p l1 `lub` l2
+    --
+    -- @partDowngradePrivDesc@ is a method rather than a function so
+    -- that it can be optimized in label-specific ways.  However,
+    -- custom definitions should behave identically to the default.
+    partDowngradePrivDesc :: p  -- ^ Privilege description
                           -> l  -- ^ Label from which data must flow
                           -> l  -- ^ Goal label
                           -> l  -- ^ Result
     partDowngradePrivDesc p l1 l2 = downgradePrivDesc p l1 `lub` l2
 
-    -- | See 'canFlowToP'. This function uses privilege descriptoins
-    -- instead of privileges.
+    -- | @canFlowToPrivDesc p l1 l2@ determines whether @p@ describes
+    -- sufficient privileges to observe data labeled @l1@ and
+    -- subsequently write it to an object labeled @l2@.  The function
+    -- returns 'True' if and only if either @canFlowTo l1 l2@ or @l1
+    -- and l2@ are equivalent under @p@.
+    --
+    -- The default definition is:
+    --
+    -- > canFlowToPrivDesc p l1 l2 = downgradePrivDesc p l1 `canFlowTo` l2
+    -- 
+    -- @canFlowToPrivDesc@ is a method rather than a function so that
+    -- it can be optimized in label-specific ways.  However, custom
+    -- definitions should behave identically to the default.
     canFlowToPrivDesc :: p -> l -> l -> Bool
     canFlowToPrivDesc p l1 l2 = downgradePrivDesc p l1 `canFlowTo` l2
 
--- | The \"can-flow-to given privileges\" pre-order used to compare
+-- | The \"can-flow-to given privileges\" pre-order is used to compare
 -- two labels in the presence of privileges.  If @'canFlowToP' p L_1
 -- L_2@ holds, then privileges @p@ are sufficient to downgrade data
 -- from @L_1@ to @L_2@.  Note that @'canFlowTo' L_1 L_2@ implies
 -- @'canFlowToP' p L_1 L_2@ for all @p@, but for some labels and
--- privileges, 'canFlowToP' will hold even where 'canFlowTo' does
--- not.
+-- privileges, 'canFlowToP' will hold even where 'canFlowTo' does not.
 canFlowToP :: PrivDesc l p => Priv p -> l -> l -> Bool
 canFlowToP priv = canFlowToPrivDesc (privDesc priv)
 
@@ -127,8 +166,9 @@ instance Monoid NoPrivs where
   mempty      = NoPrivs
   mappend _ _ = NoPrivs
 
--- | With lack of privileges, 'canFlowToP' is simply 'canFlowTo', and
--- 'partDowngradeP' is the least 'upperBound'.
+-- | 'downgradePrivDesc' 'NoPrivs' is the identify function.  Hence
+-- 'canFlowToPrivDesc' 'NoPrivs' is 'canFlowTo' while
+-- 'partDowngradePrivDesc' 'NoPrivs' is 'lub'.
 instance Label l => PrivDesc l NoPrivs where
   downgradePrivDesc _ l = l
 

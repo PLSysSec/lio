@@ -142,4 +142,5 @@ class LabelOf t where
   labelOf :: t l a -> l
 
 instance LabelOf Labeled where
+  {-# INLINE labelOf #-}
   labelOf (LabeledTCB l _) = l
