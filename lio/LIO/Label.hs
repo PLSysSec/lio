@@ -1,4 +1,4 @@
-{-# LANGUAGE Safe #-}
+{-# LANGUAGE Trustworthy #-}
 {- | 
 
 Labels are a way of describing who can observe and modify data.  There
@@ -74,6 +74,7 @@ module LIO.Label (
  , LabelOf(..) 
  ) where
 
+import LIO.TCB
 
 -- | This class defines a label format, corresponding to a bounded
 -- lattice (see <https://en.wikipedia.org/wiki/Bounded_lattice>).
@@ -139,3 +140,6 @@ class (Eq l, Show l) => Label l where
 class LabelOf t where
   -- | Get the label of a type kinded @* -> *@
   labelOf :: t l a -> l
+
+instance LabelOf Labeled where
+  labelOf (LabeledTCB l _) = l

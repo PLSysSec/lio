@@ -45,8 +45,6 @@ import Data.IORef
 import Data.Typeable
 import Text.Read (minPrec)
 
-import LIO.Label
-
 --
 -- LIO Monad
 --
@@ -65,22 +63,21 @@ data LIOState l = LIOState { lioLabel     :: !l -- ^ Current label.
 -- we need a way to prevent certain computations from reading overly
 -- sensitive data. This is the role of the current clearance: it imposes
 -- an upper bound on the current label.
-newtype LIO l a = LIOTCB {
-    unLIOTCB :: IORef (LIOState l) -> IO a
-  } deriving (Typeable)
+newtype LIO l a = LIOTCB (IORef (LIOState l) -> IO a) deriving (Typeable)
 
 instance Monad (LIO l) where
   {-# INLINE return #-}
   return = LIOTCB . const . return
   {-# INLINE (>>=) #-}
-  m >>= k = LIOTCB $ \s -> do
-    a <- unLIOTCB m s
-    unLIOTCB (k a) s
+  (LIOTCB ma) >>= k = LIOTCB $ \s -> do
+    a <- ma s
+    case k a of LIOTCB mb -> mb s
   fail = LIOTCB . const . fail
 
 instance Functor (LIO l) where
-  {-# INLINE fmap #-}
-  fmap f ma = LIOTCB $ \s -> unLIOTCB ma s >>= return . f
+  fmap f (LIOTCB a) = LIOTCB $ \s -> a s >>= return . f
+-- fmap typically isn't inlined, so we don't inline our definition,
+-- but we do define it in terms of >>= and return (which are inlined)
 
 instance Applicative (LIO l) where
   {-# INLINE pure #-}
@@ -105,14 +102,14 @@ putLIOStateTCB :: LIOState l -> LIO l ()
 putLIOStateTCB s = LIOTCB $ \sp -> writeIORef sp $! s
 
 -- | Update the internal state given some function.
-modifyLIOStateTCB :: Label l => (LIOState l -> LIOState l) -> LIO l ()
+modifyLIOStateTCB :: (LIOState l -> LIOState l) -> LIO l ()
 {-# INLINE modifyLIOStateTCB #-}
 modifyLIOStateTCB f = do
   s <- getLIOStateTCB
   putLIOStateTCB (f s)
 
 {-# DEPRECATED updateLIOStateTCB "Use modifyLIOStateTCB instead" #-}
-updateLIOStateTCB :: Label l => (LIOState l -> LIOState l) -> LIO l ()
+updateLIOStateTCB :: (LIOState l -> LIOState l) -> LIO l ()
 updateLIOStateTCB = modifyLIOStateTCB
 
 --
@@ -187,15 +184,12 @@ instance Monoid p => Monoid (Priv p) where
 data Labeled l t = LabeledTCB !l t deriving Typeable
 -- Note: t cannot be strict if we want things like lFmap.
 
-instance LabelOf Labeled where
-  labelOf (LabeledTCB l _) = l
-
 -- | Trusted 'Show' instance.
-instance (Label l, Show a) => ShowTCB (Labeled l a) where
+instance (Show l, Show a) => ShowTCB (Labeled l a) where
     showTCB (LabeledTCB l t) = show t ++ " {" ++ show l ++ "}"
 
 -- | Trusted 'Read' instance.
-instance (Label l, Read l, Read a) => ReadTCB (Labeled l a) where
+instance (Read l, Read a) => ReadTCB (Labeled l a) where
   readsPrecTCB _ str = do (val, str1) <- reads str
                           ("{", str2) <- lex str1
                           (lab, str3) <- reads str2
@@ -211,7 +205,7 @@ instance (Label l, Read l, Read a) => ReadTCB (Labeled l a) where
 -- examine such objects when debugging.  The 'showTCB' method can be used
 -- to examine such objects.
 class ShowTCB a where
-    showTCB :: a -> String
+  showTCB :: a -> String
 
 -- | It is useful to have the dual of 'ShowTCB', @ReadTCB@, that allows
 -- for the reading of strings that were created using 'showTCB'. Only

@@ -40,5 +40,3 @@ data LabeledResult l a = LabeledResultTCB {
 
 instance LabelOf LabeledResult where
   labelOf = lresLabelTCB
-
-

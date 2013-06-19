@@ -40,8 +40,8 @@ throwLIO = ioTCB . IO.throwIO
 -- exceeding the clarance, and an exception is always thrown at the
 -- time this happens.)
 catch :: (Label l, Exception e) => LIO l a -> (e -> LIO l a) -> LIO l a
-catch io h =
-  LIOTCB $ \s -> unLIOTCB io s `IO.catch` \e -> unLIOTCB (safeh e) s
+catch (LIOTCB io) h =
+  LIOTCB $ \s -> io s `IO.catch` \e -> case safeh e of LIOTCB ioe -> ioe s
   where uncatchableType = typeOf (undefined :: UncatchableTCB)
         safeh e@(SomeException einner) = do
           when (typeOf einner == uncatchableType) $ throwLIO e

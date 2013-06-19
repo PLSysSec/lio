@@ -97,14 +97,14 @@ lFork = lForkP noPrivs
 -- for when performing label comparisons.
 lForkP :: PrivDesc l p =>
           Priv p -> l -> LIO l a -> LIO l (LabeledResult l a)
-lForkP p l lio = do
+lForkP p l (LIOTCB action) = do
   guardAllocP p l
   mv <- ioTCB IO.newEmptyMVar
   st <- ioTCB $ newIORef LResEmpty
   s0 <- getLIOStateTCB
   tid <- ioTCB $ IO.mask $ \unmask -> IO.forkIO $ do
     sp <- newIORef s0
-    ea <- IO.try $ unmask $ unLIOTCB lio sp
+    ea <- IO.try $ unmask $ action sp
     LIOState lEnd _ <- readIORef sp
     writeIORef st $ case ea of
       _ | not (lEnd `canFlowTo` l) -> LResLabelTooHigh lEnd

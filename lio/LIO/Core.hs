@@ -166,9 +166,9 @@ setClearanceP p cnew = do
 -- be caught outside a second @scopeClearance@ that restores the
 -- clearance to higher than the current label.
 scopeClearance :: Label l => LIO l a -> LIO l a
-scopeClearance lio = LIOTCB $ \sp -> do
+scopeClearance (LIOTCB action) = LIOTCB $ \sp -> do
   LIOState _ c <- readIORef sp
-  ea <- IO.try $ unLIOTCB lio sp
+  ea <- IO.try $ action sp
   LIOState l _ <- readIORef sp
   writeIORef sp (LIOState l c)
   if l `canFlowTo` c
