@@ -75,6 +75,9 @@ oldNewSame = T.defaultMain [
   , testProperty "oldNewSameLub" oldNewSameLub
   ]
 
+newReadShow :: PSS -> PSS -> Bool
+newReadShow (PSS s) (PSS i) = l == read (show l)
+  where l = mkCNF s F.%% mkCNF i
 
 sssmall = unGen pGen (mkStdGen 2) 10
 sssmall1 = unGen pGen (mkStdGen 4) 10

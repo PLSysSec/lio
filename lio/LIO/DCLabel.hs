@@ -93,6 +93,7 @@ module LIO.DCLabel (
   , cTrue, cFalse, cToSet, cFromList
   ) where
 
+import safe Control.Applicative
 import safe Data.Bits
 import safe qualified Data.ByteString as S
 import Data.Hashable
@@ -103,6 +104,7 @@ import safe qualified Data.Set as Set
 import safe Data.String
 import safe Data.Typeable
 import safe Data.Word
+import safe Text.Read
 
 import safe LIO.Exception (SomeException)
 import safe LIO.Core
@@ -126,6 +128,11 @@ data Principal = Principal !S.ByteString {-# UNPACK #-} !SetTag
 
 instance Show Principal where
   showsPrec _ (Principal n _) = shows n
+
+instance Read Principal where
+  readsPrec d s = do
+    (name, rest) <- readsPrec d s
+    return (principalBS name, rest)
 
 instance Eq Principal where
   (Principal n1 t1) == (Principal n2 t2) = t1 == t2 && n1 == n2
@@ -182,6 +189,18 @@ instance Show Disjunction where
     | otherwise = showParen True $
         foldr1 (\l r -> l . (" \\/ " ++) . r) $ map shows $ Set.toList ps
 
+-- | Note that a disjunction containing more than one element /must/
+-- be surrounded by parentheses to parse correctly.
+instance Read Disjunction where
+  readPrec = false <++ clause <++ single
+    where false = do False <- readPrec; return dFalse
+          single = dSingleton <$> readPrec
+          clause = parens $ prec minPrec $ do
+            let next = do Symbol "\\/" <- lexP
+                          liftA2 (:) readPrec next
+                       <++ pure []
+            dFromList <$> liftA2 (:) readPrec next
+
 instance Monoid Disjunction where
   mempty = dFalse
   mappend = dUnion
@@ -223,8 +242,18 @@ instance Show CNF where
   showsPrec d (CNF ds)
     | Set.size ds == 0 = ("True" ++)
     | Set.size ds == 1 = shows $ Set.findMin ds
-    | otherwise = showParen (d > 6) $
+    | otherwise = showParen (d > 7) $
         foldr1 (\l r -> l . (" /\\ " ++) . r) $ map shows $ Set.toList ds
+
+instance Read CNF where
+  readPrec = true <++ formula <++ single
+    where true = do True <- readPrec; return cTrue
+          single = cSingleton <$> readPrec
+          formula = parens $ prec 7 $ do
+            let next = do Symbol "/\\" <- lexP
+                          liftA2 (:) readPrec next
+                       <++ pure []
+            cFromList <$> liftA2 (:) readPrec next
 
 instance Monoid CNF where
   mempty = cTrue
@@ -341,6 +370,13 @@ data DCLabel = DCLabel { dcSecrecy :: !CNF
 instance Show DCLabel where
   showsPrec d (DCLabel sec int) =
     showParen (d > 5) $ shows sec . (" %% " ++) . shows int
+
+instance Read DCLabel where
+  readPrec = parens $ prec 5 $ do
+    sec <- readPrec
+    Symbol "%%" <- lexP
+    int <- readPrec
+    return $ DCLabel sec int
 
 -- | As a type, a 'CNF' is always a conjunction of 'Disjunction's of
 -- 'Principal's.  However, mathematically speaking, a single
