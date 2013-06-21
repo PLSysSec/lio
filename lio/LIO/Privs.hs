@@ -38,7 +38,7 @@ By convention, all 'PrivDesc' instances should also be instances of
 module LIO.Privs (
   -- * Privilege descriptions
     SpeaksFor(..), delegate
-  , PrivDesc(..), canFlowToP, partDowngradeP
+  , PrivDesc(..), downgradeP, canFlowToP, partDowngradeP
   -- * Privileges
   , Priv, privDesc
   , NoPrivs, noPrivs
@@ -111,20 +111,6 @@ class (Label l, SpeaksFor p) => PrivDesc l p where
                       -> l  -- ^ Label to downgrade
                       -> l  -- ^ Lowest label equivelent to input
 
-    -- | See 'partDowngradeP'. This method uses privilege descriptions
-    -- instead of privileges.  The default definition is:
-    --
-    -- > partDowngradePrivDesc p l1 l2 = downgradePrivDesc p l1 `lub` l2
-    --
-    -- @partDowngradePrivDesc@ is a method rather than a function so
-    -- that it can be optimized in label-specific ways.  However,
-    -- custom definitions should behave identically to the default.
-    partDowngradePrivDesc :: p  -- ^ Privilege description
-                          -> l  -- ^ Label from which data must flow
-                          -> l  -- ^ Goal label
-                          -> l  -- ^ Result
-    partDowngradePrivDesc p l1 l2 = downgradePrivDesc p l1 `lub` l2
-
     -- | @canFlowToPrivDesc p l1 l2@ determines whether @p@ describes
     -- sufficient privileges to observe data labeled @l1@ and
     -- subsequently write it to an object labeled @l2@.  The function
@@ -141,6 +127,9 @@ class (Label l, SpeaksFor p) => PrivDesc l p where
     canFlowToPrivDesc :: p -> l -> l -> Bool
     canFlowToPrivDesc p l1 l2 = downgradePrivDesc p l1 `canFlowTo` l2
 
+downgradeP :: PrivDesc l p => Priv p -> l -> l
+downgradeP p l = downgradePrivDesc (privDesc p) l
+
 -- | The \"can-flow-to given privileges\" pre-order is used to compare
 -- two labels in the presence of privileges.  If @'canFlowToP' p L_1
 -- L_2@ holds, then privileges @p@ are sufficient to downgrade data
@@ -149,6 +138,21 @@ class (Label l, SpeaksFor p) => PrivDesc l p where
 -- privileges, 'canFlowToP' will hold even where 'canFlowTo' does not.
 canFlowToP :: PrivDesc l p => Priv p -> l -> l -> Bool
 canFlowToP priv = canFlowToPrivDesc (privDesc priv)
+
+-- | See 'partDowngradeP'. This method uses privilege descriptions
+-- instead of privileges.  The default definition is:
+--
+-- > partDowngradePrivDesc p l1 l2 = downgradePrivDesc p l1 `lub` l2
+--
+-- @partDowngradePrivDesc@ is a method rather than a function so
+-- that it can be optimized in label-specific ways.  However,
+-- custom definitions should behave identically to the default.
+partDowngradePrivDesc :: (PrivDesc l p) =>
+                         p  -- ^ Privilege description
+                      -> l  -- ^ Label from which data must flow
+                      -> l  -- ^ Goal label
+                      -> l  -- ^ Result
+partDowngradePrivDesc p l1 l2 = downgradePrivDesc p l1 `lub` l2
 
 -- | Roughly speaking, @L_r = partDowngradeP p L L_g@ computes how
 -- close one can come to downgrading data labeled @L@ to the goal
@@ -176,6 +180,8 @@ partDowngradeP :: PrivDesc l p
                -> l  -- ^ Result
 partDowngradeP priv = partDowngradePrivDesc (privDesc priv)
 
+{-# DEPRECATED partDowngradePrivDesc, partDowngradeP
+  "reformulate in terms of downgradePrivDesc" #-}
 
 -- | Generic privilege type used to denote the lack of privileges.
 data NoPrivs = NoPrivs deriving (Show, Read, Typeable)

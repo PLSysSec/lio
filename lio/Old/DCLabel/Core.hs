@@ -196,23 +196,23 @@ instance PrivDesc DCLabel Component where
         s2 = dcReduce $ dcSecrecy l2   `dcAnd` pd
     in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
 
-  partDowngradePrivDesc pd la lg
-               | pd == mempty  = la `lub` lg
-               | pd == dcFalse = lg
-               | otherwise = 
-    let sec_a  = dcSecrecy la
-        int_a  = dcIntegrity la
-        sec_g  = dcSecrecy   lg
-        int_g  = dcIntegrity lg
-        sec_a' = dcFormula . Set.filter f $ unDCFormula sec_a
-        sec_res  = if isFalse sec_a
-                then sec_a
-                else sec_a' `dcAnd` sec_g
-        int_res  = (pd `dcAnd` int_a) `dcOr` int_g
-    in dcLabel sec_res int_res
-      where f c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
+  downgradePrivDesc p l = pdpd p l dcBottom
+    where pdpd pd la lg
+             | pd == mempty  = la `lub` lg
+             | pd == dcFalse = lg
+             | otherwise = 
+            let sec_a  = dcSecrecy la
+                int_a  = dcIntegrity la
+                sec_g  = dcSecrecy   lg
+                int_g  = dcIntegrity lg
+                sec_a' = dcFormula . Set.filter f $ unDCFormula sec_a
+                sec_res  = if isFalse sec_a
+                        then sec_a
+                        else sec_a' `dcAnd` sec_g
+                int_res  = (pd `dcAnd` int_a) `dcOr` int_g
+                f c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
+            in dcLabel sec_res int_res
 
-  downgradePrivDesc p l = partDowngradePrivDesc p l dcBottom
 
 
 -- | @dcLabel secrecyComponent integrityComponent@ creates a label,

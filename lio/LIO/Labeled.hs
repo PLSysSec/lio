@@ -1,7 +1,4 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE CPP,
-             ConstraintKinds,
-             FlexibleContexts #-}
 
 {- |
 
@@ -38,13 +35,13 @@ module LIO.Labeled (
   , lFmap, lAp
   ) where
 
-import Control.Monad
+import safe Control.Monad
 
-import LIO.Exception
+import safe LIO.Exception
+import safe LIO.Label
+import safe LIO.Core
+import safe LIO.Privs
 import LIO.TCB
-import LIO.Label
-import LIO.Core
-import LIO.Privs
 
 --
 -- Label values
@@ -140,8 +137,11 @@ taintLabeledP p l (LabeledTCB lold v) = do
 -- | Downgrades a label.
 untaintLabeledP :: PrivDesc l p
                 => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
-untaintLabeledP p target lv =
-  relabelLabeledP p (partDowngradeP p (labelOf lv) target) lv
+untaintLabeledP p target lv = relabelLabeledP p
+                              (downgradeP p (labelOf lv) `lub` target) lv
+
+{-# DEPRECATED untaintLabeledP
+  "This is a confusing function.  Usually relabelLabeledP is better" #-}
 
 
 {- $functor

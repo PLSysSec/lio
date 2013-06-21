@@ -99,6 +99,10 @@ class (Eq l, Show l, Typeable l) => Label l where
   --   @L_1 ``canFlowTo`` L_4@, @L_2 ``canFlowTo`` L_4@, and
   --   @L_4 ``canFlowTo`` L_3@.  In other words @L_3@ is the least
   --   such element.
+  --
+  -- When used infix, has fixity:
+  --
+  -- > infixl 5 `lub`
   lub :: l -> l -> l
   -- | /Greatest/ lower bound, or meet, of two labels. For any two labels
   -- @L_1@ and @L_2@, if @L_3 = L_1 \`glb` L_2@, it must be that:
@@ -111,6 +115,10 @@ class (Eq l, Show l, Typeable l) => Label l where
   --   @L_4 ``canFlowTo`` L_1@, @L_4 ``canFlowTo`` L_1@, and
   --   @L_3 ``canFlowTo`` L_4@.  In other words @L_3@ is the greatest
   --   such element.
+  --
+  -- When used infix, has fixity:
+  --
+  -- > infixl 5 `glb`
   glb :: l -> l -> l
   -- | Can-flow-to relation. An entity labeled @L_1@ should be allowed
   -- to affect an entity @L_2@ only if @L_1 \`canFlowTo` L_2@. This
@@ -125,7 +133,14 @@ class (Eq l, Show l, Typeable l) => Label l where
   --
   -- * Transitivity: If @L_1 \`canFlowTo` L_2@ and
   --   @L_2 \`canFlowTo` L_3@ then @L_1 \`canFlowTo` L_3@.
+  --
+  -- When used infix, has fixity:
+  --
+  -- > infix 4 `canFlowTo`
   canFlowTo :: l -> l -> Bool
+
+infixl 5 `lub`, `glb`
+infix 4 `canFlowTo`
 
 -- | Generic class used to get the type of labeled objects. For,
 -- instance, if you wish to associate a label with a pure value (as in

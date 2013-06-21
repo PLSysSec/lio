@@ -140,7 +140,7 @@ lWaitP p (LabeledResultTCB _ l mv st) = taintP p l >> go
         check (LResResult a) = return $! a
         check (LResLabelTooHigh lnew) = do
           modifyLIOStateTCB $ \s -> s {
-            lioLabel = partDowngradeP p lnew (lioLabel s) }
+            lioLabel = downgradeP p lnew `lub` lioLabel s }
           throwLIO ResultExceedsLabel
 
 

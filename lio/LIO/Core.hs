@@ -340,7 +340,7 @@ taintP :: PrivDesc l p => Priv p -> l -> LIO l ()
 taintP p newl = do
   c <- getClearance
   l <- getLabel
-  let l' = partDowngradeP p newl l
+  let l' = downgradeP p newl `lub` l
   unless (l' `canFlowTo` c) $! throwLIO ClearanceViolation
   modifyLIOStateTCB $ \s -> s { lioLabel = l' }
 
