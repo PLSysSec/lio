@@ -81,8 +81,9 @@ True
 -}
 
 module LIO.DCLabel (
-  -- * Top-level type aliases and functions
+  -- * Top-level aliases and functions
     DC, DCPriv, DCLabeled, dcDefaultState, evalDC, tryDC
+  , dcPub, dcTop, dcBottom
   -- * Main types and functions
   , Principal, principalBS, principal
   , DCLabel(..), (%%), (/\), (\/)
@@ -311,6 +312,18 @@ instance Show DCLabel where
   showsPrec d (DCLabel sec int) =
     showParen (d > 5) $ shows sec . (" %% " ++) . shows int
 
+-- | The public label (True %% True) which is the \"middle\" of the lattice.
+dcPub :: DCLabel
+dcPub = True %% True
+
+-- | The lavel \'top\' (False %% True) - noone can read, everyone can write.
+dcTop :: DCLabel
+dcTop = False %% True
+
+-- | The label \'bottom\' (True %% False) - everyone can read, noone can write.
+dcBottom :: DCLabel
+dcBottom = True %% False
+
 -- | As a type, a 'CNF' is always a conjunction of 'Disjunction's of
 -- 'Principal's.  However, mathematically speaking, a single
 -- 'Principal' or single 'Disjunction' is also a degenerate example of
@@ -324,6 +337,7 @@ instance ToCNF [Char] where toCNF = toCNF . principal
 instance ToCNF Bool where
   toCNF True = cTrue
   toCNF False = cFalse
+instance ToCNF DCPriv where toCNF = privDesc
 
 -- | The primary way of creating a 'DCLabel'.  The secrecy component
 -- goes on the left, while the integrity component goes on the right,
@@ -381,8 +395,8 @@ instance PrivDesc DCLabel CNF where
 -- and an unlimited clearance of @(False '%%' True)@--to which all
 -- labels flow.
 dcDefaultState :: LIOState DCLabel
-dcDefaultState = LIOState { lioLabel = True %% True
-                          , lioClearance = False %% True }
+dcDefaultState = LIOState { lioLabel = dcPub
+                          , lioClearance = dcTop }
 
 -- | The main monad type alias to use for 'LIO' functions specific to
 -- 'DCLabel's.
