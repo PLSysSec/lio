@@ -6,7 +6,8 @@
 {-|
 
 /Disjunction Category Labels/ ('DCLabel's) are a label format that
-encodes secrecy and integrity using propositional logic.
+encodes authority, secrecy restrictions, and integrity properties
+using propositional logic.
 
 A 'DCLabel' consists of two boolean formulas over 'Principal's.  Each
 formula is in conjunctive normal form, represented by type 'CNF'.  The
@@ -24,8 +25,8 @@ argument types that are instances of 'ToCNF'.
 For example, the following expresses data that can be exported by the
 principal \"Alice\" and may have been written by anybody:  @\"Alice\"
 '%%' 'True'@.  (@'toCNF' 'True'@ indicates a trivially satisfiable
-label component, which in this case means a label with no integrity
-guarantees.)
+label component, which in this case means a label conveying no
+integrity properties.)
 
 A 'CNF' is created using the ('\/') and ('/\') operators.  The
 disjunction operator ('\/') is used to compute a 'CNF' equivalent to
@@ -50,12 +51,12 @@ e4 = e1 '/\' \"p4\" '/\' p3
 
 Note that because a 'CNF' formula is stored as a conjunction of
 'Disjunction's, it is much more efficient to apply '/\' to the result
-of '\/', rather than vice versa.  Hence, it would be logical for '/\'
-to have higher fixity than '\/'.  Unfortunately, this makes formulas
-harder to read (given the convention of AND binding more tightly than
-OR).  Hence '\/' and '/\' have been given the same fixity but
-different associativities, preventing the two from being mixed in the
-same expression without explicit parentheses.
+of '\/' than vice versa.  It would be logical for '/\' to have higher
+fixity than '\/'.  Unfortunately, this makes formulas harder to read
+(given the convention of AND binding more tightly than OR).  Hence
+'\/' and '/\' have been given the same fixity but different
+associativities, preventing the two from being mixed in the same
+expression without explicit parentheses.
 
 Consider the following, example:
 
@@ -119,10 +120,10 @@ type SetTag = Word64
 -- Principals
 --
 
--- | A @Principal@ is a source of authority, represented as a string.
--- The interpretation of principal strings is up to the application.
--- Reasonable schemes include encoding user names, domain names,
--- and/or URLs in the 'Principal' type.
+-- | A @Principal@ is a primitive source of authority, represented as
+-- a string.  The interpretation of principal strings is up to the
+-- application.  Reasonable schemes include encoding user names,
+-- domain names, and/or URLs in the 'Principal' type.
 data Principal = Principal !S.ByteString {-# UNPACK #-} !SetTag
                  deriving (Ord, Typeable)
 
@@ -230,6 +231,9 @@ dImplies (Disjunction ps1 t1) (Disjunction ps2 t2)
 -- Conjunctive Normal Form (CNF) Formulas
 --
 
+-- | A boolean formula in Conjunctive Normal Form.  @CNF@ is used to
+-- describe 'DCLabel' privileges, as well to provide each of the two
+-- halves of a 'DCLabel'.
 newtype CNF = CNF (Set Disjunction) deriving (Eq, Ord, Typeable)
 
 -- | Convert a 'CNF' to a 'Set' of 'Disjunction's.  Mostly useful if
@@ -262,12 +266,12 @@ instance Monoid CNF where
 -- | A 'CNF' that is always @True@--i.e., trivially satisfiable.  When
 -- @'dcSecrecy' = cTrue@, it means data is public.  When
 -- @'dcIntegrity' = cTrue@, it means data carries no integrity
--- guarantees.  As a description of privileges, 'cTrue' conveys no
+-- guarantees.  As a description of privileges, @cTrue@ conveys no
 -- privileges; @'canFlowToPrivDesc' cTrue l1 l2@ is equivalent to
--- @'canFlowToPrivDesc' l1 l2@.
+-- @'canFlowTo' l1 l2@.
 --
--- Note that the default label in 'dcDefaultState' is @'DCLabel'
--- dcTrue dcTrue@.
+-- Note that @'toCNF' 'True' = cTrue@.  Hence @'dcPublic' = 'DCLabel'
+-- cTrue cTrue@.
 cTrue :: CNF
 cTrue = CNF $ Set.empty
 
@@ -279,16 +283,17 @@ cTrue = CNF $ Set.empty
 -- arbitrarily raise its label.
 --
 -- @'dcIntegrity' = cFalse@ indicates impossibly much integrity--i.e.,
--- data that no combination of principals is powerful enough to
--- modify.  Generally this is not a useful concept.
+-- data that no combination of principals is powerful enough to modify
+-- or have created.  Generally this is not a useful concept.
 --
 -- As a privilege description, @cFalse@ indicates impossibly high
 -- privileges (i.e., higher than could be achieved through any
--- combination of 'Principal's).  This is a useful concept if you want
--- to run privileged code within the 'DC' monad.  The result of
--- @'privInit' cFalse@ can be passed to privileged 'DC' code, which
--- can in turn use 'delegate' to create finite privileges to pass to
--- unprivileged code.
+-- combination of 'Principal's).  @cFalse ``speaksFor`` p@ for any
+-- 'CNF' @p@.  This can be a useful concept for bootstrapping
+-- privileges within the 'DC' monad itself.  For instance, the result
+-- of @'privInit' cFalse@ can be passed to fully-trusted 'DC' code,
+-- which can in turn use 'delegate' to create arbitrary finite
+-- privileges to pass to less privileged code.
 cFalse :: CNF
 cFalse = CNF $ Set.singleton dFalse
 
@@ -329,7 +334,7 @@ cImplies c (CNF ds) = setAll (c `cImplies1`) ds
 --
 
 -- | Main DCLabel type.  @DCLabel@s use 'CNF' boolean formulas over
--- principals to express the authority exercised by a combination of
+-- principals to express authority exercised by a combination of
 -- principals.  A @DCLabel@ contains two 'CNF's.  One, 'dcSecrecy',
 -- specifies the minimum authority required to make data with the
 -- label completely public.  The second, 'dcIntegrity', expresses the
@@ -346,25 +351,27 @@ cImplies c (CNF ds) = setAll (c `cImplies1`) ds
 --   * If @cnf1@ and @cnf2@ are 'CNF's describing authority, then
 --   @cnf1 ``speaksFor`` cnf2@ if and only if @cnf1@ logically implies
 --   @cnf2@ (often written @cnf1 &#x27f9; cnf2@).  For example,
---   @(\"A\" '/\' \"B\") ``speaksFor`` 'toCNF' \"A\"@, while @toCNF
+--   @(\"A\" '/\' \"B\") ``speaksFor`` 'toCNF' \"A\"@, while @'toCNF'
 --   \"A\" ``speaksFor`` (\"A\" '\/' \"C\")@.
 --
 --   * Given two @DCLabel@s @dc1 = (s1 '%%' i1)@ and @dc2 = (s2 '%%'
 --   i2)@, @dc1 ``canFlowTo`` dc2@ (often written @dc1@ &#8849; @dc2@)
 --   if and only if @s2 ``speaksFor`` s1 && i1 ``speaksFor`` i2@.  In
---   other words, data can flow in the direction of adding more
---   secrecy restrictions and removing integrity endorsements.
+--   other words, data can flow in the direction of requiring more
+--   authority to make it public or removing integrity endorsements.
 --
 --   * Given two @DCLabel@s @dc1 = (s1 '%%' i1)@ and @dc 2 = (s2 '%%'
 --   i2)@, and a @p::'CNF'@ representing privileges,
---   @'canFlowtoPrivDesc' p dc1 dc2@ (often written @dc1@
+--   @'canFlowToPrivDesc' p dc1 dc2@ (often written @dc1@
 --   &#8849;&#8346; @dc2@) if and only if @(p '/\' s2) ``speaksFor``
 --   s2 && (p '/\' i1) ``speaksFor`` i2@.
 data DCLabel = DCLabel { dcSecrecy :: !CNF
-                         -- ^ Describes who is allowed to make the
-                         -- data public.
+                         -- ^ Describes the authority required to make
+                         -- the data public.
                        , dcIntegrity :: !CNF
-                         -- ^ Describes who may have written the data.
+                         -- ^ Describes the authority with which
+                         -- immutable data was endorsed, or the
+                         -- authority required to modify mutable data.
                        } deriving (Eq, Ord, Typeable)
 
 instance Show DCLabel where
@@ -378,13 +385,16 @@ instance Read DCLabel where
     int <- readPrec
     return $ DCLabel sec int
 
--- | The label @(True %% True)@, which corresponds to public data with
--- no integrity guarantees.  For instance, an unrestricted Internet
--- socket should be labeled @dcPublic@.  If data is labeled @(s1 %%
--- i1)@, the 'CNF' @s1@ specifies the minimum authority required to
--- write the data over a channel labeled @dcPublic@.  Similarly, @i1@
--- is the minimum authority required to take @dcPublic@ data and label
--- it with @(s1 %% i1)@.
+-- |
+-- > dcPublic = True %% True
+--
+-- This label corresponds to public data with no integrity guarantees.
+-- For instance, an unrestricted Internet socket should be labeled
+-- @dcPublic@.  The significance of @dcPublic@ is that given data
+-- labeled @(s %% i)@, @s@ is the exact minimum authority required to
+-- transition the data to @dcPublic@.  Conversely, given data labeled
+-- @dcPublic@, @i@ is the exact authority required to transition the
+-- data to @(s %% i)@ (assuming sufficient clearance).
 dcPublic :: DCLabel
 dcPublic = True %% True
 
@@ -395,7 +405,7 @@ dcPublic = True %% True
 -- differences between these types, promoting them all to 'CNF'.
 class ToCNF c where toCNF :: c -> CNF
 instance ToCNF CNF where toCNF = id
-instance ToCNF DCPriv where toCNF = privDesc
+instance ToCNF (Priv CNF) where toCNF = privDesc
 instance ToCNF Disjunction where toCNF = cSingleton
 instance ToCNF Principal where toCNF = toCNF . dSingleton
 instance ToCNF [Char] where toCNF = toCNF . principal
@@ -429,6 +439,11 @@ infixr 7 /\
 -- | Compute a disjunction of two 'CNF's or 'ToCNF' instances.  Note
 -- that this can be an expensive operation if the inputs have many
 -- conjunctions.
+--
+-- The fixity is specifically chosen so that @&#92;&#47;@ and '/\'
+-- cannot be mixed in the same expression without parentheses:
+--
+-- > infixl 7 \/
 (\/) :: (ToCNF a, ToCNF b) => a -> b -> CNF
 a \/ b = toCNF a `cOr` toCNF b
 infixl 7 \/
@@ -455,22 +470,22 @@ instance PrivDesc DCLabel CNF where
 -- Type aliases
 --
 
--- | The conventional default state is a label of @(True '%%' True)@
--- and an unlimited clearance of @(False '%%' True)@--to which all
--- labels flow.
+-- | A common default starting state, where @'lioLabel' = 'dcPublic'@
+-- and @'lioClearance' = False '%%' True@ (i.e., the highest
+-- possible clearance).
 dcDefaultState :: LIOState DCLabel
-dcDefaultState = LIOState { lioLabel = True %% True
+dcDefaultState = LIOState { lioLabel = dcPublic
                           , lioClearance = False %% True }
 
--- | The main monad type alias to use for 'LIO' functions specific to
--- 'DCLabel's.
+-- | The main monad type alias to use for 'LIO' computations that are
+-- specific to 'DCLabel's.
 type DC = LIO DCLabel
 
 -- | 'DCLabel' privileges are expressed as a 'CNF' of the principals
 -- whose authority is being exercised.
 type DCPriv = Priv CNF
 
--- | An alias for 'Labeled' values with 'DCLabel'.
+-- | An alias for 'Labeled' values labeled with a 'DCLabel'.
 type DCLabeled = Labeled DCLabel
 
 -- | Wrapper function for running @'LIO' 'DCLabel'@ computations.
