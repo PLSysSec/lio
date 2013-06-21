@@ -82,7 +82,7 @@ True
 
 module LIO.DCLabel (
   -- * Top-level type aliases and functions
-    DC, DCPriv, dcDefaultState, evalDC, tryDC
+    DC, DCPriv, DCLabeled, dcDefaultState, evalDC, tryDC
   -- * Main types and functions
   , Principal, principalBS, principal
   , DCLabel(..), (%%), (/\), (\/)
@@ -107,6 +107,7 @@ import safe Data.Word
 import safe LIO.Exception (SomeException)
 import safe LIO.Core
 import safe LIO.Label
+import safe LIO.Labeled
 import safe LIO.Privs
 import safe LIO.Run
 
@@ -360,6 +361,7 @@ instance Label DCLabel where
   canFlowTo (DCLabel s1 i1) (DCLabel s2 i2) = cImplies s2 s1 && cImplies i1 i2
 
 instance SpeaksFor CNF where
+  {-# INLINE speaksFor #-}
   speaksFor = cImplies
 
 dcMaxDowngrade :: CNF -> DCLabel -> DCLabel
@@ -389,6 +391,9 @@ type DC = LIO DCLabel
 -- | 'DCLabel' privileges are expressed as a 'CNF' of the principals
 -- whose authority is being exercised.
 type DCPriv = Priv CNF
+
+-- | An alias for 'Labeled' values with 'DCLabel'.
+type DCLabeled = Labeled DCLabel
 
 -- | Wrapper function for running @'LIO' 'DCLabel'@ computations.
 --
