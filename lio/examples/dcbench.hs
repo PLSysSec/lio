@@ -111,8 +111,6 @@ main = do
     , bench "O.lub" $ whnf (lub (osmall O.%% osmall)) (osmall1 O.%% osmall1)
     ]
 
---[bench "\\/" $ whnf (c0 \/) c1]
-
 -- Local Variables:
 -- haskell-program-name: "ghci -i.."
 -- End:

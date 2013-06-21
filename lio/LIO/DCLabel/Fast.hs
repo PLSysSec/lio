@@ -1,7 +1,16 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module LIO.DCLabel.Fast where
+module LIO.DCLabel.Fast (
+  -- * Main funcitons
+    Principal, principalBS, principal
+  , DCLabel(..), (%%), (/\), (\/)
+  , CNF, ToCNF(..)
+  -- * Lower-level functions
+  , principalName
+  , Disjunction, dToSet, dFromList
+  , cTrue, cFalse, cToSet, cFromList
+  ) where
 
 import Data.Bits
 import qualified Data.ByteString.Char8 as S8
@@ -51,9 +60,6 @@ data Disjunction = Disjunction !(Set Principal) {-# UNPACK #-} !SetTag
 
 dToSet :: Disjunction -> Set Principal
 dToSet (Disjunction ps _) = ps
-
-dDump :: Disjunction -> String
-dDump (Disjunction ps t) = "Disjunction " ++ showsPrec 11 ps (' ':show t)
 
 instance Eq Disjunction where
   (Disjunction ps1 t1) == (Disjunction ps2 t2) = t1 == t2 && ps1 == ps2
