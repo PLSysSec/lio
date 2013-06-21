@@ -35,16 +35,16 @@ module LIO.Concurrent (
   ) where
 
 
-import qualified Control.Concurrent as IO
-import qualified Control.Exception as IO
-import Control.Monad
-import Data.IORef
+import safe qualified Control.Concurrent as IO
+import safe qualified Control.Exception as IO
+import safe Control.Monad
+import safe Data.IORef
 
-import LIO.Concurrent.LMVar
-import LIO.Core
-import LIO.Exception
-import LIO.Label
-import LIO.Privs
+import safe LIO.Concurrent.LMVar
+import safe LIO.Core
+import safe LIO.Exception
+import safe LIO.Label
+import safe LIO.Privs
 import LIO.TCB
 import LIO.TCB.Concurrent
 

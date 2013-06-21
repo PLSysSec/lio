@@ -40,11 +40,11 @@ module LIO.Concurrent.LMVar (
   , isEmptyLMVar, isEmptyLMVarP
   ) where
 
-import Control.Concurrent.MVar
+import safe Control.Concurrent.MVar
 
-import LIO.Label
-import LIO.Core
-import LIO.Privs
+import safe LIO.Core
+import safe LIO.Label
+import safe LIO.Privs
 import LIO.TCB
 import LIO.TCB.LObj
 

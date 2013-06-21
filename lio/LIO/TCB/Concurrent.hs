@@ -12,10 +12,10 @@ module LIO.TCB.Concurrent (
     LabeledResult(..), LResStatus(..)
   ) where
 
-import qualified Control.Concurrent as IO
-import Data.IORef
+import safe qualified Control.Concurrent as IO
+import safe Data.IORef
 
-import LIO.Label
+import safe LIO.Label
 
 data LResStatus l a = LResEmpty
                     | LResLabelTooHigh !l

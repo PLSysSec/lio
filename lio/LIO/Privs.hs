@@ -1,6 +1,7 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 {- | 
 
@@ -48,9 +49,10 @@ module LIO.Privs (
   -- $gateExample
   ) where
 
-import Data.Monoid
+import safe Data.Monoid
+import safe Data.Typeable
 
-import LIO.Label
+import safe LIO.Label
 import LIO.TCB
 
 --
@@ -61,7 +63,7 @@ privDesc :: Priv a -> a
 {-# INLINE privDesc #-}
 privDesc (PrivTCB a) = a
 
-class (Show p) => SpeaksFor p where
+class (Typeable p, Show p) => SpeaksFor p where
   -- | @speaksFor p1 p2@ returns 'True' iff @p1@ subsumes all the
   -- privileges of @p2@.  In other words, it is safe for 'delegate' to
   -- hand out @p2@ to a caller who already has @p1@.
@@ -176,7 +178,7 @@ partDowngradeP priv = partDowngradePrivDesc (privDesc priv)
 
 
 -- | Generic privilege type used to denote the lack of privileges.
-data NoPrivs = NoPrivs deriving (Show, Read)
+data NoPrivs = NoPrivs deriving (Show, Read, Typeable)
 
 noPrivs :: Priv NoPrivs
 noPrivs = PrivTCB NoPrivs
@@ -218,7 +220,7 @@ need to trust the implementation of 'callGate'.
 -- arbitrary type @a@. Applying the gate is accomplished with 'callGate'
 -- which takes a privilege argument that is converted to a description
 -- before invoking the gate computation.
-newtype Gate d a = GateTCB (d -> a)
+newtype Gate d a = GateTCB (d -> a) deriving Typeable
 -- Note GateTCB is trusted by convention.  Anyone with access to the
 -- symbol can call any gate while claiming arbitrary privileges.  In
 -- the absence of gates, however, GateTCB doesn't provide any

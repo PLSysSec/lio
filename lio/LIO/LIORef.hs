@@ -28,10 +28,11 @@ module LIO.LIORef (
   , atomicModifyLIORef, atomicModifyLIORefP
   ) where
 
-import Data.IORef
-import LIO.Core
-import LIO.Label
-import LIO.Privs
+import safe Data.IORef
+
+import safe LIO.Core
+import safe LIO.Label
+import safe LIO.Privs
 import LIO.TCB
 import LIO.TCB.LObj
 

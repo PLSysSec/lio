@@ -1,4 +1,5 @@
 {-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
@@ -100,6 +101,7 @@ import safe Data.Monoid
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.String
+import safe Data.Typeable
 import safe Data.Word
 
 import safe LIO.Exception (SomeException)
@@ -118,7 +120,8 @@ type SetTag = Word64
 -- The interpretation of principal strings is up to the application.
 -- Reasonable schemes include encoding user names, domain names,
 -- and/or URLs in the 'Principal' type.
-data Principal = Principal !S.ByteString {-# UNPACK #-} !SetTag deriving Ord
+data Principal = Principal !S.ByteString {-# UNPACK #-} !SetTag
+                 deriving (Ord, Typeable)
 
 instance Show Principal where
   showsPrec _ (Principal n _) = shows n
@@ -155,6 +158,7 @@ principal = principalBS . fromString
 -- @Disjunction@s unless you need to serialize and de-serialize them
 -- (by means of 'dToSet' and 'dFromList').
 data Disjunction = Disjunction !(Set Principal) {-# UNPACK #-} !SetTag
+                   deriving (Typeable)
 
 -- | Expose the set of 'Principal's being ORed together in a
 -- 'Disjunction'.
@@ -206,7 +210,7 @@ dImplies (Disjunction ps1 t1) (Disjunction ps2 t2)
 -- Conjunctive Normal Form (CNF) Formulas
 --
 
-newtype CNF = CNF (Set Disjunction) deriving (Eq, Ord)
+newtype CNF = CNF (Set Disjunction) deriving (Eq, Ord, Typeable)
 
 -- | Convert a 'CNF' to a 'Set' of 'Disjunction's.  Mostly useful if
 -- you wish to serialize a 'DCLabel'.
@@ -300,7 +304,7 @@ data DCLabel = DCLabel { dcSecrecy :: !CNF
                          -- data public.
                        , dcIntegrity :: !CNF
                          -- ^ Describes who may have written the data.
-                       } deriving (Eq, Ord)
+                       } deriving (Eq, Ord, Typeable)
 
 instance Show DCLabel where
   showsPrec d (DCLabel sec int) =

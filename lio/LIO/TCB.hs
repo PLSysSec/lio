@@ -37,13 +37,13 @@ module LIO.TCB (
   , ShowTCB(..), ReadTCB(..)
   ) where
 
-import Control.Applicative
-import Control.Exception (Exception(..), SomeException(..))
-import Control.Monad
-import Data.Monoid
-import Data.IORef
-import Data.Typeable
-import Text.Read (minPrec)
+import safe Control.Applicative
+import safe Control.Exception (Exception(..), SomeException(..))
+import safe Control.Monad
+import safe Data.Monoid
+import safe Data.IORef
+import safe Data.Typeable
+import safe Text.Read (minPrec)
 
 --
 -- LIO Monad

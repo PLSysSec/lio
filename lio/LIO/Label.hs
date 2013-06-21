@@ -74,6 +74,8 @@ module LIO.Label (
  , LabelOf(..) 
  ) where
 
+import safe Data.Typeable
+
 import LIO.TCB
 
 -- | This class defines a label format, corresponding to a bounded
@@ -85,7 +87,7 @@ import LIO.TCB
 -- 'glb' (in literature, written as &#8851;), and of course the
 -- can-flow-to partial-order 'canFlowTo' (in literature, written as
 -- &#8849;).
-class (Eq l, Show l) => Label l where
+class (Eq l, Show l, Typeable l) => Label l where
   -- | /Least/ upper bound, or join, of two labels. For any two labels
   -- @L_1@ and @L_2@, if @L_3 = L_1 \`lub` L_2@, it must be that:
   --

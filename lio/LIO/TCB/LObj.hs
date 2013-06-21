@@ -27,7 +27,7 @@
 -- around each 'Handle' using the 'LObjTCB' constructor.
 module LIO.TCB.LObj (LObj(..), blessTCB, blessPTCB, GuardIO(..)) where
 
-import Data.Typeable
+import safe Data.Typeable
 
 import safe LIO.Core
 import safe LIO.Label

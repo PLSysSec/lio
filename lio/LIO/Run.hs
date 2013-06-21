@@ -11,8 +11,9 @@
 -- with symbols you don't need in the 'IO' monad.
 module LIO.Run (LIOState(..), runLIO, tryLIO, evalLIO, privInit) where
 
-import Control.Exception
-import Data.IORef
+import safe Control.Exception
+import safe Data.IORef
+
 import LIO.TCB
 
 -- | Execute an 'LIO' action, returning its result and the final label

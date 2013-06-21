@@ -95,16 +95,16 @@ module LIO.Core (
   ) where
 
 
-import qualified Control.Exception as IO
-import Control.Monad
-import Data.IORef
-import Data.Typeable
+import safe qualified Control.Exception as IO
+import safe Control.Monad
+import safe Data.IORef
+import safe Data.Typeable
 
-import LIO.Exception
+import safe LIO.Exception
+import safe LIO.Label
+import safe LIO.Privs
+import safe LIO.Run
 import LIO.TCB
-import LIO.Label
-import LIO.Privs
-import LIO.Run
 
 
 --
