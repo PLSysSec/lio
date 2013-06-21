@@ -83,10 +83,9 @@ True
 module LIO.DCLabel (
   -- * Top-level aliases and functions
     DC, DCPriv, DCLabeled, dcDefaultState, evalDC, tryDC
-  , dcPub, dcTop, dcBottom
   -- * Main types and functions
   , Principal, principalBS, principal
-  , DCLabel(..), (%%), (/\), (\/)
+  , DCLabel(..), dcPublic, (%%), (/\), (\/)
   , CNF, ToCNF(..)
   -- * Lower-level functions
   , principalName
@@ -379,17 +378,15 @@ instance Read DCLabel where
     int <- readPrec
     return $ DCLabel sec int
 
--- | The public label (True %% True) which is the \"middle\" of the lattice.
-dcPub :: DCLabel
-dcPub = True %% True
-
--- | The lavel \'top\' (False %% True) - noone can read, everyone can write.
-dcTop :: DCLabel
-dcTop = False %% True
-
--- | The label \'bottom\' (True %% False) - everyone can read, noone can write.
-dcBottom :: DCLabel
-dcBottom = True %% False
+-- | The label @(True %% True)@, which corresponds to public data with
+-- no integrity guarantees.  For instance, an unrestricted Internet
+-- socket should be labeled @dcPublic@.  If data is labeled @(s1 %%
+-- i1)@, the 'CNF' @s1@ specifies the minimum authority required to
+-- write the data over a channel labeled @dcPublic@.  Similarly, @i1@
+-- is the minimum authority required to take @dcPublic@ data and label
+-- it with @(s1 %% i1)@.
+dcPublic :: DCLabel
+dcPublic = True %% True
 
 -- | As a type, a 'CNF' is always a conjunction of 'Disjunction's of
 -- 'Principal's.  However, mathematically speaking, a single
@@ -398,13 +395,13 @@ dcBottom = True %% False
 -- differences between these types, promoting them all to 'CNF'.
 class ToCNF c where toCNF :: c -> CNF
 instance ToCNF CNF where toCNF = id
+instance ToCNF DCPriv where toCNF = privDesc
 instance ToCNF Disjunction where toCNF = cSingleton
 instance ToCNF Principal where toCNF = toCNF . dSingleton
 instance ToCNF [Char] where toCNF = toCNF . principal
 instance ToCNF Bool where
   toCNF True = cTrue
   toCNF False = cFalse
-instance ToCNF DCPriv where toCNF = privDesc
 
 -- | The primary way of creating a 'DCLabel'.  The secrecy component
 -- goes on the left, while the integrity component goes on the right,
@@ -462,8 +459,8 @@ instance PrivDesc DCLabel CNF where
 -- and an unlimited clearance of @(False '%%' True)@--to which all
 -- labels flow.
 dcDefaultState :: LIOState DCLabel
-dcDefaultState = LIOState { lioLabel = dcPub
-                          , lioClearance = dcTop }
+dcDefaultState = LIOState { lioLabel = True %% True
+                          , lioClearance = False %% True }
 
 -- | The main monad type alias to use for 'LIO' functions specific to
 -- 'DCLabel's.
