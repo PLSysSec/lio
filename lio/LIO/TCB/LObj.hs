@@ -34,12 +34,12 @@ import safe LIO.Label
 import safe LIO.Privs
 import LIO.TCB
 
--- | A "@LObj label object@" is a wrapper around an IO abstraction of
--- type @object@ (such as a file handle or socket) on which it is safe
--- to do @IO@ operations in the 'LIO' monad when the caller can read
--- and write a particular label.  It is the job of the trusted code
--- constructing such a @LObj@ object to ensure both that the same IO
--- object is only ever blessed with one label, and that the
+-- | A \"@LObj label object@\" is a wrapper around an IO abstraction
+-- of type @object@ (such as a file handle or socket) on which it is
+-- safe to do @IO@ operations in the 'LIO' monad when the caller can
+-- read and write a particular label.  It is the job of the trusted
+-- code constructing such a @LObj@ object to ensure both that the same
+-- IO object is only ever blessed with one label, and that the
 -- abstraction combined with its blessed IO operations (see
 -- 'blessTCB') cannot be used to communicate with code running at
 -- different labels.
