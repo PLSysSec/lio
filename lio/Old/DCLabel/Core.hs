@@ -43,7 +43,7 @@ because data vouched for by @P_1@ or @P_2@ is more permissive than just @P_1@
 
 -}
 
-module LIO.DCLabel.Core ( 
+module Old.DCLabel.Core ( 
   -- * Principals
     Principal(..), principal
   -- * Clauses
@@ -184,6 +184,9 @@ instance Show DCLabel where
     let s = dcSecrecy l
         i = dcIntegrity l
     in showsPrec (d + 1) s . showString " %% " . showsPrec (d + 1) i
+
+instance SpeaksFor Component where
+  speaksFor = dcImplies
 
 instance PrivDesc DCLabel Component where
   canFlowToPrivDesc pd l1 l2

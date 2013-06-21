@@ -36,7 +36,8 @@ By convention, all 'PrivDesc' instances should also be instances of
 
 module LIO.Privs (
   -- * Privilege descriptions
-    PrivDesc(..), canFlowToP, partDowngradeP
+    SpeaksFor(..), delegate
+  , PrivDesc(..), canFlowToP, partDowngradeP
   -- * Privileges
   , Priv, privDesc
   , NoPrivs, noPrivs
@@ -48,6 +49,7 @@ module LIO.Privs (
   ) where
 
 import Data.Monoid
+
 import LIO.Label
 import LIO.TCB
 
@@ -58,6 +60,18 @@ import LIO.TCB
 privDesc :: Priv a -> a
 {-# INLINE privDesc #-}
 privDesc (PrivTCB a) = a
+
+class (Show p) => SpeaksFor p where
+  -- | @speaksFor p1 p2@ returns 'True' iff @p1@ subsumes all the
+  -- privileges of @p2@.  In other words, it is safe for 'delegate' to
+  -- hand out @p2@ to a caller who already has @p1@.
+  speaksFor :: p -> p -> Bool
+  speaksFor _ _ = False
+
+delegate :: (SpeaksFor p) => Priv p -> p -> Priv p
+delegate (PrivTCB p1) p2
+  | p1 `speaksFor` p2 = PrivTCB p2
+  | otherwise = error $ "Insufficient privileges to delegate " ++ show p2
 
 -- | This class represents privilege descriptions, which define a
 -- pre-order on labels in which distinct labels become equivalent.
@@ -72,7 +86,12 @@ privDesc (PrivTCB a) = a
 -- (The 'downgradePrivDesc' requirement represents the fact that a
 -- generic 'canFlowToPrivDesc' can be implemented efficiently in terms
 -- of 'downgradePrivDesc', but not vice-versa.)
-class (Label l) => PrivDesc l p where
+class (Label l, SpeaksFor p) => PrivDesc l p where
+-- Note: SpeaksFor is a superclass for security reasons.  Were it not
+-- a superclass, then if a label format ever failed to define
+-- SpeaksFor, or defined it in a different module from the PrivDesc
+-- instance, then an attacker could produce an vacuous instance that
+-- allows all delegation.
     -- | Privileges are described in terms of a pre-order on labels in
     -- which sets of distinct labels become equivalent.
     -- @downgradePrivDesc p l@ returns the lowest of all labels
@@ -166,11 +185,12 @@ instance Monoid NoPrivs where
   mempty      = NoPrivs
   mappend _ _ = NoPrivs
 
+instance SpeaksFor NoPrivs where speaksFor _ _ = True
+
 -- | 'downgradePrivDesc' 'NoPrivs' is the identify function.  Hence
 -- 'canFlowToPrivDesc' 'NoPrivs' is 'canFlowTo' while
 -- 'partDowngradePrivDesc' 'NoPrivs' is 'lub'.
-instance Label l => PrivDesc l NoPrivs where
-  downgradePrivDesc _ l = l
+instance Label l => PrivDesc l NoPrivs where downgradePrivDesc _ l = l
 
 
 {- $gateIntro

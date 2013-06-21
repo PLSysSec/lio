@@ -9,7 +9,7 @@
 -- use in invoking 'LIO' code.  The functions are also available via
 -- "LIO" and "LIO.Core", but those modules will clutter your namespace
 -- with symbols you don't need in the 'IO' monad.
-module LIO.Run (LIOState(..), runLIO, evalLIO) where
+module LIO.Run (LIOState(..), runLIO, tryLIO, evalLIO, privInit) where
 
 import Control.Exception
 import Data.IORef
@@ -28,6 +28,16 @@ runLIO (LIOTCB m) s0 = do
   s1 <- readIORef sp
   return (a, s1)
 
+-- | A variant of 'runLIO' that returns results in 'Right' and
+-- exceptions in 'Left', much like the standard library 'try'
+-- function.
+tryLIO :: LIO l a -> LIOState l -> IO (Either SomeException a, LIOState l)
+tryLIO lio s0 = runLIO lio s0 >>= tryit
+  where tryit (a, s) = do
+          ea <- try (evaluate a)
+          return (ea, s)
+
+
 -- | Given an 'LIO' computation and some initial state, return an IO
 -- action which when executed will perform the IFC-safe LIO
 -- computation.
@@ -45,3 +55,13 @@ evalLIO lio s = do
   (a, _) <- runLIO lio s
   return $! a
 
+-- | Initialize some privileges (within the 'IO' monad) that can be
+-- passed to 'LIO' computations run with 'runLIO' or 'evalLIO'.  This
+-- is a pure function, but the result is encapsulated in 'IO' to
+-- make the return value inaccessible from 'LIO' computations.
+--
+-- Note the same effect can be achieved using the 'PrivTCB'
+-- constructor, but 'PrivTCB' is easier to misuse is only available by
+-- importing "LIO.TCB".
+privInit :: a -> IO (Priv a)
+privInit = return . PrivTCB

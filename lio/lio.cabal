@@ -56,6 +56,7 @@ Library
     base          >= 4.5     && < 5.0
    ,containers
    ,bytestring
+   ,hashable      >= 1.2
 
   GHC-options: -Wall -fno-warn-orphans
 
@@ -79,11 +80,12 @@ Library
     LIO.Concurrent.LMVar
     -- * DCLabels
     LIO.DCLabel
-    LIO.DCLabel.Core
-    LIO.DCLabel.Privs
-    LIO.DCLabel.DSL
+    -- Old.DCLabel
+    -- Old.DCLabel.Core
+    -- Old.DCLabel.Privs
+    -- Old.DCLabel.DSL
+    -- Old.TCB.DCLabel
     -- * Privileged internals
     LIO.TCB
     LIO.TCB.LObj
     LIO.TCB.Concurrent
-    LIO.TCB.DCLabel

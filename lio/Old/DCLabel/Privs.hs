@@ -25,7 +25,7 @@ description @P@ of type 'DCPrivDesc', any piece of code can use
 
 -}
 
-module LIO.DCLabel.Privs (
+module Old.DCLabel.Privs (
     DCPrivDesc
   , DCPriv
   -- ** Helpers
@@ -37,7 +37,7 @@ module LIO.DCLabel.Privs (
 import qualified Data.Set as Set
 
 import LIO
-import LIO.DCLabel.Core
+import Old.DCLabel.Core
 import LIO.TCB
 
 -- | A privilege description is simply a conjunction of disjunctions.

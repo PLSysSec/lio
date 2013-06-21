@@ -17,9 +17,9 @@ import Text.Printf
 
 import LIO.Label
 import LIO.Privs
-import qualified LIO.DCLabel as O
-import qualified LIO.DCLabel.Core as O
-import qualified LIO.DCLabel.Fast as F
+import qualified Old.DCLabel as O
+import qualified Old.DCLabel.Core as O
+import qualified LIO.DCLabel as F
 
 instance (Ord a, Arbitrary a) => Arbitrary (Set a) where
   arbitrary = Set.fromList <$> arbitrary
@@ -60,12 +60,19 @@ oldNewSameDowngrade (PSS p) (PSS l) =
   show (downgradePrivDesc (mkComponent p) (mkComponent l O.%% True))
   == show (downgradePrivDesc (mkCNF p) (mkCNF l F.%% True))
 
+oldNewSameLub :: PSS -> PSS -> Bool
+oldNewSameLub (PSS l1) (PSS l2) =
+  show (lub (mkComponent l1 O.%% mkComponent l1)
+        (mkComponent l2 O.%% mkComponent l2))
+  == show (lub (mkCNF l1 F.%% mkCNF l1) (mkCNF l2 F.%% mkCNF l2))
+
 oldNewSame :: IO ()
 oldNewSame = T.defaultMain [
     testProperty "oldNewSameProp" oldNewSameProp
   , testProperty "oldNewSameAnd" oldNewSameAnd
   , testProperty "oldNewSameOr" oldNewSameOr
   , testProperty "oldNewSameDowngrade" oldNewSameDowngrade
+  , testProperty "oldNewSameLub" oldNewSameLub
   ]
 
 
@@ -89,7 +96,7 @@ sanity = foldl1 (&&) [
   , show (fbig F.\/ fsmall) == show (obig O.\/ osmall)
   , show (downgradePrivDesc fsmall (fbig F.%% True))
     == show (downgradePrivDesc osmall (obig O.%% True))
-  ] 
+  ]
 
 
 main = do
