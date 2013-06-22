@@ -11,7 +11,7 @@ module LIO.Label (
   -- * Privileges
   -- $Privileges
   , SpeaksFor(..), PrivDesc(..)
-  , Priv, privDesc, canFlowToP, downgradeP
+  , Priv, privDesc
   -- * Empty privileges
   , NoPrivs(..), noPrivs
   ) where
@@ -135,7 +135,7 @@ from accessing the constructor for 'Priv' (called 'PrivTCB').  Safe
 code can construct arbitrary privileges from the 'IO' monad (using
 'privInit' in "LIO.Run#v:privInit"), but cannot do so from the 'LIO'
 monad.  Starting from existing privileges, safe code can also
-'delegate' lesser privileges (see "LIO.Delegate").
+'delegate' lesser privileges (see "LIO.Delegate#v:delegate").
 
 Privileges allow you to behave as if @l1 ``canFlowTo`` l2@ even when
 that is not the case, but only for certain pairs of labels @l1@ and
@@ -148,11 +148,10 @@ more permissive can-flow-to check by exercising particular privileges
 (in literature this relation is commonly written @&#8849;&#8346;@ for
 privileges @p@).  Most core 'LIO' function have variants ending @...P@
 that take a privilege argument to act in a more permissive way.
-'canFlowToP' is defined in terms of the method 'canFlowToPrivDesc',
-which performs the same check on a 'PrivDesc' instance.
 
 By convention, all 'PrivDesc' instances should also be instances of
-'Monoid', allowing privileges to be combined with 'mappend'.
+'Monoid', allowing privileges to be combined with 'mappend', though
+this is not enforced with superclasses.
 
 -}
 
@@ -182,39 +181,39 @@ infix 4 `speaksFor`
 -- | This class represents privilege descriptions, which define a
 -- pre-order on labels in which distinct labels become equivalent.
 -- The pre-oder implied by a privilege description is specified by the
--- method 'canFlowToPrivDesc'.  In addition, this this class defines a
--- method 'downgradePrivDesc', which is important for finding least
--- labels satisfying a privilege equivalence.
+-- method 'canFlowP'.  In addition, this this class defines a method
+-- 'downgradeP', which is important for finding least labels
+-- satisfying a privilege equivalence.
 --
--- Minimal complete definition: 'downgradePrivDesc'.
+-- Minimal complete definition: 'downgradeP'.
 --
--- (The 'downgradePrivDesc' requirement represents the fact that a
--- generic 'canFlowToPrivDesc' can be implemented efficiently in terms
--- of 'downgradePrivDesc', but not vice-versa.)
+-- (The 'downgradeP' requirement represents the fact that a generic
+-- 'canFlowToP' can be implemented efficiently in terms of
+-- 'downgradeP', but not vice-versa.)
 class (Label l, SpeaksFor p) => PrivDesc l p where
 -- Note: SpeaksFor is a superclass for security reasons.  Were it not
 -- a superclass, then if a label format ever failed to define
 -- SpeaksFor, or defined it in a different module from the PrivDesc
 -- instance, then an attacker could produce an vacuous instance that
 -- allows all delegation.
-    -- | Privileges are described in terms of a pre-order on labels in
-    -- which sets of distinct labels become equivalent.
-    -- @downgradePrivDesc p l@ returns the lowest of all labels
-    -- equivalent to @l@ under privilege description @p@.
-    --
-    -- Less formally, @downgradePrivDesc p l@ returns a label
-    -- representing the furthest you can downgrade data labeled @l@
-    -- given privileges described by @p@.
-    --
-    -- Yet another way to view this function is that
-    -- @downgradePrivDesc p l@ returns the greatest lower bound (under
-    -- 'canFlowTo') of the set of all labels @l'@ such that
-    -- @'canFlowToPrivDesc' p l' l@.
-    downgradePrivDesc :: p  -- ^ Privilege description
-                      -> l  -- ^ Label to downgrade
-                      -> l  -- ^ Lowest label equivelent to input
 
-    -- | @canFlowToPrivDesc p l1 l2@ determines whether @p@ describes
+    -- | Privileges are described in terms of a pre-order on labels in
+    -- which sets of distinct labels become equivalent.  @downgradeP p
+    -- l@ returns the lowest of all labels equivalent to @l@ under
+    -- privilege description @p@.
+    --
+    -- Less formally, @downgradeP p l@ returns a label representing
+    -- the furthest you can downgrade data labeled @l@ given
+    -- privileges described by @p@.
+    --
+    -- Yet another way to view this function is that @downgradeP p l@
+    -- returns the greatest lower bound (under 'canFlowTo') of the set
+    -- of all labels @l'@ such that @'canFlowToP' p l' l@.
+    downgradeP :: p     -- ^ Privilege description
+                  -> l  -- ^ Label to downgrade
+                  -> l  -- ^ Lowest label equivelent to input
+
+    -- | @canFlowToP p l1 l2@ determines whether @p@ describes
     -- sufficient privileges to observe data labeled @l1@ and
     -- subsequently write it to an object labeled @l2@.  The function
     -- returns 'True' if and only if either @canFlowTo l1 l2@ or @l1
@@ -222,27 +221,23 @@ class (Label l, SpeaksFor p) => PrivDesc l p where
     --
     -- The default definition is:
     --
-    -- > canFlowToPrivDesc p l1 l2 = downgradePrivDesc p l1 `canFlowTo` l2
+    -- > canFlowToP p l1 l2 = downgradeP p l1 `canFlowTo` l2
     -- 
-    -- @canFlowToPrivDesc@ is a method rather than a function so that
-    -- it can be optimized in label-specific ways.  However, custom
+    -- @canFlowToP@ is a method rather than a function so that it can
+    -- be optimized in label-specific ways.  However, custom
     -- definitions should behave identically to the default.
-    canFlowToPrivDesc :: p -> l -> l -> Bool
-    canFlowToPrivDesc p l1 l2 = downgradePrivDesc p l1 `canFlowTo` l2
+    canFlowToP :: p -> l -> l -> Bool
+    canFlowToP p l1 l2 = downgradeP p l1 `canFlowTo` l2
 
--- | A version of 'canFlowToPrivDesc' that works on 'Priv' objects:
---
--- > canFlowToP = canFlowToPrivDesc . privDesc
-canFlowToP :: PrivDesc l p => Priv p -> l -> l -> Bool
-{-# INLINE canFlowToP #-}
-canFlowToP = canFlowToPrivDesc . privDesc
+instance (SpeaksFor p) => SpeaksFor (Priv p) where
+  {-# INLINE speaksFor #-}
+  speaksFor p1 p2 = privDesc p1 `speaksFor` privDesc p2
 
--- | A version of 'downgradePrivDesc' that works on 'Priv' objects:
---
--- > downgradeP = downgradePrivDesc . privDesc
-downgradeP :: PrivDesc l p => Priv p -> l -> l
-{-# INLINE downgradeP #-}
-downgradeP = downgradePrivDesc . privDesc
+instance (PrivDesc l p) => PrivDesc l (Priv p) where
+  {-# INLINE downgradeP #-}
+  downgradeP = downgradeP . privDesc
+  {-# INLINE canFlowToP #-}
+  canFlowToP = canFlowToP . privDesc
 
 --
 -- NoPrivs
@@ -256,9 +251,9 @@ data NoPrivs = NoPrivs deriving (Show, Read, Typeable)
 
 instance SpeaksFor NoPrivs where speaksFor _ _ = True
 
--- | 'downgradePrivDesc' 'NoPrivs' is the identify function.  Hence
--- 'canFlowToPrivDesc' 'NoPrivs' is the same as 'canFlowTo'.
-instance Label l => PrivDesc l NoPrivs where downgradePrivDesc _ l = l
+-- | 'downgradeP' 'NoPrivs' is the identify function.  Hence
+-- 'canFlowToP' 'NoPrivs' is the same as 'canFlowTo'.
+instance Label l => PrivDesc l NoPrivs where downgradeP _ l = l
 
 instance Monoid NoPrivs where
   mempty      = NoPrivs

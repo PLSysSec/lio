@@ -461,8 +461,8 @@ dcMaxDowngrade p (DCLabel (CNF ds) int) = DCLabel sec (cUnion p int)
   where sec = CNF $ Set.filter (not . cImplies1 p) ds
 
 instance PrivDesc DCLabel CNF where
-  downgradePrivDesc = dcMaxDowngrade
-  canFlowToPrivDesc p (DCLabel s1 i1) (DCLabel s2 i2) =
+  downgradeP = dcMaxDowngrade
+  canFlowToP p (DCLabel s1 i1) (DCLabel s2 i2) =
     cImplies (cUnion p s2) s1 && cImplies (cUnion p i1) i2
 
 --
