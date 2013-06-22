@@ -44,7 +44,6 @@ import safe LIO.Concurrent.LMVar
 import safe LIO.Core
 import safe LIO.Exception
 import safe LIO.Label
-import safe LIO.Privs
 import LIO.TCB
 import LIO.TCB.Concurrent
 

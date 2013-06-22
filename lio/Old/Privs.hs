@@ -11,8 +11,9 @@ a pre-order among labels in which certain unequal labels become
 equivalent.  A 'Priv' object containing a 'PrivDesc' instance allows
 code to make those unequal labels equivalent for the purposes of many
 library functions.  Effectively a 'PrivDesc' instance /describes/
-privileges, while a 'Priv' object /embodies/ them.  Security is
-enforced by preventing safe code from importing the constructor for
+privileges, while a 'Priv' object /embodies/ them.  Any code is free
+to construct arbitrarily powerful 'PrivDesc' values.  Security is
+enforced by preventing safe code from accessing the constructor for
 'Priv' (called 'PrivTCB').
 
 Put another way, privileges allow you to behave as if @L_1

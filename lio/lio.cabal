@@ -74,7 +74,7 @@ Library
     -- * Labeled IORefs
     LIO.LIORef
     -- * LIO privileges
-    LIO.Privs
+    LIO.Delegate
     -- * Concurrency
     LIO.Concurrent
     LIO.Concurrent.LMVar

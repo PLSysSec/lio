@@ -31,7 +31,6 @@ import safe Data.Typeable
 
 import safe LIO.Core
 import safe LIO.Label
-import safe LIO.Privs
 import LIO.TCB
 
 -- | A \"@LObj label object@\" is a wrapper around an IO abstraction

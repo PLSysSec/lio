@@ -111,7 +111,6 @@ import safe LIO.Exception (SomeException)
 import safe LIO.Core
 import safe LIO.Label
 import safe LIO.Labeled
-import safe LIO.Privs
 import safe LIO.Run
 
 type SetTag = Word64

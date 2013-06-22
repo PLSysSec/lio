@@ -3,8 +3,8 @@
 
 This is the main module to be included by code using the Labeled IO
 (LIO) library. This module exports the core library (documented in
-"LIO.Core"), with support for labeled values (documented in
-"LIO.Labeled") and privileges (documented in "LIO.Privs").
+"LIO.Core"), with support for labels and privileges (documented in
+"LIO.Privs") and labeled values (documented in "LIO.Labeled").
 
 Certain symbols in the lio library, particularly those in
 "LIO.Exception", use the same names as their 'IO' equivalents in the
@@ -29,15 +29,15 @@ details on the guarantees provided by SafeHaskell.
 -}
 
 module LIO ( 
-    module LIO.Label
+    module LIO.Core
+  , module LIO.Delegate
   , module LIO.Exception
-  , module LIO.Core
+  , module LIO.Label
   , module LIO.Labeled
-  , module LIO.Privs
   ) where
 
-import LIO.Core
-import LIO.Exception
-import LIO.Label
-import LIO.Labeled
-import LIO.Privs
+import safe LIO.Core
+import safe LIO.Delegate
+import safe LIO.Exception
+import safe LIO.Label
+import safe LIO.Labeled

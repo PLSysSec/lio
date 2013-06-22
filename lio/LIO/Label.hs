@@ -1,138 +1,114 @@
 {-# LANGUAGE Trustworthy #-}
-{- | 
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
-Labels are a way of describing who can observe and modify data.  There
-is a partial order, generally pronounced \"can flow to\" on labels.
-In LIO we write this partial order ``canFlowTo`` (in the literature it
-is usually written as &#8849;).
-
-The idea is that data labeled @L_1@ may affect data labeled @L_2@
-only if @L_1@ ``canFlowTo`` @L_2@.  The 'LIO' monad (see "LIO.Core")
-keeps track of the current label of the executing code (accessible via
-the 'getLabel' function).  Code may attempt to perform various IO or
-memory operations on labeled data.  Hence, touching data may change
-the current label (or throw an exception if an operation would violate
-flow restrictions).
-
-If the current label is @L_cur@, then it is only permissible to read
-data labeled @L_r@ if @L_r ``canFlowTo`` L_cur@.  This is sometimes
-termed \"no read up\" in the literature; however, because the partial
-order allows for incomparable labels (i.e., two labels @L_1@ and @L_2@
-such that @not (L_1 ``canFlowTo`` L_2) && not (L_2 ``canFlowTo``
-L_1)@), a more appropriate phrasing would be \"read only what can flow
-to your label\".  Note that, rather than throw an exception, reading
-data will often just increase the current label to ensure that @L_r
-``canFlowTo`` L_cur@.  The LIO monad keeps a second label, called the
-/clearance/ (accessible via the @getClearance@ function), that
-represents the highest value the current thread can raise its label
-to. The purpose of clearance is to enforce discretionary access
-control: you can set the clearance to a label @L_clear@ so as to prevent
-a piece of LIO code from accessing anything above @L_clear@.
-
-Conversely, it is only permissible to modify data labeled @L_w@ when
-@L_cur``canFlowTo`` L_w@, a property often cited as \"no write down\",
-but more accurately characterized as \"write only what you can flow
-to\".  In practice, there are very few IO abstractions (namely,
-mutable references) in which it is possible to do a pure write that
-doesn't also involve observing some state.  For instance, writing to a
-file handle and not getting an exception tells you that the handle is
-not closed.  Thus, in practice, the requirement for modifying data
-labeled @L_w@ is almost always that @L_cur ``canFlowTo`` L_w@ and @L_w
-``canFlowTo`` L_cur@, i.e., @L_cur == L_w@.
-
-Note that higher labels are neither more nor less privileged than
-lower ones.  Simply, the higher one's label is, the more things one
-can read.  Conversely, the lower one's label, the more things one can
-write.  But, because labels are a partial and not a total order, some
-data may be completely inaccessible to a particular computation; for
-instance, if the current label is @L_cur@, the current clearance is
-@C_cur@, and some data is labeled @L_d@, such that @not (L_cur
-``canFlowTo`` L_d || L_d ``canFlowTo`` C_cur)@, then the current
-thread can neither read nor write the data, at least without invoking
-some privilege.
-
-LIO is polymorphic in the label type. It is solely required that every
-implementation of a label (usually called a "label format") be an
-instance of the 'Label' class. This class provides a generic interface
-to labels: they must define the 'canFlowTo' relation, some minimal
-element 'bottom', some maximum element 'top', and two binary operators
-on how to combine labels: the least upper bound ('lub') and greatest
-lower bound ('glb').
-
-Since LIO associates labels with different data types, it is useful to
-be able to access the label of such objects (when the label is solely
-protected by the current label). To this end, LIO provides the
-'LabelOf' type class for which different labeled objects
-implementations provide an instance.
-
--}
 
 module LIO.Label (
   -- * Labels
+  -- $Labels
     Label(..)
-  -- * Accessing label of labeled values
- , LabelOf(..) 
- ) where
+  -- * Privileges
+  -- $Privileges
+  , SpeaksFor(..), PrivDesc(..)
+  , Priv, privDesc, canFlowToP, downgradeP
+  -- * Empty privileges
+  , NoPrivs(..), noPrivs
+  ) where
 
+import safe Data.Monoid
 import safe Data.Typeable
 
 import LIO.TCB
 
--- | This class defines a label format, corresponding to a bounded
--- lattice (see <https://en.wikipedia.org/wiki/Bounded_lattice>).
--- Specifically, it is necessary to define a bottom element
--- 'bottom' (in literature, written as &#8869;), a top element 'top' (in
--- literature, written as &#8868;), a join, or least upper bound, 'lub'
--- (in literature, written as &#8852;), a meet, or greatest lower bound,
--- 'glb' (in literature, written as &#8851;), and of course the
--- can-flow-to partial-order 'canFlowTo' (in literature, written as
--- &#8849;).
+{- $Labels
+
+Labels are a way of describing who can observe and modify data.
+Labels are governed by a partial order, generally pronounced \"can
+flow to.\"  In LIO, we write this relation ``canFlowTo``.  In the
+literature, it is usually written &#8849;.
+
+At a high level, the purpose of this whole library is to ensure that
+data labeled @l1@ may affect data labeled @l2@ only if @l1
+``canFlowTo`` l2@.  The 'LIO' monad (see "LIO.Core") ensures this by
+keeping track of a /current label/ of the executing thread (accessible
+via the 'getLabel' function).  Code may attempt to perform various IO
+or memory operations on labeled data.  Touching data may change the
+current label and will throw an exception in the event that an
+operation would violate information flow restrictions.
+
+The specific invariant maintained by 'LIO' is, first, that labels on
+all previously observed data must flow to a thread's current label.
+Second, the current label must flow to the labels of any future
+objects the thread will be allowed to modify.  Hence, after a thread
+with current label @lcur@ observes data labeled @l1@, it must hold
+that @l1 ``canFlowTo`` lcur@.  If the thread is later permitted to
+modify an object labeled @l2@, it must hold that @lcur ``canFlowTo``
+l2@.  By transitifity of the ``canFlowTo`` relation, it holds that @l1
+``canFlowTo` l2@.
+
+-}
+
+-- | This class defines the operations necessary to make a label into
+-- a lattice (see <http://en.wikipedia.org/wiki/Lattice_(order)>).
+-- 'canFlowTo' partially orders labels (which corresponds to the
+-- relation usually written &#8849; in the information flow
+-- literature).  'lub' and 'glb' compute the least upper bound and
+-- greatest lower bound of two labels, respectively.
 class (Eq l, Show l, Typeable l) => Label l where
-  -- | /Least/ upper bound, or join, of two labels. For any two labels
-  -- @L_1@ and @L_2@, if @L_3 = L_1 \`lub` L_2@, it must be that:
+  -- | Compute the /least upper bound/, or join, of two labels.  When
+  -- data carrying two different labels is mixed together in a
+  -- document, the @lub@ of the two labels is the lowest safe value
+  -- with which to label the result.
   --
-  -- * @L_1 ``canFlowTo`` L_3@,
+  -- More formally, for any two labels @l1@ and @l2@, if @ljoin = l1
+  -- \`lub` l2@, it must be that:
   --
-  -- * @L_2 ``canFlowTo`` L_3@, and
+  -- * @L_1 ``canFlowTo`` ljoin@,
   --
-  -- * There is no label @L_4 /= L_3 @ such that
-  --   @L_1 ``canFlowTo`` L_4@, @L_2 ``canFlowTo`` L_4@, and
-  --   @L_4 ``canFlowTo`` L_3@.  In other words @L_3@ is the least
-  --   such element.
+  -- * @L_2 ``canFlowTo`` ljoin@, and
+  --
+  -- * There is no label @l /= ljoin@ such that @l1 ``canFlowTo`` l@,
+  --   @l2 ``canFlowTo`` l@, and @l ``canFlowTo`` ljoin@.  In other
+  --   words @ljoin@ is the least element to which both @l1@ and @l2@
+  --   can flow.
   --
   -- When used infix, has fixity:
   --
   -- > infixl 5 `lub`
   lub :: l -> l -> l
-  -- | /Greatest/ lower bound, or meet, of two labels. For any two labels
-  -- @L_1@ and @L_2@, if @L_3 = L_1 \`glb` L_2@, it must be that:
+
+  -- | /Greatest lower bound/, or meet, of two labels. For any two
+  -- labels @l1@ and @l2@, if @lmeet = l1 \`glb` l2@, it must be
+  -- that:
   --
-  -- * @L_3 ``canFlowTo`` L_1@,
+  -- * @lmeet ``canFlowTo`` l1@,
   --
-  -- * @L_3 ``canFlowTo`` L_2@, and
+  -- * @lmeet ``canFlowTo`` l2@, and
   --
-  -- * There is no label @L_4 /= L_3@ such that
-  --   @L_4 ``canFlowTo`` L_1@, @L_4 ``canFlowTo`` L_1@, and
-  --   @L_3 ``canFlowTo`` L_4@.  In other words @L_3@ is the greatest
-  --   such element.
+  -- * There is no label @l /= lmeet@ such that @l ``canFlowTo`` l1@,
+  --   @l ``canFlowTo`` l2@, and @lmeet ``canFlowTo`` l@.  In other
+  --   words @lmeet@ is the greatest element flowing to both @l1@ and
+  --   @l2@.
   --
   -- When used infix, has fixity:
   --
   -- > infixl 5 `glb`
   glb :: l -> l -> l
-  -- | Can-flow-to relation. An entity labeled @L_1@ should be allowed
-  -- to affect an entity @L_2@ only if @L_1 \`canFlowTo` L_2@. This
-  -- relation on labels is at least a partial order (see
+
+  -- | /Can-flow-to/ relation (&#8849;). An entity labeled @l1@ should
+  -- be allowed to affect an entity @l2@ only if @l1 \`canFlowTo`
+  -- l2@. This relation on labels is at least a partial order (see
   -- <https://en.wikipedia.org/wiki/Partially_ordered_set>), and must
-  -- satisfy the following rules:
+  -- satisfy the following laws:
   --
-  -- * Reflexivity: @L_1 \`canFlowTo` L_1@ for any @L_1@.
+  -- * Reflexivity: @l1 \`canFlowTo` l1@ for any @l1@.
   --
-  -- * Antisymmetry: If @L_1 \`canFlowTo` L_2@ and
-  --   @L_2 \`canFlowTo` L_1@ then @L_1 = L_2@.
+  -- * Antisymmetry: If @l1 \`canFlowTo` l2@ and
+  --   @l2 \`canFlowTo` l1@ then @l1 = l2@.
   --
-  -- * Transitivity: If @L_1 \`canFlowTo` L_2@ and
-  --   @L_2 \`canFlowTo` L_3@ then @L_1 \`canFlowTo` L_3@.
+  -- * Transitivity: If @l1 \`canFlowTo` l2@ and
+  --   @l2 \`canFlowTo` l3@ then @l1 \`canFlowTo` l3@.
   --
   -- When used infix, has fixity:
   --
@@ -142,22 +118,153 @@ class (Eq l, Show l, Typeable l) => Label l where
 infixl 5 `lub`, `glb`
 infix 4 `canFlowTo`
 
--- | Generic class used to get the type of labeled objects. For,
--- instance, if you wish to associate a label with a pure value (as in
--- "LIO.Labeled"), you may create a data type:
--- 
--- > newtype LVal l a = LValTCB (l, a)
--- 
--- Then, you may wish to allow untrusted code to read the label of any
--- @LVal@s but not necessarily the actual value. To do so, simply
--- provide an instance for @LabelOf@:
--- 
--- > instance LabelOf LVal where
--- >   labelOf (LValTCB lv) = fst lv
-class LabelOf t where
-  -- | Get the label of a type kinded @* -> *@
-  labelOf :: t l a -> l
+{- $Privileges 
 
-instance LabelOf Labeled where
-  {-# INLINE labelOf #-}
-  labelOf (LabeledTCB l _) = l
+Privileges are objects the possesion of which allows code to bypass
+certain label protections.  An instance of class 'PrivDesc' describes
+a pre-order (see <http://en.wikipedia.org/wiki/Preorder>) among labels
+in which certain unequal labels become equivalent.  A 'Priv' object
+containing a 'PrivDesc' instance allows code to make those unequal
+labels equivalent for the purposes of many library functions.
+Effectively, a 'PrivDesc' instance /describes/ privileges, while a
+'Priv' object /embodies/ them.
+
+Any code is free to construct 'PrivDesc' values describing arbitrarily
+powerful privileges.  Security is enforced by preventing safe code
+from accessing the constructor for 'Priv' (called 'PrivTCB').  Safe
+code can construct arbitrary privileges from the 'IO' monad (using
+'privInit' in "LIO.Run#v:privInit"), but cannot do so from the 'LIO'
+monad.  Starting from existing privileges, safe code can also
+'delegate' lesser privileges (see "LIO.Delegate").
+
+Privileges allow you to behave as if @l1 ``canFlowTo`` l2@ even when
+that is not the case, but only for certain pairs of labels @l1@ and
+@l2@; which pairs depends on the specific privileges.  The process of
+allowing data labeled @l1@ to infulence data labeled @l2@ when @(l1
+``canFlowTo`` l2) == False@ is known as /downgrading/.
+
+The central function in this module is 'canFlowToP', which performs a
+more permissive can-flow-to check by exercising particular privileges
+(in literature this relation is commonly written @&#8849;&#8346;@ for
+privileges @p@).  Most core 'LIO' function have variants ending @...P@
+that take a privilege argument to act in a more permissive way.
+'canFlowToP' is defined in terms of the method 'canFlowToPrivDesc',
+which performs the same check on a 'PrivDesc' instance.
+
+By convention, all 'PrivDesc' instances should also be instances of
+'Monoid', allowing privileges to be combined with 'mappend'.
+
+-}
+
+
+-- | Turns privileges into a powerless description of the privileges
+-- by unwrapping the 'Priv' newtype.
+privDesc :: Priv a -> a
+{-# INLINE privDesc #-}
+privDesc (PrivTCB a) = a
+
+-- | Every privilege type must be an instance of 'SpeaksFor', which
+-- specifies when one privilege value is more powerful than another.
+-- If you do not wish to allow delegation, you can simply define
+-- @'speaksFor' _ _ = False@.
+class (Typeable p, Show p) => SpeaksFor p where
+  -- | @speaksFor p1 p2@ returns 'True' iff @p1@ subsumes all the
+  -- privileges of @p2@.  In other words, it is safe for 'delegate' to
+  -- hand out @p2@ to a caller who already has @p1@.
+  --
+  -- Has fixity:
+  --
+  -- > infix 4 `speaksFor`
+  speaksFor :: p -> p -> Bool
+
+infix 4 `speaksFor`
+
+-- | This class represents privilege descriptions, which define a
+-- pre-order on labels in which distinct labels become equivalent.
+-- The pre-oder implied by a privilege description is specified by the
+-- method 'canFlowToPrivDesc'.  In addition, this this class defines a
+-- method 'downgradePrivDesc', which is important for finding least
+-- labels satisfying a privilege equivalence.
+--
+-- Minimal complete definition: 'downgradePrivDesc'.
+--
+-- (The 'downgradePrivDesc' requirement represents the fact that a
+-- generic 'canFlowToPrivDesc' can be implemented efficiently in terms
+-- of 'downgradePrivDesc', but not vice-versa.)
+class (Label l, SpeaksFor p) => PrivDesc l p where
+-- Note: SpeaksFor is a superclass for security reasons.  Were it not
+-- a superclass, then if a label format ever failed to define
+-- SpeaksFor, or defined it in a different module from the PrivDesc
+-- instance, then an attacker could produce an vacuous instance that
+-- allows all delegation.
+    -- | Privileges are described in terms of a pre-order on labels in
+    -- which sets of distinct labels become equivalent.
+    -- @downgradePrivDesc p l@ returns the lowest of all labels
+    -- equivalent to @l@ under privilege description @p@.
+    --
+    -- Less formally, @downgradePrivDesc p l@ returns a label
+    -- representing the furthest you can downgrade data labeled @l@
+    -- given privileges described by @p@.
+    --
+    -- Yet another way to view this function is that
+    -- @downgradePrivDesc p l@ returns the greatest lower bound (under
+    -- 'canFlowTo') of the set of all labels @l'@ such that
+    -- @'canFlowToPrivDesc' p l' l@.
+    downgradePrivDesc :: p  -- ^ Privilege description
+                      -> l  -- ^ Label to downgrade
+                      -> l  -- ^ Lowest label equivelent to input
+
+    -- | @canFlowToPrivDesc p l1 l2@ determines whether @p@ describes
+    -- sufficient privileges to observe data labeled @l1@ and
+    -- subsequently write it to an object labeled @l2@.  The function
+    -- returns 'True' if and only if either @canFlowTo l1 l2@ or @l1
+    -- and l2@ are equivalent under @p@.
+    --
+    -- The default definition is:
+    --
+    -- > canFlowToPrivDesc p l1 l2 = downgradePrivDesc p l1 `canFlowTo` l2
+    -- 
+    -- @canFlowToPrivDesc@ is a method rather than a function so that
+    -- it can be optimized in label-specific ways.  However, custom
+    -- definitions should behave identically to the default.
+    canFlowToPrivDesc :: p -> l -> l -> Bool
+    canFlowToPrivDesc p l1 l2 = downgradePrivDesc p l1 `canFlowTo` l2
+
+-- | A version of 'canFlowToPrivDesc' that works on 'Priv' objects:
+--
+-- > canFlowToP = canFlowToPrivDesc . privDesc
+canFlowToP :: PrivDesc l p => Priv p -> l -> l -> Bool
+{-# INLINE canFlowToP #-}
+canFlowToP = canFlowToPrivDesc . privDesc
+
+-- | A version of 'downgradePrivDesc' that works on 'Priv' objects:
+--
+-- > downgradeP = downgradePrivDesc . privDesc
+downgradeP :: PrivDesc l p => Priv p -> l -> l
+{-# INLINE downgradeP #-}
+downgradeP = downgradePrivDesc . privDesc
+
+--
+-- NoPrivs
+--
+
+-- | Generic 'PrivDesc' used to denote the lack of privileges.  Works
+-- with any 'Label' type.  This is only a privilege description; a
+-- more useful symbol is 'noPrivs', which actually embodies the
+-- @NoPrivs@ privilege.
+data NoPrivs = NoPrivs deriving (Show, Read, Typeable)
+
+instance SpeaksFor NoPrivs where speaksFor _ _ = True
+
+-- | 'downgradePrivDesc' 'NoPrivs' is the identify function.  Hence
+-- 'canFlowToPrivDesc' 'NoPrivs' is the same as 'canFlowTo'.
+instance Label l => PrivDesc l NoPrivs where downgradePrivDesc _ l = l
+
+instance Monoid NoPrivs where
+  mempty      = NoPrivs
+  mappend _ _ = NoPrivs
+
+-- | 'Priv' object corresponding to 'NoPrivs'.
+noPrivs :: Priv NoPrivs
+noPrivs = PrivTCB NoPrivs
+

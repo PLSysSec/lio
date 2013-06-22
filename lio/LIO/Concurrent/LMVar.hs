@@ -44,7 +44,6 @@ import safe Control.Concurrent.MVar
 
 import safe LIO.Core
 import safe LIO.Label
-import safe LIO.Privs
 import LIO.TCB
 import LIO.TCB.LObj
 

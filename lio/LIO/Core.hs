@@ -102,7 +102,6 @@ import safe Data.Typeable
 
 import safe LIO.Exception
 import safe LIO.Label
-import safe LIO.Privs
 import safe LIO.Run
 import LIO.TCB
 
@@ -151,8 +150,8 @@ setClearance = setClearanceP noPrivs
 setClearanceP :: PrivDesc l p => Priv p -> l -> LIO l ()
 setClearanceP p cnew = do
   LIOState l c <- getLIOStateTCB
-  unless (canFlowToP p cnew c) $! throwLIO InsufficientPrivs
-  unless (l `canFlowTo` cnew)  $! throwLIO CurrentLabelViolation
+  unless (canFlowToP p cnew c) $ throwLIO InsufficientPrivs
+  unless (l `canFlowTo` cnew) $ throwLIO CurrentLabelViolation
   putLIOStateTCB $ LIOState l cnew
 
 -- | Runs an 'LIO' action and re-sets the current clearance to its
@@ -318,8 +317,8 @@ guardAllocP :: PrivDesc l p => Priv p -> l -> LIO l ()
 guardAllocP p newl = do
   c <- getClearance
   l <- getLabel
-  unless (canFlowToP p l newl) $! throwLIO CurrentLabelViolation
-  unless (newl `canFlowTo` c)  $! throwLIO ClearanceViolation
+  unless (canFlowToP p l newl) $ throwLIO CurrentLabelViolation
+  unless (newl `canFlowTo` c)  $ throwLIO ClearanceViolation
 
 --
 -- Read
@@ -341,7 +340,7 @@ taintP p newl = do
   c <- getClearance
   l <- getLabel
   let l' = downgradeP p newl `lub` l
-  unless (l' `canFlowTo` c) $! throwLIO ClearanceViolation
+  unless (l' `canFlowTo` c) $ throwLIO ClearanceViolation
   modifyLIOStateTCB $ \s -> s { lioLabel = l' }
 
 

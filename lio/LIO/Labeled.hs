@@ -40,7 +40,6 @@ import safe Control.Monad
 import safe LIO.Exception
 import safe LIO.Label
 import safe LIO.Core
-import safe LIO.Privs
 import LIO.TCB
 
 --

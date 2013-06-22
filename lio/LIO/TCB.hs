@@ -30,11 +30,11 @@ module LIO.TCB (
   -- * Executing IO actions
   , ioTCB
   -- * Privileged constructors
-  , Priv(..), Labeled(..)
+  , Priv(..), Labeled(..), LabelOf(..)
   -- * Uncatchable exception type
   , UncatchableTCB(..), makeCatchable
-  -- * Trusted 'Show' and 'Read'
-  , ShowTCB(..), ReadTCB(..)
+  -- * Trusted 'Show'
+  , ShowTCB(..)
   ) where
 
 import safe Control.Applicative
@@ -43,7 +43,6 @@ import safe Control.Monad
 import safe Data.Monoid
 import safe Data.IORef
 import safe Data.Typeable
-import safe Text.Read (minPrec)
 
 --
 -- LIO Monad
@@ -157,9 +156,11 @@ makeCatchable e@(SomeException einner) =
 --
 
 -- | A newtype wrapper that can be used by trusted code to bless
--- privileges.  Privilege-related functions are defined in
--- "LIO.Privs", but the constructor, 'PrivTCB', allows one to mint
--- arbitrary privileges and hence must be located in this file.
+-- privileges.  The constructor, 'PrivTCB', allows one to mint
+-- arbitrary privileges and hence is only exported by the unsafe file
+-- "LIO.TCB".  A safe way to create arbitrary privileges is to call
+-- 'privInit' (see "LIO.Run#v:privInit") from the 'IO' monad before
+-- running your 'LIO' computation.
 newtype Priv a = PrivTCB a deriving (Show, Eq, Typeable)
 
 instance Monoid p => Monoid (Priv p) where
@@ -186,18 +187,30 @@ data Labeled l t = LabeledTCB !l t deriving Typeable
 
 -- | Trusted 'Show' instance.
 instance (Show l, Show a) => ShowTCB (Labeled l a) where
-    showTCB (LabeledTCB l t) = show t ++ " {" ++ show l ++ "}"
+    showTCB (LabeledTCB l a) = show a ++ " {" ++ show l ++ "}"
 
--- | Trusted 'Read' instance.
-instance (Read l, Read a) => ReadTCB (Labeled l a) where
-  readsPrecTCB _ str = do (val, str1) <- reads str
-                          ("{", str2) <- lex str1
-                          (lab, str3) <- reads str2
-                          ("}", rest) <- lex str3
-                          return (LabeledTCB lab val, rest)
+-- | Generic class used to get the type of labeled objects. For,
+-- instance, if you wish to associate a label with a pure value (as in
+-- "LIO.Labeled"), you may create a data type:
+-- 
+-- > newtype LVal l a = LValTCB (l, a)
+-- 
+-- Then, you may wish to allow untrusted code to read the label of any
+-- @LVal@s but not necessarily the actual value. To do so, simply
+-- provide an instance for @LabelOf@:
+-- 
+-- > instance LabelOf LVal where
+-- >   labelOf (LValTCB lv) = fst lv
+class LabelOf t where
+  -- | Get the label of a type kinded @* -> *@
+  labelOf :: t l a -> l
+
+instance LabelOf Labeled where
+  {-# INLINE labelOf #-}
+  labelOf (LabeledTCB l _) = l
 
 --
--- Trusted 'Show' and 'Read'
+-- Trusted 'Show'
 --
 
 -- | It would be a security issue to make certain objects a member of
@@ -206,18 +219,3 @@ instance (Read l, Read a) => ReadTCB (Labeled l a) where
 -- to examine such objects.
 class ShowTCB a where
   showTCB :: a -> String
-
--- | It is useful to have the dual of 'ShowTCB', @ReadTCB@, that allows
--- for the reading of strings that were created using 'showTCB'. Only
--- @readTCB@ (corresponding to 'read') and @readsPrecTCB@ (corresponding
--- to 'readsPrec') are implemented.
-class ReadTCB a where
-  -- | Trusted 'readsPrec'
-  readsPrecTCB :: Int -> ReadS a
-  -- | Trusted 'read'
-  readTCB :: String -> a
-  readTCB str = check $ readsPrecTCB minPrec str
-    where check []                          = error "readTCB: no parse"
-          check [(x,rst)] | all (==' ') rst = x
-                         | otherwise        = error "readTCB: no parse"
-          check _                           = error "readTCB: ambiguous parse"

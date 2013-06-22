@@ -15,18 +15,18 @@ module LIO.TCB.Concurrent (
 import safe qualified Control.Concurrent as IO
 import safe Data.IORef
 
-import safe LIO.Label
+import LIO.TCB (LabelOf(..))
 
 data LResStatus l a = LResEmpty
                     | LResLabelTooHigh !l
                     | LResResult a
                       deriving (Show)
 
--- | A LabeledResult encapsulates a future result from a computation running
--- in a thread. It holds the 'ThreadId' and an 'LMVar' where the result is
--- stored. The thread referenced in 'lresThreadIdTCB' should fill in
--- 'lresResultTCB' (either with a value or exception), so waiting on the thread
--- should ensure that a result is ready.
+-- | A LabeledResult encapsulates a future result from a computation
+-- running in a thread. It holds the 'ThreadId' and an 'LMVar' where
+-- the result is stored. The thread referenced in 'lresThreadIdTCB'
+-- should fill in 'lresResultTCB' (either with a value or exception),
+-- so waiting on the thread should ensure that a result is ready.
 data LabeledResult l a = LabeledResultTCB {
     lresThreadIdTCB :: !IO.ThreadId
     -- ^ Thread executing the computation
