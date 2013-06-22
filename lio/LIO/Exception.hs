@@ -21,13 +21,13 @@ module LIO.Exception (
   , onException, finally, bracket, evaluate
   ) where
 
-import Control.Exception (Exception(..), SomeException(..))
-import qualified Control.Exception as IO
-import Control.Monad
-import Data.Typeable
+import safe Control.Exception (Exception(..), SomeException(..))
+import safe qualified Control.Exception as IO
+import safe Control.Monad
+import safe Data.Typeable
 
 import LIO.TCB
-import LIO.Label
+import safe LIO.Label
 
 throwLIO :: Exception e => e -> LIO l a
 throwLIO = ioTCB . IO.throwIO
