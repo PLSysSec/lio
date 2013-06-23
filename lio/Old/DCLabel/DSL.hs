@@ -82,7 +82,7 @@ module Old.DCLabel.DSL (
 
 import qualified Data.Set as Set
 
-import LIO.Privs
+import LIO.Label
 import Old.DCLabel.Core
 
 -- | Convert a type (e.g., 'Clause', 'Principal') to a label component.

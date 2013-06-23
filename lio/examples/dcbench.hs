@@ -16,7 +16,6 @@ import Test.QuickCheck.Gen
 import Text.Printf
 
 import LIO.Label
-import LIO.Privs
 import qualified Old.DCLabel as O
 import qualified Old.DCLabel.Core as O
 import qualified LIO.DCLabel as F
@@ -57,8 +56,8 @@ oldNewSameOr (PSS ps1) (PSS ps2) =
 
 oldNewSameDowngrade :: PSS -> PSS -> Bool
 oldNewSameDowngrade (PSS p) (PSS l) =
-  show (downgradePrivDesc (mkComponent p) (mkComponent l O.%% True))
-  == show (downgradePrivDesc (mkCNF p) (mkCNF l F.%% True))
+  show (downgradeP (mkComponent p) (mkComponent l O.%% True))
+  == show (downgradeP (mkCNF p) (mkCNF l F.%% True))
 
 oldNewSameLub :: PSS -> PSS -> Bool
 oldNewSameLub (PSS l1) (PSS l2) =
@@ -97,8 +96,8 @@ sanity = foldl1 (&&) [
   , show (mkComponent sssmall1) == show (mkCNF sssmall1)
   , show (fbig F./\ fsmall) == show (obig O./\ osmall)
   , show (fbig F.\/ fsmall) == show (obig O.\/ osmall)
-  , show (downgradePrivDesc fsmall (fbig F.%% True))
-    == show (downgradePrivDesc osmall (obig O.%% True))
+  , show (downgradeP fsmall (fbig F.%% True))
+    == show (downgradeP osmall (obig O.%% True))
   ]
 
 
@@ -113,10 +112,10 @@ main = do
     , bench "O./\\" $ whnf (obig O./\) osmall
     , bench "F.\\/" $ whnf (fbig F.\/) fsmall
     , bench "O.\\/" $ whnf (obig O.\/) osmall
-    , bench "F.downgradePrivDesc" $
-      whnf (downgradePrivDesc fsmall) (fbig F.%% True)
-    , bench "O.downgradePrivDesc" $
-      whnf (downgradePrivDesc osmall) (obig O.%% True)
+    , bench "F.downgradeP" $
+      whnf (downgradeP fsmall) (fbig F.%% True)
+    , bench "O.downgradeP" $
+      whnf (downgradeP osmall) (obig O.%% True)
     , bench "F.lub" $ whnf (lub (fsmall F.%% fsmall)) (fsmall1 F.%% fsmall1)
     , bench "O.lub" $ whnf (lub (osmall O.%% osmall)) (osmall1 O.%% osmall1)
     ]

@@ -45,8 +45,8 @@ module Old.DCLabel (
 import qualified Control.Exception as IO
 
 import LIO.Core
+import LIO.Delegate
 import LIO.Labeled
-import LIO.Privs
 import LIO.LIORef
 import Old.DCLabel.Core
 import Old.DCLabel.Privs

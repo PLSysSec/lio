@@ -69,7 +69,6 @@ import qualified Data.Set as Set
 import Data.Typeable
 
 import LIO.Label
-import LIO.Privs
 
 --
 -- Principals
@@ -189,14 +188,14 @@ instance SpeaksFor Component where
   speaksFor = dcImplies
 
 instance PrivDesc DCLabel Component where
-  canFlowToPrivDesc pd l1 l2
+  canFlowToP pd l1 l2
            | pd == dcTrue = canFlowTo l1 l2
            | otherwise =
     let i1 = dcReduce $ dcIntegrity l1 `dcAnd` pd
         s2 = dcReduce $ dcSecrecy l2   `dcAnd` pd
     in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
 
-  downgradePrivDesc p l = pdpd p l dcBottom
+  downgradeP p l = pdpd p l dcBottom
     where pdpd pd la lg
              | pd == mempty  = la `lub` lg
              | pd == dcFalse = lg
