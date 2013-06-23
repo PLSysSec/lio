@@ -1,6 +1,7 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 
 import Control.Applicative
+import Control.Exception
 import Criterion
 import qualified Criterion.Main as Cr
 import qualified Data.ByteString.Char8 as S
@@ -79,7 +80,7 @@ newReadShow (PSS s) (PSS i) = l == read (show l)
   where l = mkCNF s F.%% mkCNF i
 
 sssmall = unGen pGen (mkStdGen 2) 10
-sssmall1 = unGen pGen (mkStdGen 4) 10
+sssmall1 = unGen pGen (mkStdGen 5) 10
 ssbig = unGen pGen (mkStdGen 12312) 100
 
 fbig = mkCNF ssbig
@@ -100,11 +101,19 @@ sanity = foldl1 (&&) [
     == show (downgradeP osmall (obig O.%% True))
   ]
 
-
 main = do
   True <- return sanity
   Cr.defaultMain [
-      bench "mkCNF" $ whnf mkCNF ssbig
+      bench "canFlowTo" $ 
+      let iosmall1 = return (fsmall F.%% True) :: IO F.DCLabel
+          {-# NOINLINE iosmall1 #-}
+      in whnfIO (fmap (canFlowTo (fsmall F.%% True)) iosmall1)
+    , bench "catch canFlowTo" $ 
+      let iosmall1 = return (fsmall F.%% True) :: IO F.DCLabel
+          {-# NOINLINE iosmall1 #-}
+      in whnfIO (fmap (canFlowTo (fsmall F.%% True)) iosmall1
+                 `catch` \(SomeException _) -> return False)
+    , bench "mkCNF" $ whnf mkCNF ssbig
     , bench "mkComponent" $ whnf mkComponent ssbig
     , bench "mkCNF small" $ whnf mkCNF sssmall1
     , bench "mkComponent small" $ whnf mkComponent sssmall1
