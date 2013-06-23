@@ -43,6 +43,7 @@ module LIO.Concurrent.LMVar (
 import safe Control.Concurrent.MVar
 
 import safe LIO.Core
+import safe LIO.Error
 import safe LIO.Label
 import LIO.TCB
 import LIO.TCB.LObj
@@ -62,14 +63,16 @@ type LMVar l a = LObj l (MVar a)
 newEmptyLMVar :: Label l
               => l                -- ^ Label of @LMVar@
               -> LIO l (LMVar l a)    -- ^ New mutable location
-newEmptyLMVar l = guardAlloc l >> ioTCB (LObjTCB l `fmap` newEmptyMVar)
+newEmptyLMVar l = do
+  withContext "newEmptyLMVar" $ guardAlloc l
+  ioTCB (LObjTCB l `fmap` newEmptyMVar)
 
 -- | Same as 'newEmptyLMVar' except it takes a set of privileges which
 -- are accounted for in comparing the label of the MVar to the current
 -- label and clearance.
 newEmptyLMVarP :: PrivDesc l p => Priv p -> l -> LIO l (LMVar l a)
 newEmptyLMVarP p l = do
-  guardAllocP p l
+  withContext "newEmptyLMVarP" $ guardAllocP p l
   ioTCB $ LObjTCB l `fmap` newEmptyMVar
 
 -- | Create a new labeled MVar, in an filled state with the supplied
@@ -79,14 +82,16 @@ newLMVar :: Label l
          => l                       -- ^ Label of @LMVar@
          -> a                       -- ^ Initial value of @LMVar@
          -> LIO l (LMVar l a)       -- ^ New mutable location
-newLMVar l a = guardAlloc l >> ioTCB (LObjTCB l `fmap` newMVar a)
+newLMVar l a = do
+  withContext "newLMVar" $ guardAlloc l
+  ioTCB (LObjTCB l `fmap` newMVar a)
 
 -- | Same as 'newLMVar' except it takes a set of privileges which are
 -- accounted for in comparing the label of the MVar to the current label
 -- and clearance.
 newLMVarP :: PrivDesc l p => Priv p -> l -> a -> LIO l (LMVar l a)
 newLMVarP p l a = do
-  guardAllocP p l
+  withContext "newLMVarP" $ guardAllocP p l
   ioTCB $ LObjTCB l `fmap` newMVar a
 
 --
@@ -104,23 +109,23 @@ newLMVarP p l a = do
 -- If the Finally, like 'MVars' if the 'LMVar' is empty, @takeLMVar@
 -- blocks.
 takeLMVar :: Label l => LMVar l a -> LIO l a
-takeLMVar = blessTCB takeMVar
+takeLMVar = blessTCB "takeLMVar" takeMVar
 
 -- | Same as 'takeLMVar' except @takeLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
 takeLMVarP :: PrivDesc l p => Priv p -> LMVar l a -> LIO l a
-takeLMVarP = blessPTCB takeMVar
+takeLMVarP = blessPTCB "takeLMVarP" takeMVar
 
 -- | Non-blocking version of 'takeLMVar'. It returns @Nothing@ if the
 -- 'LMVar' is empty, otherwise it returns @Just@ value, emptying the
 -- 'LMVar'.
 tryTakeLMVar :: Label l => LMVar l a -> LIO l (Maybe a)
-tryTakeLMVar = blessTCB tryTakeMVar
+tryTakeLMVar = blessTCB "tryTakeLMVar" tryTakeMVar
 
 -- | Same as 'tryTakeLMVar', but uses priviliges when raising current
 -- label.
 tryTakeLMVarP :: PrivDesc l p => Priv p -> LMVar l a -> LIO l (Maybe a)
-tryTakeLMVarP = blessPTCB tryTakeMVar
+tryTakeLMVarP = blessPTCB "tryTakeLMVar" tryTakeMVar
 
 --
 -- Put 'LMVar'
@@ -139,21 +144,21 @@ putLMVar :: Label l
          => LMVar l a   -- ^ Source 'LMVar'
          -> a           -- ^ New value
          -> LIO l ()
-putLMVar = blessTCB putMVar
+putLMVar = blessTCB "putLMVar" putMVar
 
 -- | Same as 'putLMVar' except @putLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
 putLMVarP :: PrivDesc l p => Priv p -> LMVar l a -> a -> LIO l ()
-putLMVarP = blessPTCB putMVar
+putLMVarP = blessPTCB "putLMVarP" putMVar
 
 -- | Non-blocking version of 'putLMVar'. It returns @True@ if the
 -- 'LMVar' was empty and the put succeeded, otherwise it returns @False@.
 tryPutLMVar :: Label l => LMVar l a -> a -> LIO l Bool
-tryPutLMVar = blessTCB tryPutMVar
+tryPutLMVar = blessTCB "tryPutLMVar" tryPutMVar
 
 -- | Same as 'tryPutLMVar', but uses privileges when raising current label.
 tryPutLMVarP :: PrivDesc l p => Priv p -> LMVar l a -> a -> LIO l Bool
-tryPutLMVarP = blessPTCB tryPutMVar
+tryPutLMVarP = blessPTCB "tryPutLMVarP" tryPutMVar
 
 --
 -- Read 'LMVar'
@@ -165,12 +170,12 @@ tryPutLMVarP = blessPTCB tryPutMVar
 -- a function such as 'putLMVar', 'tryTakeLMVarP', or 'isEmptyLMVar'
 -- for this 'LMVar'.
 readLMVar :: Label l => LMVar l a -> LIO l a
-readLMVar = blessTCB readMVar
+readLMVar = blessTCB "readLMVar" readMVar
 
 -- | Same as 'readLMVar' except @readLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
 readLMVarP :: PrivDesc l p => Priv p -> LMVar l a -> LIO l a
-readLMVarP = blessPTCB readMVar
+readLMVarP = blessPTCB "readLMVarP" readMVar
 
 --
 -- Swap 'LMVar'
@@ -187,12 +192,12 @@ swapLMVar :: Label l
           => LMVar l a          -- ^ Source @LMVar@
           -> a                  -- ^ New value
           -> LIO l a            -- ^ Taken value
-swapLMVar = blessTCB swapMVar
+swapLMVar = blessTCB "swapLMVar" swapMVar
 
 -- | Same as 'swapLMVar' except @swapLMVarP@ takes a privilege object
 -- which is used when the current label is raised.
 swapLMVarP :: PrivDesc l p => Priv p -> LMVar l a -> a -> LIO l a
-swapLMVarP = blessPTCB swapMVar
+swapLMVarP = blessPTCB "swapLMVarP" swapMVar
 
 --
 -- Check state of 'LMVar'
@@ -201,12 +206,10 @@ swapLMVarP = blessPTCB swapMVar
 -- | Check the status of an 'LMVar', i.e., whether it is empty. The
 -- function succeeds if the label of the 'LMVar' is below the current
 -- clearance -- the current label is raised to the join of the 'LMVar'
--- label and the current label. Note that this function only returns a
--- snapshot of the state and does not modify it -- hence the
--- underlying guard is 'taint' and not 'guardWrite'.
+-- label and the current label.
 isEmptyLMVar :: Label l => LMVar l a -> LIO l Bool
-isEmptyLMVar = blessTCB isEmptyMVar
+isEmptyLMVar = blessTCB "isEmptyLMVar" isEmptyMVar
 
 -- | Same as 'isEmptyLMVar', but uses privileges when raising current label.
 isEmptyLMVarP :: PrivDesc l p => Priv p -> LMVar l a -> LIO l Bool
-isEmptyLMVarP = blessPTCB isEmptyMVar
+isEmptyLMVarP = blessPTCB "isEmptyLMVarP" isEmptyMVar
