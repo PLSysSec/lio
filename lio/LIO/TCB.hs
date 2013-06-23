@@ -4,21 +4,16 @@
 
 {- | 
 
-This module exports 
+This module exports symbols that must be accessible only to trusted
+code.  By convention, the names of such symbols always end
+\"@...TCB@\" (short for \"trusted computing base\").  In many cases, a
+type is safe to export while its constructor is not.  Hence, only the
+constructor ends \"@TCB@\", while the type is re-exported to safe code
+(without constructors) to from "LIO.Core".
 
-* The definition of the 'LIO' monad and relevant trusted state
-  access/modifying functions.
-
-* Various other types whose constructors are privileged and must be
-  hidden from untrusted code.
-
-* Uncatchable exceptions used to pop threads out of the 'LIO' monad
-  unconditionally.
-
-* Combinators for executing 'IO' actions within the 'LIO' monad.
-
-The documentation and external, safe 'LIO' interface is provided in
-"LIO.Core".
+Security rests on the fact that untrusted code must be compiled with
+@-XSafe@.  Because this module is flagged unsafe, it cannot be
+imported from safe modules.
 
 -}
 
@@ -53,15 +48,11 @@ data LIOState l = LIOState { lioLabel     :: !l -- ^ Current label.
                            , lioClearance :: !l -- ^ Current clearance.
                            } deriving (Eq, Show, Read)
 
--- | The @LIO@ monad is a state monad, with 'IO' as the underlying monad,
--- that carries along a /current label/ ('lioLabel') and /current clearance/
--- ('lioClearance'). The current label imposes restrictions on
--- what the current computation may read and write (e.g., no writes to
--- public channels after reading sensitive data).  Since the current
--- label can be raised to be permissive in what a computation observes,
--- we need a way to prevent certain computations from reading overly
--- sensitive data. This is the role of the current clearance: it imposes
--- an upper bound on the current label.
+-- | The @LIO@ monad is a wrapper around 'IO' that keeps track of a
+-- /current label/ and /current clearance/.  Safe code cannot execute
+-- arbitrary 'IO' actions from the 'LIO' monad.  However, trusted
+-- runtime functions can use 'ioTCB' to perform 'IO' actions (which
+-- they should only do after appropriately checking labels).
 newtype LIO l a = LIOTCB (IORef (LIOState l) -> IO a) deriving (Typeable)
 
 instance Monad (LIO l) where
@@ -115,10 +106,9 @@ updateLIOStateTCB = modifyLIOStateTCB
 -- Executing IO actions
 --
 
--- | Lifts an 'IO' computation into the 'LIO' monad.  Note that
--- exceptions thrown within the 'IO' computation cannot directly be
--- caught within the 'LIO' computation.  Thus, you will generally want to
--- use 'rethrowIoTCB'.
+-- | Lifts an 'IO' computation into the 'LIO' monad.  Obviously this
+-- function is dangerous and should only be called after appropriate
+-- checks ensure the 'IO' computation will not violate IFC policy.
 ioTCB :: IO a -> LIO l a
 {-# INLINE ioTCB #-}
 ioTCB = LIOTCB . const
@@ -127,10 +117,10 @@ ioTCB = LIOTCB . const
 -- Exception handling
 --
 
--- | An uncatchable exception hierarchy use to terminate an untrusted
--- thread.  Wrap the uncatchable exception in 'UncatchableTCB' before
--- throwing it to the thread.  'runLIO' will subsequently unwrap the
--- 'UncatchableTCB' constructor.
+-- | An uncatchable exception hierarchy is used to terminate an
+-- untrusted thread.  Wrap the uncatchable exception in
+-- 'UncatchableTCB' before throwing it to the thread.  'runLIO' will
+-- subsequently unwrap the 'UncatchableTCB' constructor.
 --
 -- Note this can be circumvented by 'IO.mapException', which should be
 -- made unsafe.
@@ -155,12 +145,13 @@ makeCatchable e@(SomeException einner) =
 -- Privileges
 --
 
--- | A newtype wrapper that can be used by trusted code to bless
--- privileges.  The constructor, 'PrivTCB', allows one to mint
--- arbitrary privileges and hence is only exported by the unsafe file
--- "LIO.TCB".  A safe way to create arbitrary privileges is to call
--- 'privInit' (see "LIO.Run#v:privInit") from the 'IO' monad before
--- running your 'LIO' computation.
+-- | A newtype wrapper that can be used by trusted code to transform a
+-- powerless description of privileges into actual privileges.  The
+-- constructor, 'PrivTCB', is dangerous as it allows creation of
+-- arbitrary privileges.  Hence it is only exported by the unsafe
+-- module "LIO.TCB".  A safe way to create arbitrary privileges is to
+-- call 'privInit' (see "LIO.Run#v:privInit") from the 'IO' monad
+-- before running your 'LIO' computation.
 newtype Priv a = PrivTCB a deriving (Show, Eq, Typeable)
 
 instance Monoid p => Monoid (Priv p) where
@@ -175,13 +166,12 @@ instance Monoid p => Monoid (Priv p) where
 --
 
 -- | @Labeled l a@ is a value that associates a label of type @l@ with
--- a value of type @a@. Labeled values allow users to label data with
--- a label other than the current label. In an embedded setting this
--- is akin to having first class labeled values. Note that 'Labeled'
--- is an instance of 'LabelOf', which effectively means that the label
--- of a 'Labeled' value is usually just protected by the current
--- label. (Of course if you have a nested labeled value then the label
--- on the inner labeled value's label is the outer label.)
+-- a pure value of type @a@. Labeled values allow users to label data
+-- with a label other than the current label.  Note that 'Labeled' is
+-- an instance of 'LabelOf', which means that only the /contents/ of a
+-- labeled value (the type @t@) is kept secret, not the label.  Of
+-- course, if you have a @Labeled@ within a @Labeled@, then the label
+-- on the inner value will be protected by the outer label.
 data Labeled l t = LabeledTCB !l t deriving Typeable
 -- Note: t cannot be strict if we want things like lFmap.
 
@@ -202,7 +192,8 @@ instance (Show l, Show a) => ShowTCB (Labeled l a) where
 -- > instance LabelOf LVal where
 -- >   labelOf (LValTCB lv) = fst lv
 class LabelOf t where
-  -- | Get the label of a type kinded @* -> *@
+  -- | Get the label of a labeled value or object.  Note the label
+  -- must be the second to last type constructor argument.
   labelOf :: t l a -> l
 
 instance LabelOf Labeled where
@@ -213,9 +204,9 @@ instance LabelOf Labeled where
 -- Trusted 'Show'
 --
 
--- | It would be a security issue to make certain objects a member of
--- the 'Show' class, but nonetheless it is useful to be able to
--- examine such objects when debugging.  The 'showTCB' method can be used
--- to examine such objects.
+-- | It would be a security issue to make certain objects members of
+-- the 'Show' class.  Nonetheless it is useful to be able to examine
+-- such objects when debugging.  The 'showTCB' method can be used to
+-- examine such objects.
 class ShowTCB a where
   showTCB :: a -> String

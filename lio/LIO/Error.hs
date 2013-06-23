@@ -62,12 +62,12 @@ instance Show (GenericPrivDesc l) where
 
 -- | Main error type thrown by label failures in the 'LIO' monad.
 data LabelError l = LabelError {
-    lerrContext :: [String] -- ^ Annotation of where the failure happened
-  , lerrFailure :: String   -- ^ Actual function that failed
-  , lerrCurLabel :: l       -- ^ Current label at time of error
-  , lerrCurClearance :: l   -- ^ Current clearance at time of error
-  , lerrPrivs :: [GenericPrivDesc l] -- ^ Any privileges involved in error
-  , lerrLabels :: [l]       -- ^ Any labels involved in error
+    lerrContext :: [String] -- ^ Annotation of where the failure happened.
+  , lerrFailure :: String   -- ^ Actual function that failed.
+  , lerrCurLabel :: l       -- ^ Current label at time of error.
+  , lerrCurClearance :: l   -- ^ Current clearance at time of error.
+  , lerrPrivs :: [GenericPrivDesc l] -- ^ Any privileges involved in error.
+  , lerrLabels :: [l]       -- ^ Any labels involved in error.
   } deriving (Show, Typeable)
 
 instance Annotatable (LabelError l) where
@@ -103,8 +103,9 @@ labelErrorP fl p ls = do
 
 
 -- | Error indicating insufficient privileges (independent of the
--- current label).  This is raised by 'delegate', and should by thrown
--- by gates that receive insufficient privilege.
+-- current label).  This is exception is thrown by 'delegate', and
+-- should also be thrown by gates that receive insufficient privilege
+-- descriptions (see "LIO.Delegate").
 data InsufficientPrivs = forall p. (SpeaksFor p) => InsufficientPrivs {
     inspContext :: [String]
   , inspFailure :: String

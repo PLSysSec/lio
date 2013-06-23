@@ -9,36 +9,47 @@ Maintainer:	Hails team <hails at scs dot stanford dot edu>
 Synopsis:       Labeled IO Information Flow Control Library
 Category:       Security
 Description:
+
   The /Labeled IO/ (LIO) library is an information flow control (IFC)
   library. IFC is a mechanism that enforces security policies by
   tracking and controlling the flow of information within a system.
-  Different from discretionary access control (think UNIX file
-  permissions), with IFC you can execute an untrusted computation on
-  your secret data and be sure that it does not leak it or overwrite
-  it.
+  Unlike discretionary access control (such as UNIX file permissions),
+  IFC permits scenarios in which untrusted computation may have the
+  ability to manipulate secret data without having the ability to
+  further disclose that data.
 
   .
+
   LIO is an IFC library that can be used to implement such untrusted
-  computations. LIO provides combinators similar to those of 'IO' for
-  performing side-effecting computations (e.g., accessing the
-  filesystem, modifying mutable references, throwing exceptions, etc.)
+  computations.  LIO provides combinators similar to those of 'IO' for
+  performing side-effecting computations (e.g., modifying mutable
+  references, forking threads, throwing and catching exceptions, etc.)
   To track and control the flow of information, LIO associates a
-  security policy, usually called a /label/, with every piece of data.
-  A label may, for example, impose a restriction on who can observe,
-  propagate, or modify the data labeled as such.  Different from
-  standard IO operations, the LIO counterparts usually take an
-  additional parameter for the label which they inspect before
-  actually performing the (underlying IO) side-effecting computation.
-  So, before writing to a file LIO asserts that the write will not
-  violate any security policies associated with the file or the data
-  to be written.
+  security policy, called a /label/, with every piece of data.  A
+  label may, for example, impose a restriction on who can observe,
+  propagate, or modify the data to which it applies.  Unlike standard
+  IO operations, the LIO counterparts check the vailidity of labels
+  before performing the (underlying IO) side-effecting computation.
+  For example, before writing to a labeled variable, LIO asserts that
+  the write will not violate any security policies associated with the
+  data to be written.
 
   .
 
   Most code should import module "LIO" and whichever label format the
-  application is using (e.g., "LIO.DCLabel"). All untrusted code
-  should have type 'LIO', which trusted code can safely execute with
-  'evalLIO'. See "LIO" for a description of the core library API.
+  application is using (e.g., "LIO.DCLabel" to use the format that
+  ships with the library).  Side-effecting code should be specified as
+  actions in the 'LIO' monad.  See "LIO.Core" for a description of the
+  core library API, "LIO.Label" for a discussion of labels, and
+  "LIO.Run" for functions allowing one to run an 'LIO' computation
+  from the 'IO' monad.
+
+  .
+
+  WARNING:  For security, untrusted code must always be compiled with
+  the @-XSafe@ and @-fpackage-trust@ /SafeHaskell/ flags. See
+  <http://www.haskell.org/ghc/docs/latest/html/users_guide/safe-haskell.html>
+  for more details on the guarantees provided by SafeHaskell.
 
 
 Extra-source-files:

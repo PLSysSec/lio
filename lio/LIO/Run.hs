@@ -42,7 +42,7 @@ tryLIO lio s0 = runLIO lio s0 >>= tryit
 
 
 -- | Given an 'LIO' computation and some initial state, return an IO
--- action which when executed will perform the IFC-safe LIO
+-- action which, when executed, will perform the IFC-safe LIO
 -- computation.
 --
 -- Because untrusted code cannot execute 'IO' computations, this function
