@@ -37,7 +37,7 @@ module LIO.Labeled (
 
 import safe Control.Monad
 
-import safe LIO.Exception
+import safe LIO.Error
 import safe LIO.Label
 import safe LIO.Core
 import LIO.TCB
@@ -109,8 +109,9 @@ unlabelP p (LabeledTCB l v) = taintP p l >> return v
 relabelLabeledP :: PrivDesc l p
                 => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
 relabelLabeledP p newl (LabeledTCB oldl v) = do
-  guardAllocP p newl
-  unless (canFlowToP p oldl newl) $ throwLIO InsufficientPrivs
+  withContext "relabelLabeledP" $ guardAllocP p newl
+  unless (canFlowToP p oldl newl) $
+    labelErrorP "relabelLabeledP" p [oldl, newl]
   return $ LabeledTCB newl v
 
 -- | Raises the label of a 'Labeled' to the 'upperBound' of it's current

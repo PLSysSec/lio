@@ -68,6 +68,7 @@ Library
     LIO.Label
     -- * Core library
     LIO.Core
+    LIO.Error
     LIO.Exception
     -- * Labeled values
     LIO.Labeled

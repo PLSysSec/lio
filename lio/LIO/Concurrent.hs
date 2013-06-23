@@ -27,6 +27,7 @@ module LIO.Concurrent (
   -- * Forking new threads
   , lForkP, lFork, forkLIO
   -- * Waiting on threads
+  , ResultExceedsLabel(..)
   , lWaitP, lWait
   , trylWaitP, trylWait
   , timedlWaitP, timedlWait
@@ -43,6 +44,7 @@ import safe Data.IORef
 import safe LIO.Concurrent.LMVar
 import safe LIO.Core
 import safe LIO.Exception
+import safe LIO.Error
 import safe LIO.Label
 import LIO.TCB
 import LIO.TCB.Concurrent
@@ -140,7 +142,11 @@ lWaitP p (LabeledResultTCB _ l mv st) = taintP p l >> go
         check (LResLabelTooHigh lnew) = do
           modifyLIOStateTCB $ \s -> s {
             lioLabel = downgradeP p lnew `lub` lioLabel s }
-          throwLIO ResultExceedsLabel
+          throwLIO ResultExceedsLabel {
+              relContext = []
+            , relLocation = "lWaitP"
+            , relDeclaredLabel = l
+            , relActualLabel = Just lnew }
 
 
 -- | Same as 'lWait', but does not block waiting for result.
@@ -156,7 +162,11 @@ trylWaitP p (LabeledResultTCB _ rl _ st) =
         check (LResLabelTooHigh lnew) = do
           curl <- getLabel
           if canFlowToP p lnew curl
-            then throwLIO ResultExceedsLabel
+            then throwLIO ResultExceedsLabel {
+                     relContext = []
+                   , relLocation = "trylWaitP"
+                   , relDeclaredLabel = rl
+                   , relActualLabel = Just lnew }
             else return Nothing
 
 
@@ -176,7 +186,7 @@ timedlWait = timedlWaitP noPrivs
 -- catching any 'ResultExceedsLabel' before the timeout period (if
 -- possible).
 timedlWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> Int -> LIO l a
-timedlWaitP p lr@(LabeledResultTCB t _ mvb _) to = trylWaitP p lr >>= go
+timedlWaitP p lr@(LabeledResultTCB t rl mvb _) to = trylWaitP p lr >>= go
   where go (Just a) = return a
         go Nothing = do
           mvk <- ioTCB $ IO.newEmptyMVar
@@ -185,5 +195,9 @@ timedlWaitP p lr@(LabeledResultTCB t _ mvb _) to = trylWaitP p lr >>= go
             IO.throwTo t (UncatchableTCB IO.ThreadKilled)
           ioTCB $ IO.readMVar mvb
           trylWaitP p lr >>= maybe
-            (ioTCB (IO.takeMVar mvk) >> throwLIO ResultExceedsLabel)
+            (ioTCB (IO.takeMVar mvk) >> throwLIO failure)
             (\a -> ioTCB (IO.killThread tk) >> return a)
+        failure = ResultExceedsLabel { relContext = []
+                                     , relLocation = "timedWaitP"
+                                     , relDeclaredLabel = rl
+                                     , relActualLabel = Nothing }

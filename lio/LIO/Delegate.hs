@@ -17,6 +17,7 @@ module LIO.Delegate (
 
 import safe Data.Typeable
 
+import safe LIO.Error
 import safe LIO.Label
 import LIO.TCB
 
@@ -31,9 +32,9 @@ import LIO.TCB
 -- powerful than ones you already have, you can use the 'mappend'
 -- function to combine existing privileges.
 delegate :: (SpeaksFor p) => Priv p -> p -> Priv p
-delegate (PrivTCB p1) p2
-  | p1 `speaksFor` p2 = PrivTCB p2
-  | otherwise = error $ "Insufficient privileges to delegate " ++ show p2
+delegate p1 p2
+  | privDesc p1 `speaksFor` p2 = PrivTCB p2
+  | otherwise                  = insufficientPrivs "delegate" p1 p2
 
 {- $gateIntro
 
