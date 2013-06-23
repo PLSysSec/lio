@@ -64,7 +64,7 @@ label = labelP noPrivs
 -- current clearance.
 labelP :: PrivDesc l p => Priv p -> l -> a -> LIO l (Labeled l a)
 labelP p l a = do
-  guardAllocP p l
+  withContext "labelP" $ guardAllocP p l
   return $ LabeledTCB l a
 
 --
@@ -90,7 +90,7 @@ unlabel = unlabelP noPrivs
 -- raised.  Function will throw 'ClearanceViolation' under the same
 -- circumstances as 'unlabel'.
 unlabelP :: PrivDesc l p => Priv p -> Labeled l a -> LIO l a
-unlabelP p (LabeledTCB l v) = taintP p l >> return v
+unlabelP p (LabeledTCB l v) = withContext "unlabelP" (taintP p l) >> return v
 
 --
 -- Relabel values
@@ -131,14 +131,15 @@ taintLabeledP :: PrivDesc l p
               => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
 taintLabeledP p l (LabeledTCB lold v) = do
   let lnew = lold `lub` l
-  guardAllocP p lnew
+  withContext "taintLabeledP" $ guardAllocP p lnew
   return $ LabeledTCB lnew v
 
 -- | Downgrades a label.
 untaintLabeledP :: PrivDesc l p
                 => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
-untaintLabeledP p target lv = relabelLabeledP p
-                              (downgradeP p (labelOf lv) `lub` target) lv
+untaintLabeledP p target lv =
+  withContext "untaintLabeledP" $
+  relabelLabeledP p (downgradeP p (labelOf lv) `lub` target) lv
 
 {-# DEPRECATED untaintLabeledP
   "This is a confusing function.  Usually relabelLabeledP is better" #-}
@@ -174,7 +175,7 @@ lFmap (LabeledTCB lold v) f = do
   -- Result label is joined with current label
   let lnew = lold `lub` l
   -- `label` checks for clearance violation then labels
-  label lnew $ f v
+  withContext "lFmap" $ label lnew $ f v
 
 
 -- | Similar to 'ap', apply function (wrapped by 'Labeled') to the
@@ -185,4 +186,4 @@ lAp :: Label l => Labeled l (a -> b) -> Labeled l a -> LIO l (Labeled l b)
 lAp (LabeledTCB lf f) (LabeledTCB la a) = do
   l <- getLabel
   let lnew = l `lub` lf `lub` la
-  label lnew $ f a
+  withContext "lAp" $ label lnew $ f a

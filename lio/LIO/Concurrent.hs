@@ -99,7 +99,7 @@ lFork = lForkP noPrivs
 lForkP :: PrivDesc l p =>
           Priv p -> l -> LIO l a -> LIO l (LabeledResult l a)
 lForkP p l (LIOTCB action) = do
-  guardAllocP p l
+  withContext "lForkP" $ guardAllocP p l
   mv <- ioTCB IO.newEmptyMVar
   st <- ioTCB $ newIORef LResEmpty
   s0 <- getLIOStateTCB
@@ -135,7 +135,8 @@ lWait = lWaitP noPrivs
 
 -- | Same as 'lWait', but uses priviliges in label checks and raises.
 lWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l a
-lWaitP p (LabeledResultTCB _ l mv st) = taintP p l >> go
+lWaitP p (LabeledResultTCB _ l mv st) =
+  withContext "lWaitP" (taintP p l) >> go
   where go = ioTCB (readIORef st) >>= check
         check LResEmpty = ioTCB (IO.readMVar mv) >> go
         check (LResResult a) = return $! a
@@ -156,7 +157,7 @@ trylWait = trylWaitP noPrivs
 -- | Same as 'trylWait', but uses priviliges in label checks and raises.
 trylWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l (Maybe a)
 trylWaitP p (LabeledResultTCB _ rl _ st) =
-  taintP p rl >> ioTCB (readIORef st) >>= check
+  withContext "trylWaitP" (taintP p rl) >> ioTCB (readIORef st) >>= check
   where check LResEmpty = return Nothing
         check (LResResult a) = return . Just $! a
         check (LResLabelTooHigh lnew) = do
