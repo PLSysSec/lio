@@ -23,10 +23,7 @@ data LResStatus l a = LResEmpty
                       deriving (Show)
 
 -- | A LabeledResult encapsulates a future result from a computation
--- running in a thread. It holds the 'ThreadId' and an 'LMVar' where
--- the result is stored. The thread referenced in 'lresThreadIdTCB'
--- should fill in 'lresResultTCB' (either with a value or exception),
--- so waiting on the thread should ensure that a result is ready.
+-- spawned by 'lFork' or 'lForkP'.
 data LabeledResult l a = LabeledResultTCB {
     lresThreadIdTCB :: !IO.ThreadId
     -- ^ Thread executing the computation

@@ -23,14 +23,16 @@ result of such a sub-computation.
 
 -}
 module LIO.Concurrent (
-    LabeledResult
-  -- * Forking new threads
-  , lForkP, lFork, forkLIO
+  -- * Forking simple threads
+    forkLIO
+  -- * Forking threads that return results
+  , LabeledResult
+  , lFork, lForkP
   -- * Waiting on threads
   , ResultExceedsLabel(..)
-  , lWaitP, lWait
-  , trylWaitP, trylWait
-  , timedlWaitP, timedlWait
+  , lWait, lWaitP
+  , trylWait, trylWaitP
+  , timedlWait, timedlWaitP
   -- * Labeled MVars
   , module LIO.Concurrent.LMVar
   ) where
