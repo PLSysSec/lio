@@ -7,9 +7,6 @@ import Control.Applicative
 import Test.QuickCheck
 import Test.QuickCheck.Instances ()
 import LIO.DCLabel
--- import LIO.DCLabel.Privs.TCB
--- import LIO.Privs.TCB
-import Data.Set hiding (map)
 import qualified Data.ByteString.Char8 as S8
 import LIO.TCB
 
