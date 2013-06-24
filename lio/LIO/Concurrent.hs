@@ -1,25 +1,25 @@
 {-# LANGUAGE Trustworthy #-}
 {- |
 
-This module exposes useful concurrency abstrations for 'LIO'. This
-module is, in part, analogous to "Control.Concurrent". Specifically,
-LIO provides a means for spawning 'LIO' computations in a new thread
-with 'forkLIO'.  LIO relies on the lightweight threads managed by
-Haskell's runtime system; we do not provide a way to fork OS-level
-threads.
+This module provides concurrency abstractions for 'LIO'.  The most
+basic function, 'forkLIO', spawns a computation in a new light-weight
+thread (analogous to 'forkIO').
 
-In addition to this, LIO also provides 'lFork' and 'lWait' which allow
-forking of a computation that is restricted from reading data more
-sensitive than a given upper bound. This limit is different from
-clearance in that it allows the computation to spawn additional
-threads with an upper bound above said upper bound label, but below
-the clearance. The 'lFork' function should be used whenever an LIO
-computation wishes to execute a sub-computation that may raise the
-current label (up to the supplied upper bound).  To this end, the
-current label only needs to be raised when the computation is
-interested in reading the result of the sub-computation. The role of
-'lWait' is precisely this: raise the current label and return the
-result of such a sub-computation.
+'lFork' spawns a forked thread that returns a result other threads can
+wait for (using 'lWait').  The label of such a thread's result must be
+specified at the time the thread is spawned with 'lFork'.  Should the
+'lFork'ed thread terminate with its current label be above the
+specified result label, 'lWait' will throw an exception of type
+'ResultExceedsLabel' in any thread waiting for the result.
+
+Learing that a spawned thread has terminated by catching a
+'ResultExceedsLabel' may cause the label of the waiting thread to
+rise, possibly above the current clearance (in which case the
+exception cannot be caught).  As an alternative, 'timedlWait'
+unconditionally kills a spawned thread if it has not terminated at an
+observable label within a certain time period.  'timedlWait' is
+guaranteed both to terminate and not to throw exceptions that cannot
+be caught at the current label.
 
 -}
 module LIO.Concurrent (
@@ -49,7 +49,6 @@ import safe LIO.Exception
 import safe LIO.Error
 import safe LIO.Label
 import LIO.TCB
-import LIO.TCB.Concurrent
 
 
 --
@@ -76,12 +75,7 @@ forkLIO lio = do
 -- label and clearance as enforced by a call to 'guardAlloc'.
 -- Moreover, the supplied computation must not terminate with its
 -- label above the result label; doing so will result in an exception
--- (whose label will reflect this observation) being thrown in the
--- thread reading the result.
---
--- If an exception is thrown in the inner computation, the exception
--- label will be raised to the join of the result label and original
--- exception label.
+-- being thrown in the thread reading the result.
 -- 
 -- Note that @lFork@ immediately returns a 'LabeledResult', which is
 -- essentially a \"future\", or \"promise\". This prevents
@@ -127,7 +121,7 @@ lForkP p l (LIOTCB action) = do
 -- the result must be above the current label and below the current
 -- clearance. Moreover, before block-reading, @lWait@ raises the current
 -- label to the join of the current label and label of result.  An
--- exception is thrown by the underlying 'guardWrite' if this is not the
+-- exception is thrown by the underlying 'taint' if this is not the
 -- case.  Additionally, if the thread terminates with an exception (for
 -- example if it violates clearance), the exception is rethrown by
 -- @lWait@. Similarly, if the thread reads values above the result label,
@@ -177,8 +171,8 @@ trylWaitP p (LabeledResultTCB _ rl _ st) =
 -- | Like 'lWait', with two differences.  First, a timeout is
 -- specified and the thread is unconditionally killed after this
 -- timeout (if it has not yet returned a value).  Second, if the
--- thread's result exceeds its label @timedWait@ and exceeds what the
--- calling thread can observe, consumes the whole timeout and throws a
+-- thread's result exceeds what the calling thread can observe,
+-- @timedlWait@ consumes the whole timeout and throws a
 -- 'ResultExceedsLabel' exception you can catch (i.e., it never raises
 -- the label above the clearance).
 timedlWait :: Label l => LabeledResult l a -> Int -> LIO l a

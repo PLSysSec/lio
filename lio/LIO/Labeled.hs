@@ -17,7 +17,7 @@ conversely produce a high-integrity 'Labeled' value based on pure
 data.  This module exports functions for creating labeled values
 ('label'), using the values protected by 'Labeled' by unlabeling them
 ('unlabel'), and changing the value of a labeled value without
-inspection ('relabelLabeledP', 'taintLabeled', 'untaintLabeled').  A
+inspection ('relabelLabeledP', 'taintLabeled').  A
 'Functor'-like class ('LabeledFunctor') on 'Labeled' is also defined
 in this module.
 
@@ -31,7 +31,7 @@ module LIO.Labeled (
   , unlabel, unlabelP
   -- * Relabel values
   , relabelLabeledP
-  , taintLabeled, taintLabeledP , untaintLabeledP
+  , taintLabeled, taintLabeledP 
   , lFmap, lAp
   ) where
 
@@ -52,7 +52,9 @@ import LIO.TCB
 -- ``canFlowTo`` l && l ``canFlowTo`` ccurrent@. Otherwise an
 -- exception is thrown (see 'guardAlloc').
 label :: Label l => l -> a -> LIO l (Labeled l a)
-label = labelP noPrivs
+label l a = do
+  withContext "label" $ guardAlloc l
+  return $ LabeledTCB l a
 
 -- | Constructs a 'Labeled' using privilege to allow the `Labeled`'s
 -- label to be below the current label.  If the current label is
@@ -83,7 +85,7 @@ labelP p l a = do
 -- However, you can use 'labelOf' to check if 'unlabel' will succeed
 -- without throwing an exception.
 unlabel :: Label l => Labeled l a -> LIO l a
-unlabel = unlabelP noPrivs
+unlabel (LabeledTCB l v) = withContext "unlabel" (taint l) >> return v
 
 -- | Extracts the value of an 'Labeled' just like 'unlabel', but takes a
 -- privilege argument to minimize the amount the current label must be
@@ -121,7 +123,10 @@ relabelLabeledP p newl (LabeledTCB oldl v) = do
 -- the supplied label is not bounded then @taintLabeled@ will throw an
 -- exception (see 'guardAlloc').
 taintLabeled :: Label l => l -> Labeled l a -> LIO l (Labeled l a)
-taintLabeled = taintLabeledP noPrivs
+taintLabeled l (LabeledTCB lold v) = do
+  let lnew = lold `lub` l
+  withContext "taintLabeled" $ guardAlloc lnew
+  return $ LabeledTCB lnew v
 
 -- | Same as 'taintLabeled', but uses privileges when comparing the
 -- current label to the supplied label. In other words, this function
@@ -133,17 +138,6 @@ taintLabeledP p l (LabeledTCB lold v) = do
   let lnew = lold `lub` l
   withContext "taintLabeledP" $ guardAllocP p lnew
   return $ LabeledTCB lnew v
-
--- | Downgrades a label.
-untaintLabeledP :: PrivDesc l p
-                => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
-untaintLabeledP p target lv =
-  withContext "untaintLabeledP" $
-  relabelLabeledP p (downgradeP p (labelOf lv) `lub` target) lv
-
-{-# DEPRECATED untaintLabeledP
-  "This is a confusing function.  Usually relabelLabeledP is better" #-}
-
 
 {- $functor
 

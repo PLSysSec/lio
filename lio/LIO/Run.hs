@@ -64,7 +64,7 @@ evalLIO lio s = do
 -- make the return value inaccessible from 'LIO' computations.
 --
 -- Note the same effect can be achieved using the 'PrivTCB'
--- constructor, but 'PrivTCB' is easier to misuse is only available by
+-- constructor, but 'PrivTCB' is easier to misuse and is only available by
 -- importing "LIO.TCB".
 privInit :: (SpeaksFor p) => p -> IO (Priv p)
 privInit p | isPriv p  = fail "privInit called on Priv object"

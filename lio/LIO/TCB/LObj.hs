@@ -84,6 +84,7 @@ genTypesVals n0 =
   macro(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> a9 -> a10, \
         a1 a2 a3 a4 a5 a6 a7 a8 a9 a10)
 
+-- | Class for lifting 'IO' actions.
 class GuardIO l io lio | l io -> lio where
   -- | Lifts an 'IO' action in the 'LIO' monad, executing a guard
   -- before calling the function.

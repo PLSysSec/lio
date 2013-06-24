@@ -21,7 +21,7 @@ module LIO.TCB (
   -- * LIO monad
     LIOState(..), LIO(..)
   -- ** Accessing internal state
-  , getLIOStateTCB, putLIOStateTCB, modifyLIOStateTCB, updateLIOStateTCB 
+  , getLIOStateTCB, putLIOStateTCB, modifyLIOStateTCB
   -- * Executing IO actions
   , ioTCB
   -- * Privileged constructors
@@ -30,10 +30,13 @@ module LIO.TCB (
   , UncatchableTCB(..), makeCatchable
   -- * Trusted 'Show'
   , ShowTCB(..)
+  -- * 'LabeledResult's
+  , LabeledResult(..), LResStatus(..)
   ) where
 
 import safe Control.Applicative
 import safe Control.Exception (Exception(..), SomeException(..))
+import safe qualified Control.Concurrent as IO
 import safe Control.Monad
 import safe Data.Monoid
 import safe Data.IORef
@@ -98,17 +101,13 @@ modifyLIOStateTCB f = do
   s <- getLIOStateTCB
   putLIOStateTCB (f s)
 
-{-# DEPRECATED updateLIOStateTCB "Use modifyLIOStateTCB instead" #-}
-updateLIOStateTCB :: (LIOState l -> LIOState l) -> LIO l ()
-updateLIOStateTCB = modifyLIOStateTCB
-
 --
 -- Executing IO actions
 --
 
--- | Lifts an 'IO' computation into the 'LIO' monad.  Obviously this
--- function is dangerous and should only be called after appropriate
--- checks ensure the 'IO' computation will not violate IFC policy.
+-- | Lifts an 'IO' computation into the 'LIO' monad.  This function is
+-- dangerous and should only be called after appropriate checks ensure
+-- the 'IO' computation will not violate IFC policy.
 ioTCB :: IO a -> LIO l a
 {-# INLINE ioTCB #-}
 ioTCB = LIOTCB . const
@@ -123,7 +122,8 @@ ioTCB = LIOTCB . const
 -- subsequently unwrap the 'UncatchableTCB' constructor.
 --
 -- Note this can be circumvented by 'IO.mapException', which should be
--- made unsafe.
+-- made unsafe. In the interim, auditing untrusted code for this is
+-- necessary.
 data UncatchableTCB = forall e. (Exception e) =>
                       UncatchableTCB e deriving (Typeable)
 
@@ -210,3 +210,31 @@ instance LabelOf Labeled where
 -- examine such objects.
 class ShowTCB a where
   showTCB :: a -> String
+
+
+--
+-- LabeledResult
+--
+
+-- | Status of a 'LabeledResult'.
+data LResStatus l a = LResEmpty
+                    | LResLabelTooHigh !l
+                    | LResResult a
+                      deriving (Show)
+
+-- | A @LabeledResult@ encapsulates a future result from a computation
+-- spawned by 'lFork' or 'lForkP'.  See "LIO.Concurrent" for a
+-- description of the concurrency abstractions of LIO.
+data LabeledResult l a = LabeledResultTCB {
+    lresThreadIdTCB :: !IO.ThreadId
+    -- ^ Thread executing the computation
+  , lresLabelTCB :: !l
+    -- ^ Label of the tresult
+  , lresBlockTCB :: !(IO.MVar ())
+  , lresStatusTCB :: !(IORef (LResStatus l a))
+    -- ^ Result (when it is ready), or the label at which the thread
+    -- terminated, if that label could not flow to 'lresLabelTCB'.
+  }
+
+instance LabelOf LabeledResult where
+  labelOf = lresLabelTCB

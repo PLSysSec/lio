@@ -2,6 +2,16 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
+{- |
+
+This module export exceptions commonly thrown by this functions in
+this library. In addition, this module exports 'withContext', a
+function that can be used to add a supplied string (usually function
+name) to the call stack that is percolated in 'Annotatable'
+exceptions.
+
+-}
+
 module LIO.Error (
     Annotatable(..), withContext
   , AnyLabelError(..), lerrToException, lerrFromException
@@ -35,6 +45,9 @@ instance Exception AnyLabelError
 
 -- | Executes an action with a context string which will be added to
 -- any label exception thrown.
+-- 
+-- Note: this function wraps the action with a 'catch', and thus
+-- incurs a runtime cost. Use this function sparingly.
 withContext :: String -> LIO l a -> LIO l a
 withContext ctx (LIOTCB act) =
   LIOTCB $ \st -> act st `IO.catch` \e ->
@@ -77,7 +90,10 @@ instance Label l => Exception (LabelError l) where
   toException = lerrToException
   fromException = lerrFromException
 
-labelError :: (Label l) => String -> [l] -> LIO l a
+-- | Throw a label-error exception.
+labelError :: (Label l) => String -- ^ Function that failed.
+                        -> [l]    -- ^ Labels involved in error.
+                        -> LIO l a
 labelError fl ls = do
   st <- getLIOStateTCB
   throwLIO LabelError {
@@ -89,7 +105,11 @@ labelError fl ls = do
     , lerrLabels = ls
     }
 
-labelErrorP :: (Label l, PrivDesc l p) => String -> Priv p -> [l] -> LIO l a
+-- | Throw a label-error exception.
+labelErrorP :: (Label l, PrivDesc l p) => String  -- ^ Function that failed.
+                                       -> Priv p  -- ^ Privileges involved.
+                                       -> [l]     -- ^ Labels involved.
+                                       -> LIO l a
 labelErrorP fl p ls = do
   st <- getLIOStateTCB
   throwLIO LabelError {
@@ -103,7 +123,7 @@ labelErrorP fl p ls = do
 
 
 -- | Error indicating insufficient privileges (independent of the
--- current label).  This is exception is thrown by 'delegate', and
+-- current label).  This exception is thrown by 'delegate', and
 -- should also be thrown by gates that receive insufficient privilege
 -- descriptions (see "LIO.Delegate").
 data InsufficientPrivs = forall p. (SpeaksFor p) => InsufficientPrivs {

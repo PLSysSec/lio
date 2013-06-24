@@ -51,10 +51,9 @@ l2@.  By transitifity of the ``canFlowTo`` relation, it holds that @l1
 
 -- | This class defines the operations necessary to make a label into
 -- a lattice (see <http://en.wikipedia.org/wiki/Lattice_(order)>).
--- 'canFlowTo' partially orders labels (which corresponds to the
--- relation usually written &#8849; in the information flow
--- literature).  'lub' and 'glb' compute the least upper bound and
--- greatest lower bound of two labels, respectively.
+-- 'canFlowTo' partially orders labels.
+-- 'lub' and 'glb' compute the least upper bound and greatest lower
+-- bound of two labels, respectively.
 class (Eq l, Show l, Typeable l) => Label l where
   -- | Compute the /least upper bound/, or join, of two labels.  When
   -- data carrying two different labels is mixed together in a
@@ -143,7 +142,7 @@ that is not the case, but only for certain pairs of labels @l1@ and
 allowing data labeled @l1@ to infulence data labeled @l2@ when @(l1
 ``canFlowTo`` l2) == False@ is known as /downgrading/.
 
-The central function in this module is 'canFlowToP', which performs a
+The core privilege function in 'canFlowToP', which performs a
 more permissive can-flow-to check by exercising particular privileges
 (in literature this relation is commonly written @&#8849;&#8346;@ for
 privileges @p@).  Most core 'LIO' function have variants ending @...P@
@@ -175,13 +174,14 @@ class (Typeable p, Show p) => SpeaksFor p where
   --
   -- > infix 4 `speaksFor`
   speaksFor :: p -> p -> Bool
+  speaksFor _ _ = False
 
 infix 4 `speaksFor`
 
 -- | This class represents privilege descriptions, which define a
 -- pre-order on labels in which distinct labels become equivalent.
 -- The pre-oder implied by a privilege description is specified by the
--- method 'canFlowP'.  In addition, this this class defines a method
+-- method 'canFlowToP'.  In addition, this this class defines a method
 -- 'downgradeP', which is important for finding least labels
 -- satisfying a privilege equivalence.
 --
