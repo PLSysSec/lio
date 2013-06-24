@@ -175,6 +175,10 @@ trylWaitP p (LabeledResultTCB _ rl _ st) =
 -- @timedlWait@ consumes the whole timeout and throws a
 -- 'ResultExceedsLabel' exception you can catch (i.e., it never raises
 -- the label above the clearance).
+--
+-- Because this function can alter the result by killing a thread, it
+-- requires the label of the 'LabeledResult' to be both readable and
+-- writable at the current label.
 timedlWait :: Label l => LabeledResult l a -> Int -> LIO l a
 timedlWait = timedlWaitP noPrivs
 
@@ -183,7 +187,9 @@ timedlWait = timedlWaitP noPrivs
 -- catching any 'ResultExceedsLabel' before the timeout period (if
 -- possible).
 timedlWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> Int -> LIO l a
-timedlWaitP p lr@(LabeledResultTCB t rl mvb _) to = trylWaitP p lr >>= go
+timedlWaitP p lr@(LabeledResultTCB t rl mvb _) to =
+  withContext "timedlWaitP" $ do guardWriteP p rl
+                                 trylWaitP p lr >>= go
   where go (Just a) = return a
         go Nothing = do
           mvk <- ioTCB $ IO.newEmptyMVar
