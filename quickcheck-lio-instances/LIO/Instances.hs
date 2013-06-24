@@ -32,6 +32,8 @@ import LIO.Exception
 
 import System.IO.Unsafe
 
+type DCRef a = LIORef DCLabel a
+
 newLMVarTCB :: l -> a -> LIO l (LMVar l a)
 newLMVarTCB l a = LObjTCB l `fmap` ioTCB (newMVar a)
 
