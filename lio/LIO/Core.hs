@@ -13,15 +13,15 @@ code.  The idea is for untrusted code to provide a computation in the
 'evalLIO' and similar functions (e.g., 'evalDC' in
 "LIO.DCLabel#v:evalDC").
 
-Unlike 'IO', the 'LIO' monad keeps track of a /current label/ during
-each computation. The current label effectively tracks the sensitivity
-of all the data that the computation has observed.  For example, if
-the computation has read a \"secret\" mutable reference (see
-"LIO.LIORef") and then the result of a \"top-secret\" thread (see
-"LIO.Concurrent") then the current label will be at least
-\"top-secret\".  Labels are described in more detail in the
-documentation for "LIO.Label", as well as the documentation for
-particular label formats (such as "LIO.DCLabel").
+Unlike 'IO', the 'LIO' monad keeps track of a /current label/
+(accessible via the 'getLabel' function) during each computation. The
+current label effectively tracks the sensitivity of all the data that
+the computation has observed.  For example, if the computation has
+read a \"secret\" mutable reference (see "LIO.LIORef") and then the
+result of a \"top-secret\" thread (see "LIO.Concurrent") then the
+current label will be at least \"top-secret\".  Labels are described
+in more detail in the documentation for "LIO.Label", as well as the
+documentation for particular label formats (such as "LIO.DCLabel").
 
 The role of the current label is two-fold:  First, the current label
 protects all pure values currently in scope.  For example, the current
@@ -144,6 +144,11 @@ setClearance cnew = do
 -- clearance (modulo privileges), i.e., @'canFlowToP' p cnew c ==
 -- True@.  Additionally, the current label must flow to the new
 -- clearance, i.e., @l ``canFlowTo`` cnew@ == True.
+-- 
+-- Since LIO guards that are used when reading/writing data (e.g.,
+-- 'guardAllocP') do not use privileges when comparing labels with the
+-- current clearance, code must always raise the current clearance, to
+-- read/write data above the current clearance.
 setClearanceP :: PrivDesc l p => Priv p -> l -> LIO l ()
 setClearanceP p cnew = do
   LIOState { lioLabel = l, lioClearance = c } <- getLIOStateTCB
@@ -187,7 +192,8 @@ scopeClearance (LIOTCB action) = LIOTCB $ \sp -> do
 -- 'Priv's, it may still be able to raise its clearance above the
 -- supplied argument using 'setClearanceP'.
 withClearance :: Label l => l -> LIO l a -> LIO l a
-withClearance c lio = scopeClearance $ setClearance c >> lio
+withClearance c lio = withContext "withClearance" $ do
+  scopeClearance $ setClearance c >> lio
 
 -- | A variant of 'withClearance' that takes privileges.  Equivalent
 -- to:
@@ -196,7 +202,8 @@ withClearance c lio = scopeClearance $ setClearance c >> lio
 -- withClearanceP p c lio = 'scopeClearance' $ 'setClearanceP' p c >> lio
 -- @
 withClearanceP :: PrivDesc l p => Priv p -> l -> LIO l a -> LIO l a
-withClearanceP p c lio = scopeClearance $ setClearanceP p c >> lio
+withClearanceP p c lio = withContext "withClearanceP" $ do
+  scopeClearance $ setClearanceP p c >> lio
 
 
 --
