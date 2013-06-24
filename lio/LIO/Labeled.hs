@@ -24,7 +24,7 @@ in this module.
 -}
 
 module LIO.Labeled (
-    Labeled
+    Labeled, LabelOf(..)
   -- * Label values
   , label, labelP
   -- * Unlabel values
