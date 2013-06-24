@@ -142,7 +142,7 @@ that is not the case, but only for certain pairs of labels @l1@ and
 allowing data labeled @l1@ to infulence data labeled @l2@ when @(l1
 ``canFlowTo`` l2) == False@ is known as /downgrading/.
 
-The core privilege function in 'canFlowToP', which performs a
+The core privilege function is 'canFlowToP', which performs a
 more permissive can-flow-to check by exercising particular privileges
 (in literature this relation is commonly written @&#8849;&#8346;@ for
 privileges @p@).  Most core 'LIO' function have variants ending @...P@
@@ -174,7 +174,6 @@ class (Typeable p, Show p) => SpeaksFor p where
   --
   -- > infix 4 `speaksFor`
   speaksFor :: p -> p -> Bool
-  speaksFor _ _ = False
 
 infix 4 `speaksFor`
 

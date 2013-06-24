@@ -47,8 +47,9 @@ instance Exception AnyLabelError
 -- | Executes an action with a context string which will be added to
 -- any label exception thrown.
 -- 
--- Note: this function wraps the action with a 'catch', and thus
--- incurs a runtime cost. Use this function sparingly.
+-- Note: this function wraps an action with a 'catch', and thus may
+-- incur a small runtime cost (though it is well under 100 ns on
+-- machines we benchmarked).
 withContext :: String -> LIO l a -> LIO l a
 withContext ctx (LIOTCB act) =
   LIOTCB $ \st -> act st `IO.catch` \e ->
