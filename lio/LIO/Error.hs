@@ -4,11 +4,12 @@
 
 {- |
 
-This module export exceptions commonly thrown by this functions in
-this library. In addition, this module exports 'withContext', a
-function that can be used to add a supplied string (usually function
-name) to the call stack that is percolated in 'Annotatable'
-exceptions.
+This module exports exception types thrown in response to label
+failures.  In addition, it provides 'withContext', a function that
+annotates any exceptions in the 'AnyLabelError' hierarchy that are
+thrown within a given scope.  These annotations should be used to add
+function names to exceptions, so as to make it easier to pinpoint the
+cause of a label error.
 
 -}
 

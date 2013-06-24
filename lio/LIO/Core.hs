@@ -192,8 +192,7 @@ scopeClearance (LIOTCB action) = LIOTCB $ \sp -> do
 -- 'Priv's, it may still be able to raise its clearance above the
 -- supplied argument using 'setClearanceP'.
 withClearance :: Label l => l -> LIO l a -> LIO l a
-withClearance c lio = withContext "withClearance" $ do
-  scopeClearance $ setClearance c >> lio
+withClearance c lio = scopeClearance $ setClearance c >> lio
 
 -- | A variant of 'withClearance' that takes privileges.  Equivalent
 -- to:
@@ -202,8 +201,7 @@ withClearance c lio = withContext "withClearance" $ do
 -- withClearanceP p c lio = 'scopeClearance' $ 'setClearanceP' p c >> lio
 -- @
 withClearanceP :: PrivDesc l p => Priv p -> l -> LIO l a -> LIO l a
-withClearanceP p c lio = withContext "withClearanceP" $ do
-  scopeClearance $ setClearanceP p c >> lio
+withClearanceP p c lio = scopeClearance $ setClearanceP p c >> lio
 
 
 --
