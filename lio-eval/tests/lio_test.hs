@@ -21,9 +21,7 @@ import LIO.Concurrent
 import LIO.Concurrent.LMVar
 import LIO.DCLabel
 import LIO.TCB
-import LIO.TCB.GuardIO
-import LIO.TCB.Concurrent
-import LIO.TCB.DCLabel
+import LIO.TCB.LObj
 
 import Data.Set hiding (map)
 import Data.Typeable
@@ -39,14 +37,17 @@ import qualified Control.Concurrent as IO
 
 import System.IO.Unsafe
 
+allPrivTCB :: Priv CNF
+allPrivTCB = PrivTCB $ toCNF False
+
 threadDelay :: Int -> LIO l ()
 threadDelay = ioTCB . IO.threadDelay
 
 -- | Evaluate LIO computation with starting label bottom
 -- and clearance top
 doEval :: DC a -> IO a
-doEval act = evalLIO act $ LIOState { lioLabel = dcBottom
-                                    , lioClearance = dcTop }
+doEval act = evalLIO act $ LIOState { lioLabel = (True %% False)
+                                    , lioClearance = (False %% True) }
 
 monadicDC :: PropertyM DC a -> Property
 monadicDC (MkPropertyM m) =
@@ -67,7 +68,10 @@ readLIORefTCB = readLIORefP allPrivTCB
 writeLIORefTCB :: LIORef DCLabel a -> a -> DC ()
 writeLIORefTCB = writeLIORefP allPrivTCB
 
+newEmptyLMVarTCB :: DCLabel -> LIO DCLabel (LMVar DCLabel a)
 newEmptyLMVarTCB = newEmptyLMVarP allPrivTCB
+
+newLMVarTCB :: DCLabel -> a -> LIO DCLabel (LMVar DCLabel a)
 newLMVarTCB = newLMVarP allPrivTCB
 
 --
@@ -260,10 +264,6 @@ tests = [
   , testGroup "Gates" [
         testProperty  "callGate correct"
                       callGate_correct
-    ]
-  , testGroup "Privs" [
-        testProperty  "partDowngradeP correct"
-                      prop_partDowngradeP_correct 
     ]
   ]
     where liftJust f x = Just `liftM` f x
@@ -461,30 +461,10 @@ prop_guard_raises_label act = monadicDC $ do
 -- | Calling gate with right privilege returns True, and False
 -- otherwise.
 callGate_correct :: Property
-callGate_correct = forAll arbitrary $ \(d1 :: DCPrivDesc) ->
-                   forAll arbitrary $ \(d2 :: DCPrivDesc) ->
+callGate_correct = forAll arbitrary $ \(d1 :: CNF) ->
+                   forAll arbitrary $ \(d2 :: CNF) ->
   let p1 = PrivTCB d1
       p2 = PrivTCB d2
       f = gate $ \d -> if d == privDesc p1 then True else False
   in p1 /= p2 ==> callGate f p1 && (not $ callGate f p2)
 
---
--- partDowngradeP
---
-
-{- | Test partDowngradeP
-lr = partDowngradeP p li lg satisfies:
-   - canflowto lg lr
-   - canflowto_p p li lr
-   - lr is the greatest lower bound
--}
-prop_partDowngradeP_correct :: DCPriv -> DCLabel -> DCLabel -> Property
-prop_partDowngradeP_correct p li lg = 
-  let lr = partDowngradeP p li lg 
-  in forAll (arbitrary :: Gen DCLabel) $ \lr' -> 
-   	canFlowTo lg lr &&
-   	canFlowToP p li lr &&
-	not ( canFlowTo  lg lr'   &&
-              canFlowToP p li lr' &&
-	      lr' /= lr &&
-	      canFlowTo lr' lr)

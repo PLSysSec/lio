@@ -6,27 +6,12 @@ import Test.Framework.Providers.QuickCheck2 (testProperty)
 import Test.QuickCheck
 import Test.QuickCheck.Instances
 import LIO.DCLabel
-import LIO.DCLabel.Core
 import Data.Binary
 import Data.Monoid
 import Data.Set hiding (map)
 
 import LIO
 import LIO.DCLabel.Instances
-
-
--- Reduction function toLNF does not modify the semantics of the label
-prop_dcReduce :: Property
-prop_dcReduce = forAll arbitrary $ \l ->
-  let l' = dcReduce l 
-  in  l `dcImplies` l' && l' `dcImplies` l 
-
--- Idempotenncy of dcReduce
-prop_dcReduce_idem :: Property
-prop_dcReduce_idem = forAll (arbitrary :: Gen Component) $ \l->
-  let l'  = dcReduce l 
-      l'' = dcReduce l' 
-  in l' == l''
 
 
 -- Partial order for DCLabels
@@ -73,27 +58,13 @@ prop_dc_meet_glb :: DCLabel -> DCLabel -> Property
 prop_dc_meet_glb l1 l2 = forAll (arbitrary :: Gen DCLabel) $ \l3' ->
  (l3' `canFlowTo` l1) && (l3' `canFlowTo` l2) ==> l3' `canFlowTo` (l1 `glb` l2)
 
--- Check that the top is indeed indeed the highest element in the lattice
-prop_dc_top :: DCLabel -> Property
-prop_dc_top l1 = forAll (gen l1) $ \l -> l `canFlowTo` dcTop
-    where gen :: DCLabel -> Gen DCLabel
-          gen _ = arbitrary
-
--- Check that the bottom is indeed indeed the lowest element in the lattice
-prop_dc_bottom :: DCLabel -> Property
-prop_dc_bottom _ = forAll (arbitrary :: Gen DCLabel) $ \l -> dcBottom `canFlowTo` l
-
 main :: IO ()
 main = defaultMain tests
 --
 tests :: [Test]
 tests = [
     testGroup "DCLabels" [
-      testProperty "dcReduce" prop_dcReduce
-    , testProperty "Idempotence of function dcReduce"           prop_dcReduce_idem
-    , testProperty "Property of top"                            prop_dc_top
-    , testProperty "Property of bottom"                         prop_dc_bottom
-    , testProperty "Join operation"                             prop_dc_join
+      testProperty "Join operation"                             prop_dc_join
     , testProperty "Join operation is the least upper bound"    prop_dc_join_lub
     , testProperty "Meet operation"                             prop_dc_meet
     , testProperty "Meet operation is the greatest lower bound" prop_dc_meet_glb
