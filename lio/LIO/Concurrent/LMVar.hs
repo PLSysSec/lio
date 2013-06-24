@@ -7,7 +7,7 @@ This module implements labeled 'MVar's.  The interface is analogous to
 "Control.Concurrent.MVar", but the operations take place in the 'LIO'
 monad.  A labeled MVar, of type @'LMVar' l a@, is a mutable location
 that can be in of of two states; an 'LMVar' can be empty, or it can be
-full (with a value of tye @a@). The location is protected by a label
+full (with a value of type @a@). The location is protected by a label
 of type 'l'.  As in the case of @LIORef@s (see "LIO.LIORef"), this
 label is fixed and does not change according to the content placed
 into the location.  Different from @LIORef@s, taking and putting
@@ -106,7 +106,7 @@ newLMVarP p l a = do
 -- current label to the join of the current label and the label of the
 -- MVar and read the contents of the @MVar@. The underlying guard
 -- 'guardWrite' will throw an exception if any of the IFC checks fail.
--- If the Finally, like 'MVars' if the 'LMVar' is empty, @takeLMVar@
+-- Finally, like 'MVars' if the 'LMVar' is empty, @takeLMVar@
 -- blocks.
 takeLMVar :: Label l => LMVar l a -> LIO l a
 takeLMVar = blessTCB "takeLMVar" takeMVar
