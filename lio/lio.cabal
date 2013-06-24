@@ -92,12 +92,6 @@ Library
     LIO.Concurrent.LMVar
     -- * DCLabels
     LIO.DCLabel
-    -- Old.DCLabel
-    -- Old.DCLabel.Core
-    -- Old.DCLabel.Privs
-    -- Old.DCLabel.DSL
-    -- Old.TCB.DCLabel
     -- * Privileged internals
     LIO.TCB
     LIO.TCB.LObj
-    LIO.TCB.Concurrent
