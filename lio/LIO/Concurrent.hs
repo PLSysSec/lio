@@ -49,7 +49,6 @@ import safe LIO.Exception
 import safe LIO.Error
 import safe LIO.Label
 import LIO.TCB
-import LIO.TCB.Concurrent
 
 
 --
