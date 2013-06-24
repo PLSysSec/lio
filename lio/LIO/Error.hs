@@ -2,6 +2,16 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE ExistentialQuantification #-}
 
+{- |
+
+This module export exceptions commonly thrown by this functions in
+this library. In addition, this module exports 'withContext', a
+function that can be used to add a supplied string (usually function
+name) to the call stack that is percolated in 'Annotatable'
+exceptions.
+
+-}
+
 module LIO.Error (
     Annotatable(..), withContext
   , AnyLabelError(..), lerrToException, lerrFromException
@@ -35,6 +45,9 @@ instance Exception AnyLabelError
 
 -- | Executes an action with a context string which will be added to
 -- any label exception thrown.
+-- 
+-- Note: this function wraps the action with a 'catch', and thus
+-- incurs a runtime cost. Use this function sparingly.
 withContext :: String -> LIO l a -> LIO l a
 withContext ctx (LIOTCB act) =
   LIOTCB $ \st -> act st `IO.catch` \e ->

@@ -76,12 +76,7 @@ forkLIO lio = do
 -- label and clearance as enforced by a call to 'guardAlloc'.
 -- Moreover, the supplied computation must not terminate with its
 -- label above the result label; doing so will result in an exception
--- (whose label will reflect this observation) being thrown in the
--- thread reading the result.
---
--- If an exception is thrown in the inner computation, the exception
--- label will be raised to the join of the result label and original
--- exception label.
+-- being thrown in the thread reading the result.
 -- 
 -- Note that @lFork@ immediately returns a 'LabeledResult', which is
 -- essentially a \"future\", or \"promise\". This prevents
@@ -127,7 +122,7 @@ lForkP p l (LIOTCB action) = do
 -- the result must be above the current label and below the current
 -- clearance. Moreover, before block-reading, @lWait@ raises the current
 -- label to the join of the current label and label of result.  An
--- exception is thrown by the underlying 'guardWrite' if this is not the
+-- exception is thrown by the underlying 'taint' if this is not the
 -- case.  Additionally, if the thread terminates with an exception (for
 -- example if it violates clearance), the exception is rethrown by
 -- @lWait@. Similarly, if the thread reads values above the result label,
@@ -177,8 +172,8 @@ trylWaitP p (LabeledResultTCB _ rl _ st) =
 -- | Like 'lWait', with two differences.  First, a timeout is
 -- specified and the thread is unconditionally killed after this
 -- timeout (if it has not yet returned a value).  Second, if the
--- thread's result exceeds its label @timedWait@ and exceeds what the
--- calling thread can observe, consumes the whole timeout and throws a
+-- thread's result exceeds what the calling thread can observe,
+-- @timedlWait@ consumes the whole timeout and throws a
 -- 'ResultExceedsLabel' exception you can catch (i.e., it never raises
 -- the label above the clearance).
 timedlWait :: Label l => LabeledResult l a -> Int -> LIO l a
