@@ -3,41 +3,36 @@
 
 This is the main module to be included by code using the Labeled IO
 (LIO) library. This module exports the core library (documented in
-"LIO.Core"), with support for labeled values (documented in
-"LIO.Labeled") and privileges (documented in "LIO.Privs").
+"LIO.Core"), with support for labels and privileges (documented in
+"LIO.Label") and labeled values (documented in "LIO.Labeled").
 
-Certain symbols in the lio library, particularly those in
+Certain symbols in the LIO library, particularly those in
 "LIO.Exception", use the same names as their 'IO' equivalents in the
-system libraries.  Hence main modules that mostly include 'IO' code
-and only need to invoke 'LIO' code should import "LIO.Run" (or
+system libraries.  Hence main modules consisting mostly of 'IO' code
+that simply need to run 'LIO' code should import "LIO.Run" (or
 "LIO.DCLabel") to avoid polluting their namespaces.
 
 Most code will need to use a particular label format, which needs to
-be imported separately.  For instance:
+be imported separately.  Hence, a typical set of imports for an
+untrusted LIO module is:
 
 @
  import "LIO"
- -- Import your favorite label format:
  import "LIO.DCLabel"
 @
-
-WARNING:  For security, untrusted code must always be compiled with
-the @-XSafe@ and @-fpackage-trust@ /SafeHaskell/ flags. See
-<http://hackage.haskell.org/trac/ghc/wiki/SafeHaskell> for more
-details on the guarantees provided by SafeHaskell.
 
 -}
 
 module LIO ( 
-    module LIO.Label
+    module LIO.Core
+  , module LIO.Delegate
   , module LIO.Exception
-  , module LIO.Core
+  , module LIO.Label
   , module LIO.Labeled
-  , module LIO.Privs
   ) where
 
-import LIO.Core
-import LIO.Exception
-import LIO.Label
-import LIO.Labeled
-import LIO.Privs
+import safe LIO.Core
+import safe LIO.Delegate
+import safe LIO.Exception
+import safe LIO.Label
+import safe LIO.Labeled

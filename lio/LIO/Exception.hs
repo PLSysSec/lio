@@ -21,14 +21,15 @@ module LIO.Exception (
   , onException, finally, bracket, evaluate
   ) where
 
-import Control.Exception (Exception(..), SomeException(..))
-import qualified Control.Exception as IO
-import Control.Monad
-import Data.Typeable
+import safe Control.Exception (Exception(..), SomeException(..))
+import safe qualified Control.Exception as IO
+import safe Control.Monad
+import safe Data.Typeable
 
 import LIO.TCB
-import LIO.Label
+import safe LIO.Label
 
+-- | Throw an exception.
 throwLIO :: Exception e => e -> LIO l a
 throwLIO = ioTCB . IO.throwIO
 
@@ -40,8 +41,8 @@ throwLIO = ioTCB . IO.throwIO
 -- exceeding the clarance, and an exception is always thrown at the
 -- time this happens.)
 catch :: (Label l, Exception e) => LIO l a -> (e -> LIO l a) -> LIO l a
-catch io h =
-  LIOTCB $ \s -> unLIOTCB io s `IO.catch` \e -> unLIOTCB (safeh e) s
+catch (LIOTCB io) h =
+  LIOTCB $ \s -> io s `IO.catch` \e -> case safeh e of LIOTCB ioe -> ioe s
   where uncatchableType = typeOf (undefined :: UncatchableTCB)
         safeh e@(SomeException einner) = do
           when (typeOf einner == uncatchableType) $ throwLIO e

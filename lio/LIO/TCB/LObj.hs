@@ -27,25 +27,26 @@
 -- around each 'Handle' using the 'LObjTCB' constructor.
 module LIO.TCB.LObj (LObj(..), blessTCB, blessPTCB, GuardIO(..)) where
 
-import Data.Typeable
+import safe Data.Typeable
 
 import safe LIO.Core
+import safe LIO.Error
 import safe LIO.Label
-import safe LIO.Privs
 import LIO.TCB
 
--- | A "@LObj label object@" is a wrapper around an IO abstraction of
--- type @object@ (such as a file handle or socket) on which it is safe
--- to do @IO@ operations in the 'LIO' monad when the caller can read
--- and write a particular label.  It is the job of the trusted code
--- constructing such a @LObj@ object to ensure both that the same IO
--- object is only ever blessed with one label, and that the
+-- | A \"@LObj label object@\" is a wrapper around an IO abstraction
+-- of type @object@ (such as a file handle or socket) on which it is
+-- safe to do @IO@ operations in the 'LIO' monad when the caller can
+-- read and write a particular label.  It is the job of the trusted
+-- code constructing such a @LObj@ object to ensure both that the same
+-- IO object is only ever blessed with one label, and that the
 -- abstraction combined with its blessed IO operations (see
 -- 'blessTCB') cannot be used to communicate with code running at
 -- different labels.
 data LObj label object = LObjTCB !label !object deriving (Typeable)
 
 instance LabelOf LObj where
+  {-# INLINE labelOf #-}
   labelOf (LObjTCB l _) = l
 
 instance (Label l, Show t) => ShowTCB (LObj l t) where
@@ -83,6 +84,7 @@ genTypesVals n0 =
   macro(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> a9 -> a10, \
         a1 a2 a3 a4 a5 a6 a7 a8 a9 a10)
 
+-- | Class for lifting 'IO' actions.
 class GuardIO l io lio | l io -> lio where
   -- | Lifts an 'IO' action in the 'LIO' monad, executing a guard
   -- before calling the function.
@@ -101,17 +103,23 @@ TypesVals (GUARDIO)
 -- one.  The 'LIO' version expects a 'LObj' argument, and before
 -- performing any IO uses 'guardWrite' to check that the current label
 -- can write the label in the 'LObj' object.
+-- 
+-- The first argument should be the name of the function being defined
+-- with @blessTCB@.  Its purpose is to enhance error reporting.
 --
 -- Note that @io@ and @lio@ are function types (of up to nine
 -- arguments), which must be the same in all types except the monad.
 -- For example, if @io@ is @Int -> String -> IO ()@, then @lio@ must
 -- be @Int -> String -> LIO l ()@.
-blessTCB :: (GuardIO l io lio, Label l) => (a -> io) -> (LObj l a) -> lio
+blessTCB :: (GuardIO l io lio, Label l) =>
+            String -> (a -> io) -> (LObj l a) -> lio
 {-# INLINE blessTCB #-}
-blessTCB io (LObjTCB l a) = guardIOTCB (guardWrite l) (io a)
+blessTCB name io (LObjTCB l a) =
+  guardIOTCB (withContext name $ guardWrite l) (io a)
 
 -- | A variant of 'blessTCB' that takes a privilege argument.
 blessPTCB :: (GuardIO l io lio, PrivDesc l p) =>
-             (a -> io) -> Priv p -> (LObj l a) -> lio
+             String -> (a -> io) -> Priv p -> (LObj l a) -> lio
 {-# INLINE blessPTCB #-}
-blessPTCB io p (LObjTCB l a) = guardIOTCB (guardWriteP p l) (io a)
+blessPTCB name io p (LObjTCB l a) =
+  guardIOTCB (withContext name $ guardWriteP p l) (io a)
