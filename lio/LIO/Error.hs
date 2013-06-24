@@ -110,7 +110,7 @@ labelErrorP fl p ls = do
 
 
 -- | Error indicating insufficient privileges (independent of the
--- current label).  This is exception is thrown by 'delegate', and
+-- current label).  This exception is thrown by 'delegate', and
 -- should also be thrown by gates that receive insufficient privilege
 -- descriptions (see "LIO.Delegate").
 data InsufficientPrivs = forall p. (SpeaksFor p) => InsufficientPrivs {

@@ -17,7 +17,7 @@ conversely produce a high-integrity 'Labeled' value based on pure
 data.  This module exports functions for creating labeled values
 ('label'), using the values protected by 'Labeled' by unlabeling them
 ('unlabel'), and changing the value of a labeled value without
-inspection ('relabelLabeledP', 'taintLabeled', 'untaintLabeled').  A
+inspection ('relabelLabeledP', 'taintLabeled').  A
 'Functor'-like class ('LabeledFunctor') on 'Labeled' is also defined
 in this module.
 
@@ -31,7 +31,7 @@ module LIO.Labeled (
   , unlabel, unlabelP
   -- * Relabel values
   , relabelLabeledP
-  , taintLabeled, taintLabeledP , untaintLabeledP
+  , taintLabeled, taintLabeledP 
   , lFmap, lAp
   ) where
 
@@ -52,7 +52,9 @@ import LIO.TCB
 -- ``canFlowTo`` l && l ``canFlowTo`` ccurrent@. Otherwise an
 -- exception is thrown (see 'guardAlloc').
 label :: Label l => l -> a -> LIO l (Labeled l a)
-label = labelP noPrivs
+label l a = do
+  withContext "label" $ guardAlloc l
+  return $ LabeledTCB l a
 
 -- | Constructs a 'Labeled' using privilege to allow the `Labeled`'s
 -- label to be below the current label.  If the current label is
@@ -133,17 +135,6 @@ taintLabeledP p l (LabeledTCB lold v) = do
   let lnew = lold `lub` l
   withContext "taintLabeledP" $ guardAllocP p lnew
   return $ LabeledTCB lnew v
-
--- | Downgrades a label.
-untaintLabeledP :: PrivDesc l p
-                => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
-untaintLabeledP p target lv =
-  withContext "untaintLabeledP" $
-  relabelLabeledP p (downgradeP p (labelOf lv) `lub` target) lv
-
-{-# DEPRECATED untaintLabeledP
-  "This is a confusing function.  Usually relabelLabeledP is better" #-}
-
 
 {- $functor
 
