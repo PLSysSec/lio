@@ -1,7 +1,4 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE CPP,
-             ConstraintKinds,
-             FlexibleContexts #-}
 
 {- |
 
@@ -20,31 +17,30 @@ conversely produce a high-integrity 'Labeled' value based on pure
 data.  This module exports functions for creating labeled values
 ('label'), using the values protected by 'Labeled' by unlabeling them
 ('unlabel'), and changing the value of a labeled value without
-inspection ('relabelLabeledP', 'taintLabeled', 'untaintLabeled').  A
+inspection ('relabelLabeledP', 'taintLabeled').  A
 'Functor'-like class ('LabeledFunctor') on 'Labeled' is also defined
 in this module.
 
 -}
 
 module LIO.Labeled (
-    Labeled
+    Labeled, LabelOf(..)
   -- * Label values
   , label, labelP
   -- * Unlabel values
   , unlabel, unlabelP
   -- * Relabel values
   , relabelLabeledP
-  , taintLabeled, taintLabeledP , untaintLabeledP
+  , taintLabeled, taintLabeledP 
   , lFmap, lAp
   ) where
 
-import Control.Monad
+import safe Control.Monad
 
-import LIO.Exception
+import safe LIO.Error
+import safe LIO.Label
+import safe LIO.Core
 import LIO.TCB
-import LIO.Label
-import LIO.Core
-import LIO.Privs
 
 --
 -- Label values
@@ -56,7 +52,9 @@ import LIO.Privs
 -- ``canFlowTo`` l && l ``canFlowTo`` ccurrent@. Otherwise an
 -- exception is thrown (see 'guardAlloc').
 label :: Label l => l -> a -> LIO l (Labeled l a)
-label = labelP noPrivs
+label l a = do
+  withContext "label" $ guardAlloc l
+  return $ LabeledTCB l a
 
 -- | Constructs a 'Labeled' using privilege to allow the `Labeled`'s
 -- label to be below the current label.  If the current label is
@@ -68,7 +66,7 @@ label = labelP noPrivs
 -- current clearance.
 labelP :: PrivDesc l p => Priv p -> l -> a -> LIO l (Labeled l a)
 labelP p l a = do
-  guardAllocP p l
+  withContext "labelP" $ guardAllocP p l
   return $ LabeledTCB l a
 
 --
@@ -87,14 +85,14 @@ labelP p l a = do
 -- However, you can use 'labelOf' to check if 'unlabel' will succeed
 -- without throwing an exception.
 unlabel :: Label l => Labeled l a -> LIO l a
-unlabel = unlabelP noPrivs
+unlabel (LabeledTCB l v) = withContext "unlabel" (taint l) >> return v
 
 -- | Extracts the value of an 'Labeled' just like 'unlabel', but takes a
 -- privilege argument to minimize the amount the current label must be
 -- raised.  Function will throw 'ClearanceViolation' under the same
 -- circumstances as 'unlabel'.
 unlabelP :: PrivDesc l p => Priv p -> Labeled l a -> LIO l a
-unlabelP p (LabeledTCB l v) = taintP p l >> return v
+unlabelP p (LabeledTCB l v) = withContext "unlabelP" (taintP p l) >> return v
 
 --
 -- Relabel values
@@ -113,8 +111,9 @@ unlabelP p (LabeledTCB l v) = taintP p l >> return v
 relabelLabeledP :: PrivDesc l p
                 => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
 relabelLabeledP p newl (LabeledTCB oldl v) = do
-  guardAllocP p newl
-  unless (canFlowToP p oldl newl) $ throwLIO InsufficientPrivs
+  withContext "relabelLabeledP" $ guardAllocP p newl
+  unless (canFlowToP p oldl newl) $
+    labelErrorP "relabelLabeledP" p [oldl, newl]
   return $ LabeledTCB newl v
 
 -- | Raises the label of a 'Labeled' to the 'upperBound' of it's current
@@ -124,7 +123,10 @@ relabelLabeledP p newl (LabeledTCB oldl v) = do
 -- the supplied label is not bounded then @taintLabeled@ will throw an
 -- exception (see 'guardAlloc').
 taintLabeled :: Label l => l -> Labeled l a -> LIO l (Labeled l a)
-taintLabeled = taintLabeledP noPrivs
+taintLabeled l (LabeledTCB lold v) = do
+  let lnew = lold `lub` l
+  withContext "taintLabeled" $ guardAlloc lnew
+  return $ LabeledTCB lnew v
 
 -- | Same as 'taintLabeled', but uses privileges when comparing the
 -- current label to the supplied label. In other words, this function
@@ -134,15 +136,8 @@ taintLabeledP :: PrivDesc l p
               => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
 taintLabeledP p l (LabeledTCB lold v) = do
   let lnew = lold `lub` l
-  guardAllocP p lnew
+  withContext "taintLabeledP" $ guardAllocP p lnew
   return $ LabeledTCB lnew v
-
--- | Downgrades a label.
-untaintLabeledP :: PrivDesc l p
-                => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
-untaintLabeledP p target lv =
-  relabelLabeledP p (partDowngradeP p (labelOf lv) target) lv
-
 
 {- $functor
 
@@ -174,7 +169,7 @@ lFmap (LabeledTCB lold v) f = do
   -- Result label is joined with current label
   let lnew = lold `lub` l
   -- `label` checks for clearance violation then labels
-  label lnew $ f v
+  withContext "lFmap" $ label lnew $ f v
 
 
 -- | Similar to 'ap', apply function (wrapped by 'Labeled') to the
@@ -185,4 +180,4 @@ lAp :: Label l => Labeled l (a -> b) -> Labeled l a -> LIO l (Labeled l b)
 lAp (LabeledTCB lf f) (LabeledTCB la a) = do
   l <- getLabel
   let lnew = l `lub` lf `lub` la
-  label lnew $ f a
+  withContext "lAp" $ label lnew $ f a

@@ -1,52 +1,54 @@
 {-# LANGUAGE Trustworthy #-}
 {- |
 
-This module exposes useful concurrency abstrations for 'LIO'. This
-module is, in part, analogous to "Control.Concurrent". Specifically,
-LIO provides a means for spawning 'LIO' computations in a new thread
-with 'forkLIO'.  LIO relies on the lightweight threads managed by
-Haskell's runtime system; we do not provide a way to fork OS-level
-threads.
+This module provides concurrency abstractions for 'LIO'.  The most
+basic function, 'forkLIO', spawns a computation in a new light-weight
+thread (analogous to 'forkIO').
 
-In addition to this, LIO also provides 'lFork' and 'lWait' which allow
-forking of a computation that is restricted from reading data more
-sensitive than a given upper bound. This limit is different from
-clearance in that it allows the computation to spawn additional
-threads with an upper bound above said upper bound label, but below
-the clearance. The 'lFork' function should be used whenever an LIO
-computation wishes to execute a sub-computation that may raise the
-current label (up to the supplied upper bound).  To this end, the
-current label only needs to be raised when the computation is
-interested in reading the result of the sub-computation. The role of
-'lWait' is precisely this: raise the current label and return the
-result of such a sub-computation.
+'lFork' spawns a forked thread that returns a result other threads can
+wait for (using 'lWait').  The label of such a thread's result must be
+specified at the time the thread is spawned with 'lFork'.  Should the
+'lFork'ed thread terminate with its current label be above the
+specified result label, 'lWait' will throw an exception of type
+'ResultExceedsLabel' in any thread waiting for the result.
+
+Learing that a spawned thread has terminated by catching a
+'ResultExceedsLabel' may cause the label of the waiting thread to
+rise, possibly above the current clearance (in which case the
+exception cannot be caught).  As an alternative, 'timedlWait'
+unconditionally kills a spawned thread if it has not terminated at an
+observable label within a certain time period.  'timedlWait' is
+guaranteed both to terminate and not to throw exceptions that cannot
+be caught at the current label.
 
 -}
 module LIO.Concurrent (
-    LabeledResult
-  -- * Forking new threads
-  , lForkP, lFork, forkLIO
+  -- * Forking simple threads
+    forkLIO
+  -- * Forking threads that return results
+  , LabeledResult
+  , lFork, lForkP
   -- * Waiting on threads
-  , lWaitP, lWait
-  , trylWaitP, trylWait
-  , timedlWaitP, timedlWait
+  , ResultExceedsLabel(..)
+  , lWait, lWaitP
+  , trylWait, trylWaitP
+  , timedlWait, timedlWaitP
   -- * Labeled MVars
   , module LIO.Concurrent.LMVar
   ) where
 
 
-import qualified Control.Concurrent as IO
-import qualified Control.Exception as IO
-import Control.Monad
-import Data.IORef
+import safe qualified Control.Concurrent as IO
+import safe qualified Control.Exception as IO
+import safe Control.Monad
+import safe Data.IORef
 
-import LIO.Concurrent.LMVar
-import LIO.Core
-import LIO.Exception
-import LIO.Label
-import LIO.Privs
+import safe LIO.Concurrent.LMVar
+import safe LIO.Core
+import safe LIO.Exception
+import safe LIO.Error
+import safe LIO.Label
 import LIO.TCB
-import LIO.TCB.Concurrent
 
 
 --
@@ -73,12 +75,7 @@ forkLIO lio = do
 -- label and clearance as enforced by a call to 'guardAlloc'.
 -- Moreover, the supplied computation must not terminate with its
 -- label above the result label; doing so will result in an exception
--- (whose label will reflect this observation) being thrown in the
--- thread reading the result.
---
--- If an exception is thrown in the inner computation, the exception
--- label will be raised to the join of the result label and original
--- exception label.
+-- being thrown in the thread reading the result.
 -- 
 -- Note that @lFork@ immediately returns a 'LabeledResult', which is
 -- essentially a \"future\", or \"promise\". This prevents
@@ -97,14 +94,14 @@ lFork = lForkP noPrivs
 -- for when performing label comparisons.
 lForkP :: PrivDesc l p =>
           Priv p -> l -> LIO l a -> LIO l (LabeledResult l a)
-lForkP p l lio = do
-  guardAllocP p l
+lForkP p l (LIOTCB action) = do
+  withContext "lForkP" $ guardAllocP p l
   mv <- ioTCB IO.newEmptyMVar
   st <- ioTCB $ newIORef LResEmpty
   s0 <- getLIOStateTCB
   tid <- ioTCB $ IO.mask $ \unmask -> IO.forkIO $ do
     sp <- newIORef s0
-    ea <- IO.try $ unmask $ unLIOTCB lio sp
+    ea <- IO.try $ unmask $ action sp
     LIOState lEnd _ <- readIORef sp
     writeIORef st $ case ea of
       _ | not (lEnd `canFlowTo` l) -> LResLabelTooHigh lEnd
@@ -124,7 +121,7 @@ lForkP p l lio = do
 -- the result must be above the current label and below the current
 -- clearance. Moreover, before block-reading, @lWait@ raises the current
 -- label to the join of the current label and label of result.  An
--- exception is thrown by the underlying 'guardWrite' if this is not the
+-- exception is thrown by the underlying 'taint' if this is not the
 -- case.  Additionally, if the thread terminates with an exception (for
 -- example if it violates clearance), the exception is rethrown by
 -- @lWait@. Similarly, if the thread reads values above the result label,
@@ -134,14 +131,19 @@ lWait = lWaitP noPrivs
 
 -- | Same as 'lWait', but uses priviliges in label checks and raises.
 lWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l a
-lWaitP p (LabeledResultTCB _ l mv st) = taintP p l >> go
+lWaitP p (LabeledResultTCB _ l mv st) =
+  withContext "lWaitP" (taintP p l) >> go
   where go = ioTCB (readIORef st) >>= check
         check LResEmpty = ioTCB (IO.readMVar mv) >> go
         check (LResResult a) = return $! a
         check (LResLabelTooHigh lnew) = do
           modifyLIOStateTCB $ \s -> s {
-            lioLabel = partDowngradeP p lnew (lioLabel s) }
-          throwLIO ResultExceedsLabel
+            lioLabel = downgradeP p lnew `lub` lioLabel s }
+          throwLIO ResultExceedsLabel {
+              relContext = []
+            , relLocation = "lWaitP"
+            , relDeclaredLabel = l
+            , relActualLabel = Just lnew }
 
 
 -- | Same as 'lWait', but does not block waiting for result.
@@ -151,13 +153,17 @@ trylWait = trylWaitP noPrivs
 -- | Same as 'trylWait', but uses priviliges in label checks and raises.
 trylWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> LIO l (Maybe a)
 trylWaitP p (LabeledResultTCB _ rl _ st) =
-  taintP p rl >> ioTCB (readIORef st) >>= check
+  withContext "trylWaitP" (taintP p rl) >> ioTCB (readIORef st) >>= check
   where check LResEmpty = return Nothing
         check (LResResult a) = return . Just $! a
         check (LResLabelTooHigh lnew) = do
           curl <- getLabel
           if canFlowToP p lnew curl
-            then throwLIO ResultExceedsLabel
+            then throwLIO ResultExceedsLabel {
+                     relContext = []
+                   , relLocation = "trylWaitP"
+                   , relDeclaredLabel = rl
+                   , relActualLabel = Just lnew }
             else return Nothing
 
 
@@ -165,10 +171,14 @@ trylWaitP p (LabeledResultTCB _ rl _ st) =
 -- | Like 'lWait', with two differences.  First, a timeout is
 -- specified and the thread is unconditionally killed after this
 -- timeout (if it has not yet returned a value).  Second, if the
--- thread's result exceeds its label @timedWait@ and exceeds what the
--- calling thread can observe, consumes the whole timeout and throws a
+-- thread's result exceeds what the calling thread can observe,
+-- @timedlWait@ consumes the whole timeout and throws a
 -- 'ResultExceedsLabel' exception you can catch (i.e., it never raises
 -- the label above the clearance).
+--
+-- Because this function can alter the result by killing a thread, it
+-- requires the label of the 'LabeledResult' to be both readable and
+-- writable at the current label.
 timedlWait :: Label l => LabeledResult l a -> Int -> LIO l a
 timedlWait = timedlWaitP noPrivs
 
@@ -177,7 +187,9 @@ timedlWait = timedlWaitP noPrivs
 -- catching any 'ResultExceedsLabel' before the timeout period (if
 -- possible).
 timedlWaitP :: PrivDesc l p => Priv p -> LabeledResult l a -> Int -> LIO l a
-timedlWaitP p lr@(LabeledResultTCB t _ mvb _) to = trylWaitP p lr >>= go
+timedlWaitP p lr@(LabeledResultTCB t rl mvb _) to =
+  withContext "timedlWaitP" $ do guardWriteP p rl
+                                 trylWaitP p lr >>= go
   where go (Just a) = return a
         go Nothing = do
           mvk <- ioTCB $ IO.newEmptyMVar
@@ -186,5 +198,9 @@ timedlWaitP p lr@(LabeledResultTCB t _ mvb _) to = trylWaitP p lr >>= go
             IO.throwTo t (UncatchableTCB IO.ThreadKilled)
           ioTCB $ IO.readMVar mvb
           trylWaitP p lr >>= maybe
-            (ioTCB (IO.takeMVar mvk) >> throwLIO ResultExceedsLabel)
+            (ioTCB (IO.takeMVar mvk) >> throwLIO failure)
             (\a -> ioTCB (IO.killThread tk) >> return a)
+        failure = ResultExceedsLabel { relContext = []
+                                     , relLocation = "timedWaitP"
+                                     , relDeclaredLabel = rl
+                                     , relActualLabel = Nothing }

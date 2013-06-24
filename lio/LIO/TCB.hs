@@ -4,21 +4,16 @@
 
 {- | 
 
-This module exports 
+This module exports symbols that must be accessible only to trusted
+code.  By convention, the names of such symbols always end
+\"@...TCB@\" (short for \"trusted computing base\").  In many cases, a
+type is safe to export while its constructor is not.  Hence, only the
+constructor ends \"@TCB@\", while the type is re-exported to safe code
+(without constructors) to from "LIO.Core".
 
-* The definition of the 'LIO' monad and relevant trusted state
-  access/modifying functions.
-
-* Various other types whose constructors are privileged and must be
-  hidden from untrusted code.
-
-* Uncatchable exceptions used to pop threads out of the 'LIO' monad
-  unconditionally.
-
-* Combinators for executing 'IO' actions within the 'LIO' monad.
-
-The documentation and external, safe 'LIO' interface is provided in
-"LIO.Core".
+Security rests on the fact that untrusted code must be compiled with
+@-XSafe@.  Because this module is flagged unsafe, it cannot be
+imported from safe modules.
 
 -}
 
@@ -26,26 +21,26 @@ module LIO.TCB (
   -- * LIO monad
     LIOState(..), LIO(..)
   -- ** Accessing internal state
-  , getLIOStateTCB, putLIOStateTCB, modifyLIOStateTCB, updateLIOStateTCB 
+  , getLIOStateTCB, putLIOStateTCB, modifyLIOStateTCB
   -- * Executing IO actions
   , ioTCB
   -- * Privileged constructors
-  , Priv(..), Labeled(..)
+  , Priv(..), Labeled(..), LabelOf(..)
   -- * Uncatchable exception type
   , UncatchableTCB(..), makeCatchable
-  -- * Trusted 'Show' and 'Read'
-  , ShowTCB(..), ReadTCB(..)
+  -- * Trusted 'Show'
+  , ShowTCB(..)
+  -- * 'LabeledResult's
+  , LabeledResult(..), LResStatus(..)
   ) where
 
-import Control.Applicative
-import Control.Exception (Exception(..), SomeException(..))
-import Control.Monad
-import Data.Monoid
-import Data.IORef
-import Data.Typeable
-import Text.Read (minPrec)
-
-import LIO.Label
+import safe Control.Applicative
+import safe Control.Exception (Exception(..), SomeException(..))
+import safe qualified Control.Concurrent as IO
+import safe Control.Monad
+import safe Data.Monoid
+import safe Data.IORef
+import safe Data.Typeable
 
 --
 -- LIO Monad
@@ -56,31 +51,26 @@ data LIOState l = LIOState { lioLabel     :: !l -- ^ Current label.
                            , lioClearance :: !l -- ^ Current clearance.
                            } deriving (Eq, Show, Read)
 
--- | The @LIO@ monad is a state monad, with 'IO' as the underlying monad,
--- that carries along a /current label/ ('lioLabel') and /current clearance/
--- ('lioClearance'). The current label imposes restrictions on
--- what the current computation may read and write (e.g., no writes to
--- public channels after reading sensitive data).  Since the current
--- label can be raised to be permissive in what a computation observes,
--- we need a way to prevent certain computations from reading overly
--- sensitive data. This is the role of the current clearance: it imposes
--- an upper bound on the current label.
-newtype LIO l a = LIOTCB {
-    unLIOTCB :: IORef (LIOState l) -> IO a
-  } deriving (Typeable)
+-- | The @LIO@ monad is a wrapper around 'IO' that keeps track of a
+-- /current label/ and /current clearance/.  Safe code cannot execute
+-- arbitrary 'IO' actions from the 'LIO' monad.  However, trusted
+-- runtime functions can use 'ioTCB' to perform 'IO' actions (which
+-- they should only do after appropriately checking labels).
+newtype LIO l a = LIOTCB (IORef (LIOState l) -> IO a) deriving (Typeable)
 
 instance Monad (LIO l) where
   {-# INLINE return #-}
   return = LIOTCB . const . return
   {-# INLINE (>>=) #-}
-  m >>= k = LIOTCB $ \s -> do
-    a <- unLIOTCB m s
-    unLIOTCB (k a) s
+  (LIOTCB ma) >>= k = LIOTCB $ \s -> do
+    a <- ma s
+    case k a of LIOTCB mb -> mb s
   fail = LIOTCB . const . fail
 
 instance Functor (LIO l) where
-  {-# INLINE fmap #-}
-  fmap f ma = LIOTCB $ \s -> unLIOTCB ma s >>= return . f
+  fmap f (LIOTCB a) = LIOTCB $ \s -> a s >>= return . f
+-- fmap typically isn't inlined, so we don't inline our definition,
+-- but we do define it in terms of >>= and return (which are inlined)
 
 instance Applicative (LIO l) where
   {-# INLINE pure #-}
@@ -105,24 +95,19 @@ putLIOStateTCB :: LIOState l -> LIO l ()
 putLIOStateTCB s = LIOTCB $ \sp -> writeIORef sp $! s
 
 -- | Update the internal state given some function.
-modifyLIOStateTCB :: Label l => (LIOState l -> LIOState l) -> LIO l ()
+modifyLIOStateTCB :: (LIOState l -> LIOState l) -> LIO l ()
 {-# INLINE modifyLIOStateTCB #-}
 modifyLIOStateTCB f = do
   s <- getLIOStateTCB
   putLIOStateTCB (f s)
 
-{-# DEPRECATED updateLIOStateTCB "Use modifyLIOStateTCB instead" #-}
-updateLIOStateTCB :: Label l => (LIOState l -> LIOState l) -> LIO l ()
-updateLIOStateTCB = modifyLIOStateTCB
-
 --
 -- Executing IO actions
 --
 
--- | Lifts an 'IO' computation into the 'LIO' monad.  Note that
--- exceptions thrown within the 'IO' computation cannot directly be
--- caught within the 'LIO' computation.  Thus, you will generally want to
--- use 'rethrowIoTCB'.
+-- | Lifts an 'IO' computation into the 'LIO' monad.  This function is
+-- dangerous and should only be called after appropriate checks ensure
+-- the 'IO' computation will not violate IFC policy.
 ioTCB :: IO a -> LIO l a
 {-# INLINE ioTCB #-}
 ioTCB = LIOTCB . const
@@ -131,13 +116,14 @@ ioTCB = LIOTCB . const
 -- Exception handling
 --
 
--- | An uncatchable exception hierarchy use to terminate an untrusted
--- thread.  Wrap the uncatchable exception in 'UncatchableTCB' before
--- throwing it to the thread.  'runLIO' will subsequently unwrap the
--- 'UncatchableTCB' constructor.
+-- | An uncatchable exception hierarchy is used to terminate an
+-- untrusted thread.  Wrap the uncatchable exception in
+-- 'UncatchableTCB' before throwing it to the thread.  'runLIO' will
+-- subsequently unwrap the 'UncatchableTCB' constructor.
 --
 -- Note this can be circumvented by 'IO.mapException', which should be
--- made unsafe.
+-- made unsafe. In the interim, auditing untrusted code for this is
+-- necessary.
 data UncatchableTCB = forall e. (Exception e) =>
                       UncatchableTCB e deriving (Typeable)
 
@@ -159,10 +145,13 @@ makeCatchable e@(SomeException einner) =
 -- Privileges
 --
 
--- | A newtype wrapper that can be used by trusted code to bless
--- privileges.  Privilege-related functions are defined in
--- "LIO.Privs", but the constructor, 'PrivTCB', allows one to mint
--- arbitrary privileges and hence must be located in this file.
+-- | A newtype wrapper that can be used by trusted code to transform a
+-- powerless description of privileges into actual privileges.  The
+-- constructor, 'PrivTCB', is dangerous as it allows creation of
+-- arbitrary privileges.  Hence it is only exported by the unsafe
+-- module "LIO.TCB".  A safe way to create arbitrary privileges is to
+-- call 'privInit' (see "LIO.Run#v:privInit") from the 'IO' monad
+-- before running your 'LIO' computation.
 newtype Priv a = PrivTCB a deriving (Show, Eq, Typeable)
 
 instance Monoid p => Monoid (Priv p) where
@@ -177,53 +166,75 @@ instance Monoid p => Monoid (Priv p) where
 --
 
 -- | @Labeled l a@ is a value that associates a label of type @l@ with
--- a value of type @a@. Labeled values allow users to label data with
--- a label other than the current label. In an embedded setting this
--- is akin to having first class labeled values. Note that 'Labeled'
--- is an instance of 'LabelOf', which effectively means that the label
--- of a 'Labeled' value is usually just protected by the current
--- label. (Of course if you have a nested labeled value then the label
--- on the inner labeled value's label is the outer label.)
+-- a pure value of type @a@. Labeled values allow users to label data
+-- with a label other than the current label.  Note that 'Labeled' is
+-- an instance of 'LabelOf', which means that only the /contents/ of a
+-- labeled value (the type @t@) is kept secret, not the label.  Of
+-- course, if you have a @Labeled@ within a @Labeled@, then the label
+-- on the inner value will be protected by the outer label.
 data Labeled l t = LabeledTCB !l t deriving Typeable
 -- Note: t cannot be strict if we want things like lFmap.
 
+-- | Trusted 'Show' instance.
+instance (Show l, Show a) => ShowTCB (Labeled l a) where
+    showTCB (LabeledTCB l a) = show a ++ " {" ++ show l ++ "}"
+
+-- | Generic class used to get the type of labeled objects. For,
+-- instance, if you wish to associate a label with a pure value (as in
+-- "LIO.Labeled"), you may create a data type:
+-- 
+-- > newtype LVal l a = LValTCB (l, a)
+-- 
+-- Then, you may wish to allow untrusted code to read the label of any
+-- @LVal@s but not necessarily the actual value. To do so, simply
+-- provide an instance for @LabelOf@:
+-- 
+-- > instance LabelOf LVal where
+-- >   labelOf (LValTCB lv) = fst lv
+class LabelOf t where
+  -- | Get the label of a labeled value or object.  Note the label
+  -- must be the second to last type constructor argument.
+  labelOf :: t l a -> l
+
 instance LabelOf Labeled where
+  {-# INLINE labelOf #-}
   labelOf (LabeledTCB l _) = l
 
--- | Trusted 'Show' instance.
-instance (Label l, Show a) => ShowTCB (Labeled l a) where
-    showTCB (LabeledTCB l t) = show t ++ " {" ++ show l ++ "}"
-
--- | Trusted 'Read' instance.
-instance (Label l, Read l, Read a) => ReadTCB (Labeled l a) where
-  readsPrecTCB _ str = do (val, str1) <- reads str
-                          ("{", str2) <- lex str1
-                          (lab, str3) <- reads str2
-                          ("}", rest) <- lex str3
-                          return (LabeledTCB lab val, rest)
-
 --
--- Trusted 'Show' and 'Read'
+-- Trusted 'Show'
 --
 
--- | It would be a security issue to make certain objects a member of
--- the 'Show' class, but nonetheless it is useful to be able to
--- examine such objects when debugging.  The 'showTCB' method can be used
--- to examine such objects.
+-- | It would be a security issue to make certain objects members of
+-- the 'Show' class.  Nonetheless it is useful to be able to examine
+-- such objects when debugging.  The 'showTCB' method can be used to
+-- examine such objects.
 class ShowTCB a where
-    showTCB :: a -> String
+  showTCB :: a -> String
 
--- | It is useful to have the dual of 'ShowTCB', @ReadTCB@, that allows
--- for the reading of strings that were created using 'showTCB'. Only
--- @readTCB@ (corresponding to 'read') and @readsPrecTCB@ (corresponding
--- to 'readsPrec') are implemented.
-class ReadTCB a where
-  -- | Trusted 'readsPrec'
-  readsPrecTCB :: Int -> ReadS a
-  -- | Trusted 'read'
-  readTCB :: String -> a
-  readTCB str = check $ readsPrecTCB minPrec str
-    where check []                          = error "readTCB: no parse"
-          check [(x,rst)] | all (==' ') rst = x
-                         | otherwise        = error "readTCB: no parse"
-          check _                           = error "readTCB: ambiguous parse"
+
+--
+-- LabeledResult
+--
+
+-- | Status of a 'LabeledResult'.
+data LResStatus l a = LResEmpty
+                    | LResLabelTooHigh !l
+                    | LResResult a
+                      deriving (Show)
+
+-- | A @LabeledResult@ encapsulates a future result from a computation
+-- spawned by 'lFork' or 'lForkP'.  See "LIO.Concurrent" for a
+-- description of the concurrency abstractions of LIO.
+data LabeledResult l a = LabeledResultTCB {
+    lresThreadIdTCB :: !IO.ThreadId
+    -- ^ Thread executing the computation
+  , lresLabelTCB :: !l
+    -- ^ Label of the tresult
+  , lresBlockTCB :: !(IO.MVar ())
+  , lresStatusTCB :: !(IORef (LResStatus l a))
+    -- ^ Result (when it is ready), or the label at which the thread
+    -- terminated, if that label could not flow to 'lresLabelTCB'.
+  }
+
+instance LabelOf LabeledResult where
+  labelOf = lresLabelTCB

@@ -43,7 +43,7 @@ because data vouched for by @P_1@ or @P_2@ is more permissive than just @P_1@
 
 -}
 
-module LIO.DCLabel.Core ( 
+module Old.DCLabel.Core ( 
   -- * Principals
     Principal(..), principal
   -- * Clauses
@@ -69,7 +69,6 @@ import qualified Data.Set as Set
 import Data.Typeable
 
 import LIO.Label
-import LIO.Privs
 
 --
 -- Principals
@@ -118,6 +117,13 @@ instance Show Clause where
 clause :: Set Principal -> Clause
 clause = Clause
 
+{- $component
+   A 'Component' is a conjunction of disjunctions of 'Principal's. A
+   'DCLabel' is simply a pair of such 'Component's. Hence, we define
+   almost all operations in terms of this construct, from which the
+   'DCLabel' implementation follows almost trivially.
+-}
+
 -- | A component is a set of clauses, i.e., a formula (conjunction of
 -- disjunction of 'Principal's). @DCFalse@ corresponds to logical
 -- @False@, while @DCFormula Set.empty@ corresponds to logical @True@.
@@ -139,31 +145,6 @@ instance Show Component where
 instance Monoid Component where
   mempty = dcTrue
   mappend p1 p2 = dcReduce $! p1 `dcAnd` p2
-
-instance PrivDesc DCLabel Component where
-  canFlowToPrivDesc pd l1 l2
-           | pd == dcTrue = canFlowTo l1 l2
-           | otherwise =
-    let i1 = dcReduce $ dcIntegrity l1 `dcAnd` pd
-        s2 = dcReduce $ dcSecrecy l2   `dcAnd` pd
-    in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
-
-  partDowngradePrivDesc pd la lg
-               | pd == mempty  = la `lub` lg
-               | pd == dcFalse = lg
-               | otherwise = 
-    let sec_a  = dcSecrecy la
-        int_a  = dcIntegrity la
-        sec_g  = dcSecrecy   lg
-        int_g  = dcIntegrity lg
-        sec_a' = dcFormula . Set.filter f $ unDCFormula sec_a
-        sec_res  = if isFalse sec_a
-                then sec_a
-                else sec_a' `dcAnd` sec_g
-        int_res  = (pd `dcAnd` int_a) `dcOr` int_g
-    in dcLabel sec_res int_res
-      where f c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
-
 
 
 -- | Logical @True@.
@@ -190,13 +171,6 @@ isFalse = (== dcFalse)
 -- Labels
 --
 
-{- $component
-   A 'Component' is a conjunction of disjunctions of 'Principal's. A
-   'DCLabel' is simply a pair of such 'Component's. Hence, we define
-   almost all operations in terms of this construct, from which the
-   'DCLabel' implementation follows almost trivially.
--}
-
 -- | A @DCLabel@ is a pair of secrecy and integrity 'Component's.
 data DCLabel = DCLabel { dcSecrecy   :: !Component
                          -- ^ Extract secrecy component of a label
@@ -209,6 +183,36 @@ instance Show DCLabel where
     let s = dcSecrecy l
         i = dcIntegrity l
     in showsPrec (d + 1) s . showString " %% " . showsPrec (d + 1) i
+
+instance SpeaksFor Component where
+  speaksFor = dcImplies
+
+instance PrivDesc DCLabel Component where
+  canFlowToP pd l1 l2
+           | pd == dcTrue = canFlowTo l1 l2
+           | otherwise =
+    let i1 = dcReduce $ dcIntegrity l1 `dcAnd` pd
+        s2 = dcReduce $ dcSecrecy l2   `dcAnd` pd
+    in l1 { dcIntegrity = i1 } `canFlowTo` l2 { dcSecrecy = s2 }
+
+  downgradeP p l = pdpd p l dcBottom
+    where pdpd pd la lg
+             | pd == mempty  = la `lub` lg
+             | pd == dcFalse = lg
+             | otherwise = 
+            let sec_a  = dcSecrecy la
+                int_a  = dcIntegrity la
+                sec_g  = dcSecrecy   lg
+                int_g  = dcIntegrity lg
+                sec_a' = dcFormula . Set.filter f $ unDCFormula sec_a
+                sec_res  = if isFalse sec_a
+                        then sec_a
+                        else sec_a' `dcAnd` sec_g
+                int_res  = (pd `dcAnd` int_a) `dcOr` int_g
+                f c = not $ pd `dcImplies` (dcFormula . Set.singleton $ c)
+            in dcLabel sec_res int_res
+
+
 
 -- | @dcLabel secrecyComponent integrityComponent@ creates a label,
 -- reducing each component to CNF.
@@ -287,16 +291,16 @@ dcImplies f1@(DCFormula cs1) f2@(DCFormula cs2)
 -- | Logical conjunction
 dcAnd :: Component -> Component -> Component 
 dcAnd x y | isFalse x || isFalse y = dcFalse
-          | otherwise = DCFormula $! unDCFormula x `Set.union` unDCFormula y
+          | otherwise = DCFormula $ unDCFormula x `Set.union` unDCFormula y
 
 -- | Logical disjunction
 dcOr :: Component -> Component -> Component 
 dcOr x y | isTrue x || isTrue y = dcTrue
-dcOr x y | isFalse x = y
+         | isFalse x = y
          | isFalse y = x
          | otherwise = let cs1 = unDCFormula x
                            cs2 = unDCFormula y
-                       in DCFormula $! doOr cs1 cs2
+                       in DCFormula $ doOr cs1 cs2
   where -- | Perform disjunction of two components.
         doOr :: Set Clause -> Set Clause -> Set Clause
         doOr cs1 cs2 = Set.foldl' disjFunc Set.empty cs2

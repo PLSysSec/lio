@@ -10,10 +10,10 @@ provided by "LIO.DCLabel.Privs".
 
 -}
 
-module LIO.TCB.DCLabel (allPrivTCB) where
+module Old.TCB.DCLabel (allPrivTCB) where
 
-import LIO.DCLabel.Core
-import LIO.DCLabel.Privs
+import Old.DCLabel.Core
+import Old.DCLabel.Privs
 import LIO.TCB
 
 -- | The all privilege corresponds to logical @False@
