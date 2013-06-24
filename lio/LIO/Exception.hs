@@ -29,6 +29,7 @@ import safe Data.Typeable
 import LIO.TCB
 import safe LIO.Label
 
+-- | Throw an exception.
 throwLIO :: Exception e => e -> LIO l a
 throwLIO = ioTCB . IO.throwIO
 

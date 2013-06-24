@@ -77,7 +77,10 @@ instance Label l => Exception (LabelError l) where
   toException = lerrToException
   fromException = lerrFromException
 
-labelError :: (Label l) => String -> [l] -> LIO l a
+-- | Throw a label-error exception.
+labelError :: (Label l) => String -- ^ Function that failed.
+                        -> [l]    -- ^ Labels involved in error.
+                        -> LIO l a
 labelError fl ls = do
   st <- getLIOStateTCB
   throwLIO LabelError {
@@ -89,7 +92,11 @@ labelError fl ls = do
     , lerrLabels = ls
     }
 
-labelErrorP :: (Label l, PrivDesc l p) => String -> Priv p -> [l] -> LIO l a
+-- | Throw a label-error exception.
+labelErrorP :: (Label l, PrivDesc l p) => String  -- ^ Function that failed.
+                                       -> Priv p  -- ^ Privileges involved.
+                                       -> [l]     -- ^ Labels involved.
+                                       -> LIO l a
 labelErrorP fl p ls = do
   st <- getLIOStateTCB
   throwLIO LabelError {
