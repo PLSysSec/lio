@@ -13,7 +13,6 @@ module LIO.Run (LIOState(..), runLIO, tryLIO, evalLIO, privInit) where
 
 import safe Control.Exception
 import safe Data.IORef
-import safe Data.Typeable
 
 import safe LIO.Label
 import LIO.TCB
@@ -69,10 +68,3 @@ evalLIO lio s = do
 privInit :: (SpeaksFor p) => p -> IO (Priv p)
 privInit p | isPriv p  = fail "privInit called on Priv object"
            | otherwise = return $ PrivTCB p
-
--- | Uses dynamic typing to return 'True' iff the type of the argument
--- is @'Priv' a@ (for any @a@).  Mostly useful to prevent users from
--- accidentally wrapping 'Priv' objects inside other 'Priv' objects.
-isPriv :: (Typeable p) => p -> Bool
-isPriv p = typeRepTyCon (typeOf p) == privcon
-  where privcon = typeRepTyCon $ typeOf noPrivs

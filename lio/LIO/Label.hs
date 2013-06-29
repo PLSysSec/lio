@@ -12,6 +12,8 @@ module LIO.Label (
   -- $Privileges
   , SpeaksFor(..), PrivDesc(..)
   , Priv, privDesc
+  -- ** Internal functions
+  , isPriv
   -- * Empty privileges
   , NoPrivs(..), noPrivs
   ) where
@@ -160,6 +162,14 @@ this is not enforced with superclasses.
 privDesc :: Priv a -> a
 {-# INLINE privDesc #-}
 privDesc (PrivTCB a) = a
+
+-- | Uses dynamic typing to return 'True' iff the type of the argument
+-- is @'Priv' a@ (for any @a@).  Mostly useful to prevent users from
+-- accidentally wrapping 'Priv' objects inside other 'Priv' objects or
+-- accidentally including real privileges in an exception.
+isPriv :: (Typeable p) => p -> Bool
+isPriv p = typeRepTyCon (typeOf p) == privcon
+  where privcon = typeRepTyCon $ typeOf noPrivs
 
 -- | Every privilege type must be an instance of 'SpeaksFor', which
 -- specifies when one privilege value is more powerful than another.

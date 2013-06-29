@@ -151,10 +151,15 @@ instance Exception InsufficientPrivs where
   fromException = lerrFromException
 
 -- | Raise 'InsufficientPrivs' error.
-insufficientPrivs :: (SpeaksFor p) => String -> Priv p -> p -> a
-insufficientPrivs fl supplied needed =
-  IO.throw $ InsufficientPrivs [] fl (privDesc supplied) needed
-
+insufficientPrivs :: (SpeaksFor p) =>
+                     String     -- ^ Function in which error occurs
+                     -> p       -- ^ Description of privileges supplied
+                     -> p       -- ^ Description of privileges needed
+                     -> a
+insufficientPrivs fl supplied needed
+  | isPriv supplied = error $ "insufficientPrivs: " ++ show fl ++
+                      " supplied actual privileges instead of description"
+  | otherwise = IO.throw $ InsufficientPrivs [] fl supplied needed
 
 -- | Error raised when a computation spawned by 'lFork' terminates
 -- with its current label above the label of the result.

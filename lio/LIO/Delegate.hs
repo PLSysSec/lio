@@ -34,7 +34,7 @@ import LIO.TCB
 delegate :: (SpeaksFor p) => Priv p -> p -> Priv p
 delegate p1 p2
   | privDesc p1 `speaksFor` p2 = PrivTCB p2
-  | otherwise                  = insufficientPrivs "delegate" p1 p2
+  | otherwise                  = insufficientPrivs "delegate" (privDesc p1) p2
 
 {- $gateIntro
 

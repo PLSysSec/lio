@@ -34,5 +34,5 @@ module LIO (
 import safe LIO.Core
 import safe LIO.Delegate
 import safe LIO.Exception
-import safe LIO.Label
+import safe LIO.Label hiding (isPriv)
 import safe LIO.Labeled
