@@ -59,7 +59,9 @@ import LIO.TCB
 forkLIO :: LIO l () -> LIO l ()
 forkLIO lio = do
   s <- getLIOStateTCB
-  ioTCB $ void $ IO.forkIO $ void $ runLIO lio s
+  ioTCB $ void $ IO.forkIO $ do
+    ((), _) <- runLIO lio s
+    return ()
 
 -- | Labeled fork. @lFork@ allows one to invoke computations that
 -- would otherwise raise the current label, but without actually

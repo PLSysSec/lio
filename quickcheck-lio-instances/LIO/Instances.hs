@@ -17,27 +17,29 @@ import Control.Concurrent.MVar
 
 import Test.QuickCheck hiding (label)
 import Test.QuickCheck.Instances ()
-import LIO.DCLabel
-import LIO.DCLabel.Instances
 
 import LIO
 import LIO.LIORef
--- import LIO.LIORef.TCB (newLIORefTCB, unlabelLIORefTCB)
 import LIO.TCB
 import LIO.DCLabel
+import LIO.DCLabel.Instances ()
 import LIO.Concurrent.LMVar
 import LIO.TCB.LObj
--- import LIO.Concurrent.LMVar.TCB (newLMVarTCB, unlabelLMVarTCB)
-import LIO.Exception
 
 import System.IO.Unsafe
+
+type DCRef a = LIORef DCLabel a
 
 newLMVarTCB :: l -> a -> LIO l (LMVar l a)
 newLMVarTCB l a = LObjTCB l `fmap` ioTCB (newMVar a)
 
-unlabelLIORefTCB (LObjTCB _ r) = r
-unlabelLMVarTCB (LObjTCB _ mv) = mv
+unlabelLObjTCB :: LObj l a -> a
+unlabelLObjTCB (LObjTCB _ a) = a
+
+labelTCB :: l -> a -> Labeled l a
 labelTCB = LabeledTCB
+
+unlabelTCB :: Labeled l a -> a
 unlabelTCB (LabeledTCB _ v) = v
 
 newLIORefTCB :: l -> a -> LIO l (LIORef l a)
@@ -87,7 +89,7 @@ instance Arbitrary a => Arbitrary (DCRef a) where
     return . unsafePerformIO . evalDC $ newLIORefTCB l a
 
 instance Show a => Show (DCRef a) where
-  show lr = let v = unsafePerformIO . readIORef $ unlabelLIORefTCB lr
+  show lr = let v = unsafePerformIO . readIORef $ unlabelLObjTCB lr
                 l = labelOf lr
             in "DCRef { label = "++ show l ++", value = "++ show v ++" }"
 
@@ -98,7 +100,7 @@ instance Arbitrary a => Arbitrary (LMVar DCLabel a) where
     return . unsafePerformIO . evalDC $ newLMVarTCB l a
 
 instance Show a => Show (LMVar DCLabel a) where
-  show lr = let v = unsafePerformIO . tryTakeMVar $ unlabelLMVarTCB lr
+  show lr = let v = unsafePerformIO . tryTakeMVar $ unlabelLObjTCB lr
                 l = labelOf lr
             in "LMVar { label = "++ show l ++", value = "++ show v ++" }"
 
