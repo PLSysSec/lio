@@ -3,37 +3,27 @@
 -- | Instances for "QuickCheck"\'s 'Arbitrary' class.
 module LIO.DCLabel.Instances () where
 
-import Control.Monad (liftM)
+import Control.Applicative
 import Test.QuickCheck
 import Test.QuickCheck.Instances ()
-import LIO.DCLabel.Core
 import LIO.DCLabel
--- import LIO.DCLabel.Privs.TCB
--- import LIO.Privs.TCB
-import Data.Set hiding (map)
 import qualified Data.ByteString.Char8 as S8
 import LIO.TCB
 
 instance Arbitrary Principal where
-  arbitrary = oneof $ map (\x -> return . Principal . S8.singleton $ x) ['A'..'Z']
+  arbitrary = principalBS . S8.singleton <$> elements ['A'..'Z']
 
-instance Arbitrary Clause where
-  arbitrary = Clause `liftM` arbitrary
+instance Arbitrary Disjunction where
+  arbitrary = frequency [(1, dFromList <$> arbitrary)
+                        , (10, dFromList <$> listOf1 arbitrary)]
+-- Reduce the incidence of False to get more interesting tests
 
-instance Arbitrary Component where
-  arbitrary = oneof [ return DCFalse
-                    , do cs <- arbitrary
-                         return . DCFormula $ if (Clause empty) `member` cs
-                                                then empty
-                                                else cs
-                    ]
+instance Arbitrary CNF where
+  arbitrary = cFromList <$> arbitrary
 
 instance Arbitrary DCLabel where
-  arbitrary = do
-    s <- dcReduce `liftM` arbitrary
-    i <- dcReduce `liftM` arbitrary
-    return (dcLabel s i)
+  arbitrary = liftA2 DCLabel arbitrary arbitrary
 
 instance Arbitrary DCPriv where
-  arbitrary = MintTCB `liftM` arbitrary
+  arbitrary = PrivTCB <$> arbitrary
 
