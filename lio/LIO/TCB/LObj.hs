@@ -18,10 +18,13 @@
 -- > type Handle = LObj DCLabel IO.Handle
 -- > 
 -- > hPutStrLn :: LObj DCLabel IO.Handle -> String -> LIO DCLabel ()
--- > hPutStrLn h = blessTCB IO.hPutStrLn noPrivs h
+-- > hPutStrLn h = blessTCB "hPutStrLn" IO.hPutStrLn h
+-- >
+-- > hPutStrLnP :: DCPriv -> LObj DCLabel IO.Handle -> String -> LIO DCLabel ()
+-- > hPutStrLnP h = blessPTCB "hPutStrLnP" IO.hPutStrLn h
 -- > 
 -- > hGetLine :: LObj DCLabel IO.Handle -> LIO DCLabel String
--- > hGetLine h = blessTCB IO.hGetLine noPrivs h
+-- > hGetLine h = blessTCB "hGetLine" IO.hGetLine h
 --
 -- Then application-specific trusted code can wrap a specific label
 -- around each 'Handle' using the 'LObjTCB' constructor.
@@ -37,9 +40,9 @@ import LIO.TCB
 -- | A \"@LObj label object@\" is a wrapper around an IO abstraction
 -- of type @object@ (such as a file handle or socket) on which it is
 -- safe to do @IO@ operations in the 'LIO' monad when the caller can
--- read and write a particular label.  It is the job of the trusted
+-- read and write a the label @label@.  It is the job of the trusted
 -- code constructing such a @LObj@ object to ensure both that the same
--- IO object is only ever blessed with one label, and that the
+-- IO object is only ever associated with a single label, and that the
 -- abstraction combined with its blessed IO operations (see
 -- 'blessTCB') cannot be used to communicate with code running at
 -- different labels.
@@ -117,7 +120,8 @@ blessTCB :: (GuardIO l io lio, Label l) =>
 blessTCB name io (LObjTCB l a) =
   guardIOTCB (withContext name $ guardWrite l) (io a)
 
--- | A variant of 'blessTCB' that takes a privilege argument.
+-- | A variant of 'blessTCB' that produces an 'LIO' function taking a
+-- privilege argument.
 blessPTCB :: (GuardIO l io lio, PrivDesc l p) =>
              String -> (a -> io) -> Priv p -> (LObj l a) -> lio
 {-# INLINE blessPTCB #-}

@@ -44,7 +44,7 @@ instance Annotatable AnyLabelError where
 
 instance Exception AnyLabelError
 
--- | Executes an action with a context string which will be added to
+-- | Executes an action with a context string, which will be added to
 -- any label exception thrown.
 -- 
 -- Note: this function wraps an action with a 'catch', and thus may

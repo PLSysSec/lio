@@ -41,7 +41,7 @@ e1 = p1 '\/' p2
 e2 = e1 '\/' \"p4\"
   @
 
-Similarly, the conjunction operator ('/\') creates 'CNF' as a
+Similarly, the conjunction operator ('/\') creates a 'CNF' as a
 conjunction of 'Principal's, 'String's, 'Disjunction's, or 'CNF's.
 
   @
@@ -77,6 +77,22 @@ This will result in the following:
 >>> canFlowTo dc1 dc2
 False
 >>> canFlowToP pr dc1 dc2
+True
+
+Because the '\/' and '/\' operators accept strings and 'Principal's as
+well as 'CNF's, it is sometimes easy to forget that strings and
+'Principal's are not actually 'CNF's.  For example:
+
+>>> "Alice" /\ "Bob" `speaksFor` "Alice" \/ "Bob"
+True
+>>> "Alice" `speaksFor` "Alice" \/ "Bob"
+<interactive>:12:21:
+    Couldn't match expected type `[Char]' with actual type `CNF'
+
+To convert a single string or 'Principal' to a 'CNF', you must use the
+'toCNF' method:
+
+>>> toCNF "Alice" `speaksFor` "Alice" \/ "Bob"
 True
 
 -}
@@ -266,7 +282,7 @@ instance Monoid CNF where
 -- @'dcSecrecy' = cTrue@, it means data is public.  When
 -- @'dcIntegrity' = cTrue@, it means data carries no integrity
 -- guarantees.  As a description of privileges, @cTrue@ conveys no
--- privileges; @'canFlowToPrivDesc' cTrue l1 l2@ is equivalent to
+-- privileges; @'canFlowToP' cTrue l1 l2@ is equivalent to
 -- @'canFlowTo' l1 l2@.
 --
 -- Note that @'toCNF' 'True' = cTrue@.  Hence @'dcPublic' = 'DCLabel'
@@ -359,11 +375,11 @@ cImplies c (CNF ds) = setAll (c `cImplies1`) ds
 --   other words, data can flow in the direction of requiring more
 --   authority to make it public or removing integrity endorsements.
 --
---   * Given two @DCLabel@s @dc1 = (s1 '%%' i1)@ and @dc 2 = (s2 '%%'
---   i2)@, and a @p::'CNF'@ representing privileges,
---   @'canFlowToPrivDesc' p dc1 dc2@ (often written @dc1@
---   &#8849;&#8346; @dc2@) if and only if @(p '/\' s2) ``speaksFor``
---   s2 && (p '/\' i1) ``speaksFor`` i2@.
+--   * Given two @DCLabel@s @dc1 = (s1 '%%' i1)@ and @dc2 = (s2 '%%'
+--   i2)@, and a @p::'CNF'@ representing privileges, @'canFlowToP' p
+--   dc1 dc2@ (often written @dc1@ &#8849;&#8346; @dc2@) if and only
+--   if @(p '/\' s2) ``speaksFor`` s2 && (p '/\' i1) ``speaksFor``
+--   i2@.
 data DCLabel = DCLabel { dcSecrecy :: !CNF
                          -- ^ Describes the authority required to make
                          -- the data public.
@@ -390,10 +406,9 @@ instance Read DCLabel where
 -- This label corresponds to public data with no integrity guarantees.
 -- For instance, an unrestricted Internet socket should be labeled
 -- @dcPublic@.  The significance of @dcPublic@ is that given data
--- labeled @(s %% i)@, @s@ is the exact minimum authority required to
--- transition the data to @dcPublic@.  Conversely, given data labeled
--- @dcPublic@, @i@ is the exact authority required to transition the
--- data to @(s %% i)@ (assuming sufficient clearance).
+-- labeled @(s %% i)@, @s@ is the exact minimum authority such that
+-- @(s %% i) &#x2291;&#x209b; dcPublic@, while @i@ is the exact
+-- minimum authority such that @dcPublic &#x2291;&#x1d62; (s %% i)@.
 dcPublic :: DCLabel
 dcPublic = True %% True
 

@@ -10,7 +10,7 @@ module LIO.Delegate (
     delegate
     -- * Gates
     -- $gateIntro
-  , Gate, gate, callGate
+  , Gate, gate, guardGate, callGate
     -- ** Gate example
     -- $gateExample
   ) where
@@ -25,8 +25,8 @@ import LIO.TCB
 -- less powerful than an existing privilege object.  The first
 -- argument supplies actual privileges.  The second argument is a
 -- 'PrivDesc' describing the desired new privileges.  The call throws
--- an exception unless the privileges supplied 'speaksFor' the
--- privileges requested.
+-- an exception unless the privilege object supplied 'speaksFor' the
+-- privilege object requested.
 --
 -- Note:  If you are looking for a way to create privileges /more/
 -- powerful than ones you already have, you can use the 'mappend'
@@ -48,11 +48,17 @@ description (type variable for an instance of 'PrivDesc').  Gates are
 invoked with 'callGate', and as such the service provider has the
 guarantee that the client (the caller) owns the privileges
 corresponding to the privilege description @p@.  In effect, this
-allows a client to \"prove\" to the service provider that they own
-certain privileges without entrusting the service with its privileges.
-The gate computation can analyze this privilege description before
-performing the \"actual\" computation.  The client and server solely
-need to trust the implementation of 'callGate'.
+allows a client to \"prove\" to the service provider that it owns
+certain privileges without actually entrusting the service with these
+privileges.  The gate computation can analyze this privilege
+description before performing the \"actual\" computation.  The
+'speaksFor' function may be useful.  When supplied privileges are
+insufficient, the gate code can raise an exception with
+'insufficientPrivs'.
+
+Note that the client and server must both trust the implementation of
+'callGate', which is why it is part of the LIO library, even though
+the function itself is only one line of code.
 
 -}
 
@@ -75,6 +81,21 @@ gate :: (p -> a)  -- ^ Gate computation
      -> Gate p a
 {-# INLINE gate #-}
 gate = GateTCB
+
+-- | @guardGate name minPriv a@ creates a simple gate that requires
+-- privileges at least as high as @minPriv@ to return the payload or
+-- function @a@.  If the privileges supplied are insufficient, an
+-- exception of type 'InsufficientPrivs' is thrown.  The argument
+-- @name@ is used only when an exception is thrown, to make the source
+-- of the exception more easily traceable.
+--
+-- > guardGate name minPriv a = gate $ \pd ->
+-- >   if pd `speaksFor` minPriv then a
+-- >   else insufficientPrivs name pd minPriv
+guardGate :: (SpeaksFor p) => String -> p -> a -> Gate p a
+guardGate name minPriv a = gate $ \pd ->
+  if pd `speaksFor` minPriv then a
+  else insufficientPrivs name pd minPriv
 
 -- | Given a gate and privilege, execute the gate computation.  It is
 -- important to note that @callGate@ invokes the gate computation with

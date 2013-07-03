@@ -47,7 +47,7 @@ with current label @lcur@ observes data labeled @l1@, it must hold
 that @l1 ``canFlowTo`` lcur@.  If the thread is later permitted to
 modify an object labeled @l2@, it must hold that @lcur ``canFlowTo``
 l2@.  By transitifity of the ``canFlowTo`` relation, it holds that @l1
-``canFlowTo` l2@.
+``canFlowTo`` l2@.
 
 -}
 
@@ -144,15 +144,15 @@ that is not the case, but only for certain pairs of labels @l1@ and
 allowing data labeled @l1@ to infulence data labeled @l2@ when @(l1
 ``canFlowTo`` l2) == False@ is known as /downgrading/.
 
-The core privilege function is 'canFlowToP', which performs a
-more permissive can-flow-to check by exercising particular privileges
-(in literature this relation is commonly written @&#8849;&#8346;@ for
+The core privilege function is 'canFlowToP', which performs a more
+permissive can-flow-to check by exercising particular privileges (in
+the literature this relation is commonly written @&#8849;&#8346;@ for
 privileges @p@).  Most core 'LIO' function have variants ending @...P@
 that take a privilege argument to act in a more permissive way.
 
 By convention, all 'PrivDesc' instances should also be instances of
 'Monoid', allowing privileges to be combined with 'mappend', though
-this is not enforced with superclasses.
+there is no superclass to enforce this.
 
 -}
 
@@ -171,10 +171,17 @@ isPriv :: (Typeable p) => p -> Bool
 isPriv p = typeRepTyCon (typeOf p) == privcon
   where privcon = typeRepTyCon $ typeOf noPrivs
 
--- | Every privilege type must be an instance of 'SpeaksFor', which
--- specifies when one privilege value is more powerful than another.
--- If you do not wish to allow delegation, you can simply define
--- @'speaksFor' _ _ = False@.
+-- | Every privilege type must be an instance of 'SpeaksFor', which is
+-- a partial order specifying when one privilege value is at least as
+-- powerful as another.  If @'canFlowToP' p1 l1 l2@ and @p2
+-- `speaksFor` p1@, then it should also be true that @'canFlowToP' p2
+-- l1 l2@.
+--
+-- As a partial order, 'SpeaksFor' should obeying the reflexivity,
+-- antisymmetry and transitivity laws.  However, if you do not wish to
+-- allow delegation of a particular privilege type, you can define
+-- @'speaksFor' _ _ = False@ (which violates the reflexivity law, but
+-- is reasonable when you don't want the partial order).
 class (Typeable p, Show p) => SpeaksFor p where
   -- | @speaksFor p1 p2@ returns 'True' iff @p1@ subsumes all the
   -- privileges of @p2@.  In other words, it is safe for 'delegate' to

@@ -17,9 +17,10 @@ conversely produce a high-integrity 'Labeled' value based on pure
 data.  This module exports functions for creating labeled values
 ('label'), using the values protected by 'Labeled' by unlabeling them
 ('unlabel'), and changing the value of a labeled value without
-inspection ('relabelLabeledP', 'taintLabeled').  A
-'Functor'-like class ('LabeledFunctor') on 'Labeled' is also defined
-in this module.
+inspection ('relabelLabeledP', 'taintLabeled').  
+
+Two 'Applicative' 'Functor'-like operations are also defined for
+'Labeled' data, namely 'lFmap' and 'lAp'.
 
 -}
 
@@ -46,24 +47,24 @@ import LIO.TCB
 -- Label values
 --
 
--- | Function to construct a 'Labeled' from a label and pure value.  If
--- the current label is @lcurrent@ and the current clearance is
--- @ccurrent@, then the label @l@ specified must satisfy @lcurrent
--- ``canFlowTo`` l && l ``canFlowTo`` ccurrent@. Otherwise an
--- exception is thrown (see 'guardAlloc').
+-- | Function to construct a 'Labeled' value from a label and a pure
+-- value.  If the current label is @lcurrent@ and the current
+-- clearance is @ccurrent@, then the label @l@ specified must satisfy
+-- @lcurrent ``canFlowTo`` l && l ``canFlowTo`` ccurrent@. Otherwise
+-- an exception is thrown (see 'guardAlloc').
 label :: Label l => l -> a -> LIO l (Labeled l a)
 label l a = do
   withContext "label" $ guardAlloc l
   return $ LabeledTCB l a
 
--- | Constructs a 'Labeled' using privilege to allow the `Labeled`'s
+-- | Constructs a 'Labeled' value using privilege to allow the value's
 -- label to be below the current label.  If the current label is
--- @lcurrent@ and the current clearance is @ccurrent@, then the privilege
--- @p@ and label @l@ specified must satisfy @canFlowTo p lcurrent l@ and
--- @l ``canFlowTo`` ccurrent@.  Note that privilege is not used to bypass
--- the clearance.  You must use 'setClearanceP' to raise the clearance
--- first if you wish to create an 'Labeled' at a higher label than the
--- current clearance.
+-- @lcurrent@ and the current clearance is @ccurrent@, then the
+-- privilege @p@ and label @l@ specified must satisfy @canFlowTo p
+-- lcurrent l@ and @l ``canFlowTo`` ccurrent@.  Note that privilege is
+-- not used to bypass the clearance.  You must use 'setClearanceP' to
+-- raise the clearance first if you wish to create a 'Labeled' value
+-- at a higher label than the current clearance.
 labelP :: PrivDesc l p => Priv p -> l -> a -> LIO l (Labeled l a)
 labelP p l a = do
   withContext "labelP" $ guardAllocP p l
@@ -73,24 +74,31 @@ labelP p l a = do
 -- Unlabel values
 --
 
--- | Within the 'LIO' monad, this function takes a 'Labeled' and returns
--- the underlying value.  Thus, in the 'LIO' monad one can say:
+-- | Within the 'LIO' monad, this function takes a 'Labeled' value and
+-- returns it as an unprotected value of the inner type.  For
+-- instance, in the 'LIO' monad one can say:
 --
--- > x <- unlabel (xv :: Labeled SomeLabelType Int)
+-- > x <- unlabel (lx :: Labeled SomeLabelType Int)
 --
--- And now it is possible to use the value of @x :: Int@, which is the
--- pure value of what was stored in @xv@.  Of course, @unlabel@ also
--- raises the current label.  If raising the label would exceed the
--- current clearance, then @unlabel@ throws 'ClearanceViolation'.
--- However, you can use 'labelOf' to check if 'unlabel' will succeed
--- without throwing an exception.
+-- And now it is possible to use the pure value @x :: Int@, which was
+-- previously protected by a label in @lx@.
+--
+-- @unlabel@ raises the current label as needed to reflect the fact
+-- that the thread's behavior can now depend on the contents of @lx@.
+-- If @unlabel@ing a value would require raising the current label
+-- above the current clearance, then @unlabel@ throws an exception of
+-- type 'LabelError'.  You can use 'labelOf' to check beforehand
+-- whether 'unlabel' will succeed.
 unlabel :: Label l => Labeled l a -> LIO l a
 unlabel (LabeledTCB l v) = withContext "unlabel" (taint l) >> return v
 
--- | Extracts the value of an 'Labeled' just like 'unlabel', but takes a
--- privilege argument to minimize the amount the current label must be
--- raised.  Function will throw 'ClearanceViolation' under the same
--- circumstances as 'unlabel'.
+-- | Extracts the contents of a 'Labeled' value just like 'unlabel',
+-- but takes a privilege argument to minimize the amount the current
+-- label must be raised.  The privilege is used to raise the current
+-- label less than might be required otherwise, but this function does
+-- not change the current clarance and still throws a 'LabelError' if
+-- the privileges supplied are insufficient to save the current label
+-- from needing to exceed the current clearance.
 unlabelP :: PrivDesc l p => Priv p -> Labeled l a -> LIO l a
 unlabelP p (LabeledTCB l v) = withContext "unlabelP" (taintP p l) >> return v
 
@@ -99,11 +107,11 @@ unlabelP p (LabeledTCB l v) = withContext "unlabelP" (taintP p l) >> return v
 --
 
 -- | Relabels a 'Labeled' value to the supplied label if the given
--- privilege privileges permits it.  An exception is thrown unless the
--- following two conditions hold:
+-- privileges permit it.  An exception is thrown unless the following
+-- two conditions hold:
 --
---   1. The new label must be between the current label and clearance
---      (modulo privileges), as enforced by 'guardAllocP'.
+--   1. The new label must (modulo privileges) be between the current
+--      label and current clearance, as enforced by 'guardAllocP'.
 --
 --   2. The old label must flow to the new label (again modulo
 --      privileges), as enforced by 'canFlowToP'.
@@ -116,12 +124,13 @@ relabelLabeledP p newl (LabeledTCB oldl v) = do
     labelErrorP "relabelLabeledP" p [oldl, newl]
   return $ LabeledTCB newl v
 
--- | Raises the label of a 'Labeled' to the 'upperBound' of it's current
--- label and the value supplied.  The label supplied must be bounded by
--- the current label and clearance, though the resulting label may not be
--- if the 'Labeled' is already above the current thread's clearance. If
--- the supplied label is not bounded then @taintLabeled@ will throw an
--- exception (see 'guardAlloc').
+-- | Raises the label of a 'Labeled' value to the 'lub' of it's
+-- current label and the value supplied.  The label supplied must be
+-- bounded by the current label and clearance, though the resulting
+-- label may not be if the 'Labeled' value's label is already above
+-- the current thread's clearance. If the supplied label is not
+-- bounded then @taintLabeled@ will throw an exception (see
+-- 'guardAlloc').
 taintLabeled :: Label l => l -> Labeled l a -> LIO l (Labeled l a)
 taintLabeled l (LabeledTCB lold v) = do
   let lnew = lold `lub` l
@@ -160,9 +169,13 @@ the above issues.
 
 -}
 
--- | Similar to 'fmap', apply function to the 'Labeled' value. The
--- label of the returned value is the least upper bound of the current
--- label and label of the supplied labeled value.
+-- | A function similar to 'fmap' for 'Labeled' values.  Applies a
+-- function to a 'Labeled' value without 'unlabel'ing the value or
+-- changing the thread's current label.  The label of the result is the
+-- 'lub' of the current label and that of the supplied 'Labeled'
+-- value.  Because of laziness, the actual computation on the value of
+-- type @a@ will be deferred until a thread with a higher label
+-- actually 'unlabel's the result.
 lFmap :: Label l => Labeled l a -> (a -> b) -> LIO l (Labeled l b)
 lFmap (LabeledTCB lold v) f = do
   l <- getLabel
@@ -173,9 +186,9 @@ lFmap (LabeledTCB lold v) f = do
 
 
 -- | Similar to 'ap', apply function (wrapped by 'Labeled') to the
--- labeld value. The label of the returned value is the least upper
--- bound of the current label, label of the supplied labeled value,
--- and label of the supplied function.
+-- labeld value. The label of the returned value is the 'lub' of the
+-- thread's current label, the label of the supplied function, and the
+-- label of the supplied value.
 lAp :: Label l => Labeled l (a -> b) -> Labeled l a -> LIO l (Labeled l b)
 lAp (LabeledTCB lf f) (LabeledTCB la a) = do
   l <- getLabel

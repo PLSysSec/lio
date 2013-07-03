@@ -269,9 +269,11 @@ guardAlloc newl = do
   unless (canFlowTo l newl && canFlowTo newl c) $
     labelError "guardAllocP" [newl]
 
--- | Like 'guardAlloc', but takes privilege argument to be more
+-- | Like 'guardAlloc', but takes a privilege argument to be more
 -- permissive.  Note: privileges are /only/ used when checking that
--- the current label can flow to the given label.
+-- the current label can flow to the target label; @guardAllocP@ still
+-- always throws an exception when the target label is higher than the
+-- current clearance.
 guardAllocP :: PrivDesc l p => Priv p -> l -> LIO l ()
 guardAllocP p newl = do
   LIOState { lioLabel = l, lioClearance = c } <- getLIOStateTCB

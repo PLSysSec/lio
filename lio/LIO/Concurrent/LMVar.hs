@@ -6,13 +6,13 @@
 This module implements labeled 'MVar's.  The interface is analogous to
 "Control.Concurrent.MVar", but the operations take place in the 'LIO'
 monad.  A labeled MVar, of type @'LMVar' l a@, is a mutable location
-that can be in of of two states; an 'LMVar' can be empty, or it can be
-full (with a value of type @a@). The location is protected by a label
-of type 'l'.  As in the case of @LIORef@s (see "LIO.LIORef"), this
-label is fixed and does not change according to the content placed
-into the location.  Different from @LIORef@s, taking and putting
-'LMVars' calls the write guard 'guardWrite' to enforce sound
-information flow control.
+that can be in one of two states; an 'LMVar' can be empty, or it can
+be full (with a value of type @a@). The location is protected by a
+label of type 'l'.  As in the case of @LIORef@s (see "LIO.LIORef"),
+this label is fixed and does not change according to the content
+placed into the location.  Unlike @LIORef@s, most operations use
+'guardWrite' or 'guardWriteP', reflecting the fact that there is no
+such thing as read-only or write-only operations on an 'LMVar'.
 
 'LMVar's can be used to build synchronization primitives and
 communication channels ('LMVar's themselves are single-place

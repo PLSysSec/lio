@@ -9,7 +9,7 @@ code.  By convention, the names of such symbols always end
 \"@...TCB@\" (short for \"trusted computing base\").  In many cases, a
 type is safe to export while its constructor is not.  Hence, only the
 constructor ends \"@TCB@\", while the type is re-exported to safe code
-(without constructors) to from "LIO.Core".
+(without constructors) from "LIO.Core".
 
 Security rests on the fact that untrusted code must be compiled with
 @-XSafe@.  Because this module is flagged unsafe, it cannot be
@@ -183,14 +183,14 @@ instance (Show l, Show a) => ShowTCB (Labeled l a) where
 -- instance, if you wish to associate a label with a pure value (as in
 -- "LIO.Labeled"), you may create a data type:
 -- 
--- > newtype LVal l a = LValTCB (l, a)
+-- > data LVal l a = LValTCB l a
 -- 
 -- Then, you may wish to allow untrusted code to read the label of any
 -- @LVal@s but not necessarily the actual value. To do so, simply
 -- provide an instance for @LabelOf@:
 -- 
 -- > instance LabelOf LVal where
--- >   labelOf (LValTCB lv) = fst lv
+-- >   labelOf (LValTCB l a) = l
 class LabelOf t where
   -- | Get the label of a labeled value or object.  Note the label
   -- must be the second to last type constructor argument.
@@ -231,6 +231,9 @@ data LabeledResult l a = LabeledResultTCB {
   , lresLabelTCB :: !l
     -- ^ Label of the tresult
   , lresBlockTCB :: !(IO.MVar ())
+    -- ^ This 'MVar' is empty until such point as 'lresStatusTCB' is
+    -- no longer 'LResEmpty'.  Hence, calling 'readMVar' on this field
+    -- allows one to wait for the thread to terminate.
   , lresStatusTCB :: !(IORef (LResStatus l a))
     -- ^ Result (when it is ready), or the label at which the thread
     -- terminated, if that label could not flow to 'lresLabelTCB'.
