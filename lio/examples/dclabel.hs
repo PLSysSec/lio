@@ -5,20 +5,20 @@ import LIO.TCB
 import LIO.DCLabel
 
 -- | Simple secrecy component example
-s :: Component
-s =  "Alice" \/ "Bob" /\  "Carla"
+s :: CNF
+s =  ("Alice" \/ "Bob") /\  "Carla"
 
 -- | Simple integrity component example
-i :: Component
+i :: CNF
 i = "Alice" /\ "Carla"
 
 -- | Simple label
 l1 :: DCLabel
-l1 = dcLabel s i
+l1 = s %% i
 
 -- | Simple label
 l2 :: DCLabel
-l2 = dcLabel (toComponent "Djon") (toComponent "Alice")
+l2 = "Djon" %% "Alice"
 
 -- | Creating privilege using constructor from TCB
 p :: DCPriv
@@ -36,12 +36,11 @@ main = do
 {-
 Output:
 ghci> main
-Label 1: < {[Carla] /\ [Alice \/ Bob]} , {[Alice] /\ [Carla]} >
-Label 2: < {[Djon]} , {[Alice]} >
-Join of labels: < {[Carla] /\ [Djon] /\ [Alice \/ Bob]} , {[Alice]} >
-Meet of labels: < {[Carla \/ Djon] /\ [Alice \/ Bob \/ Djon]} ,
-{[Alice] /\ [Carla]} >
-Privileges: DCPrivTCB {unDCPriv = {[Alice] /\ [Carla]}}
+Label 1: "Carla" /\ ("Alice" \/ "Bob") %% "Alice" /\ "Carla"
+Label 2: "Djon" %% "Alice"
+Join of labels: "Carla" /\ "Djon" /\ ("Alice" \/ "Bob") %% "Alice"
+Meet of labels: ("Carla" \/ "Djon") /\ ("Alice" \/ "Bob" \/ "Djon") %% "Alice" /\ "Carla"
+Privileges: PrivTCB ("Alice" /\ "Carla")
 Label 1 flows to Label 2? False
 Label 1 flows to Label 2 given privileges? True
 -}

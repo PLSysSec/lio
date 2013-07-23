@@ -1,21 +1,22 @@
 import LIO
+import LIO.Delegate
 import LIO.DCLabel
 
 import LIO.TCB
 
 
 -- | Add two numbers if the computation is invoked by Alice or Bob.
-addGate :: DCGate (Int -> Int -> Maybe Int)
+addGate :: Gate CNF (Int -> Int -> Maybe Int)
 addGate = gate $ \pd a b ->
-  if pd `elem` (map dcPrivDesc ["Alice", "Bob"])
+  if pd `elem` (map toCNF ["Alice", "Bob"])
     then Just $ a + b
     else Nothing
 
 
 alice, bob, clark :: DCPriv
-alice = PrivTCB . dcPrivDesc $ "Alice"
-bob   = PrivTCB . dcPrivDesc $ "Bob"
-clark = PrivTCB . dcPrivDesc $ "Clark"
+alice = PrivTCB . toCNF $ "Alice"
+bob   = PrivTCB . toCNF $ "Bob"
+clark = PrivTCB . toCNF $ "Clark"
 
 main = putStrLn . show $ 
   [ callGate addGate alice 1 2 -- Just 3

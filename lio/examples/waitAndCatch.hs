@@ -11,9 +11,9 @@ import Control.Exception (SomeException)
 
 
 l,m,h :: DCLabel
-l = dcLabel ("A" \/ "B")      dcTrue
-m = dcLabel (toComponent "M") dcTrue
-h = dcLabel ("A" /\ "B")      dcTrue
+l = "A" \/ "B" %% True
+m = "M" %% True
+h = "A" /\ "B" %% True
 
 main =  do
   lr <- evalDC $ do

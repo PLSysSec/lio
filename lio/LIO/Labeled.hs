@@ -110,18 +110,18 @@ unlabelP p (LabeledTCB l v) = withContext "unlabelP" (taintP p l) >> return v
 -- privileges permit it.  An exception is thrown unless the following
 -- two conditions hold:
 --
---   1. The new label must (modulo privileges) be between the current
---      label and current clearance, as enforced by 'guardAllocP'.
+--   1. The new label must be below the current clearance.
 --
---   2. The old label must flow to the new label (again modulo
---      privileges), as enforced by 'canFlowToP'.
+--   2. The old label and new label must be equal (modulo privileges),
+--   as enforced by 'canFlowToP'.
 --
 relabelLabeledP :: PrivDesc l p
                 => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
 relabelLabeledP p newl (LabeledTCB oldl v) = do
-  withContext "relabelLabeledP" $ guardAllocP p newl
-  unless (canFlowToP p oldl newl) $
-    labelErrorP "relabelLabeledP" p [oldl, newl]
+  clr <- getClearance
+  unless (canFlowTo newl clr     &&
+          canFlowToP p newl oldl &&
+          canFlowToP p oldl newl) $ labelErrorP "relabelLabeledP" p [oldl, newl]
   return $ LabeledTCB newl v
 
 -- | Raises the label of a 'Labeled' value to the 'lub' of it's

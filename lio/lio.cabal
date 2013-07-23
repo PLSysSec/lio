@@ -1,5 +1,5 @@
 Name:           lio
-Version:        0.11.1.0
+Version:        0.11.2.0
 Cabal-Version:  >= 1.8
 Build-type:     Simple
 License:        GPL
@@ -55,6 +55,7 @@ Description:
 Extra-source-files:
   examples/dclabel.hs
   examples/gate.hs
+  examples/sign.hs
   examples/waitAndCatch.hs
 
 
