@@ -147,7 +147,7 @@ allowing data labeled @l1@ to infulence data labeled @l2@ when @(l1
 The core privilege function is 'canFlowToP', which performs a more
 permissive can-flow-to check by exercising particular privileges (in
 the literature this relation is commonly written @&#8849;&#8346;@ for
-privileges @p@).  Most core 'LIO' function have variants ending @...P@
+privileges @p@).  Most core 'LIO' functions have variants ending @...P@
 that take a privilege argument to act in a more permissive way.
 
 By convention, all 'PrivDesc' instances should also be instances of
@@ -177,7 +177,7 @@ isPriv p = typeRepTyCon (typeOf p) == privcon
 -- `speaksFor` p1@, then it should also be true that @'canFlowToP' p2
 -- l1 l2@.
 --
--- As a partial order, 'SpeaksFor' should obeying the reflexivity,
+-- As a partial order, 'SpeaksFor' should obey the reflexivity,
 -- antisymmetry and transitivity laws.  However, if you do not wish to
 -- allow delegation of a particular privilege type, you can define
 -- @'speaksFor' _ _ = False@ (which violates the reflexivity law, but
