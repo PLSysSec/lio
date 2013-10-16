@@ -59,11 +59,14 @@ instance (Label l, Show t) => ShowTCB (LObj l t) where
 genTypesVals :: Int -> IO ()
 genTypesVals n0 =
   putStrLn $ "#define TypesVals(macro) \\\n" ++ concatMap doit [1..n0]
-  where doit n = "  macro(" ++ intercalate " -> " (as n) ++ ", \\\n" ++
-                 "        " ++ intercalate " " (as n) ++ ")" ++
+  where doit n = "  macro(" ++ icl " -> " (as n) ++ ", \\\n" ++
+                 "        " ++ icl " " (as n) ++ ")" ++
                  (if n < n0 then "; \\\n" else "\n")
         as n = map (\i -> "a" ++ show i) [1..n]
+        icl _ [] = []
+        icl s (h:t) = h ++ concatMap (\a -> s ++ a) t
 #endif
+
 
 #define TypesVals(macro) \
   macro(a1, \
