@@ -15,9 +15,9 @@ module LIO.TCB.MLObj (
   , newMLabelP, labelOfMlabel, readMLabelP, withMLabelP, modifyMLabelP
   , MLabelOf(..)
   -- * 'MLabel' modificaton policies
-  , MLabelPolicy(..), InternalML(..), ExternalML(..)
+  , MLabelPolicyDefault(..), MLabelPolicy(..), InternalML(..), ExternalML(..)
   -- * Objects with mutable labels
-  , MLObj(..), mlObjTCB, mblessTCB, mblessPTCB
+  , MLObj(..), mlObjTCB, mlPolicyObjTCB, mblessTCB, mblessPTCB
   ) where
 
 import safe Control.Concurrent
@@ -40,6 +40,9 @@ import LIO.TCB
 -- 'MLabel'.
 class MLabelPolicy policy l where
   mlabelPolicy :: (PrivDesc l p) => policy -> p -> l -> l -> LIO l ()
+
+class MLabelPolicyDefault policy where
+  mlabelPolicyDefault :: policy
 
 -- | 'InternalML' is for objects contained entirely within Haskell,
 -- such as a variable.  Raising the label can't cause data to leak.
@@ -142,7 +145,6 @@ newMLabelP p policy ll l = do
 class MLabelOf t where
   mLabelOf :: t policy l a -> MLabel policy l
 
-
 -- | IO Object with a mutable label.
 data MLObj policy l object = MLObjTCB !(MLabel policy l) !object
                              deriving (Typeable)
@@ -150,9 +152,15 @@ data MLObj policy l object = MLObjTCB !(MLabel policy l) !object
 instance MLabelOf MLObj where
   mLabelOf (MLObjTCB ml _) = ml
 
-mlObjTCB :: (Label l) => policy -> l -> l -> a -> LIO l (MLObj policy l a)
-mlObjTCB policy ll l a = do
+mlPolicyObjTCB :: policy -> l -> l -> a -> LIO l (MLObj policy l a)
+mlPolicyObjTCB policy ll l a = do
   ml <- newMLabelTCB policy ll l
+  return $ MLObjTCB ml a
+
+mlObjTCB :: (MLabelPolicyDefault policy) =>
+            l -> l -> a -> LIO l (MLObj policy l a)
+mlObjTCB ll l a = do
+  ml <- newMLabelTCB mlabelPolicyDefault ll l
   return $ MLObjTCB ml a
 
 #include "TypeVals.hs"
