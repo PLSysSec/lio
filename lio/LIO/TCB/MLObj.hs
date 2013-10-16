@@ -12,7 +12,6 @@
 module LIO.TCB.MLObj where
 
 import safe Control.Concurrent.MVar
-import safe Control.Exception
 import safe Control.Monad
 import safe Data.Typeable
 
@@ -88,9 +87,9 @@ useMLObjTCB :: (Label l) =>
             -> IO r             -- ^ Perform IO action
             -> MLObj l a
             -> LIO l r
-useMLObjTCB guard action (MLObjTCB mv _ _) =
+useMLObjTCB check action (MLObjTCB mv _ _) =
   LIOTCB $ \s -> withMVar mv $ \lold -> do
-    () <- case guard lold of LIOTCB io -> io s
+    () <- case check lold of LIOTCB io -> io s
     action
 
 withMLObjTCB :: (Label l) =>
@@ -98,8 +97,8 @@ withMLObjTCB :: (Label l) =>
             -> (a -> IO r)      -- ^ Perform IO action on object
             -> MLObj l a
             -> LIO l r
-withMLObjTCB guard action mlo@(MLObjTCB _ _ a) =
-  useMLObjTCB guard (action a) mlo
+withMLObjTCB check action mlo@(MLObjTCB _ _ a) =
+  useMLObjTCB check (action a) mlo
 
 
 #if 0
