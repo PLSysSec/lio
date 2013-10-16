@@ -63,7 +63,7 @@ instance MLabelPolicy ExternalML l where
 data MLabel policy l = MLabelTCB {
     mlLabelLabel :: !l
   , mlLabel :: !(IORef l)
-  , mlUsers :: !(MVar (Map Unique (l -> IO ())))
+  , mlUsers :: !(MVar (Map Unique (l -> IO Bool)))
   , mlPolicy :: !policy
   } deriving (Typeable)
 
@@ -95,17 +95,19 @@ withMLabelP p (MLabelTCB ll r mv _) action = LIOTCB $ \s -> do
   u <- newUnique
   let check lnew = do
         LIOState { lioLabel = lcur, lioClearance = ccur } <- readIORef s
-        unless (canFlowToP p lcur lnew && canFlowToP p lnew lcur) $
-          IO.throwTo tid LabelError {
-              lerrContext = []
-            , lerrFailure = "withMLabelP label changed"
-            , lerrCurLabel = lcur
-            , lerrCurClearance = ccur
-            , lerrPrivs = [GenericPrivDesc $ privDesc p]
-            , lerrLabels = [lnew]
-            }
+        if canFlowToP p lcur lnew && canFlowToP p lnew lcur
+          then return True
+          else do IO.throwTo tid LabelError {
+                      lerrContext = []
+                    , lerrFailure = "withMLabelP label changed"
+                    , lerrCurLabel = lcur
+                    , lerrCurClearance = ccur
+                    , lerrPrivs = [GenericPrivDesc $ privDesc p]
+                    , lerrLabels = [lnew]
+                    }
+                  return False
       enter = modifyMVar_ mv $ \m -> do
-        readIORef r >>= check
+        void $ readIORef r >>= check
         return $ Map.insert u check m
       exit = modifyMVar_ mv $ return . Map.delete u
   IO.bracket_ enter exit $ run action
@@ -116,12 +118,12 @@ modifyMLabelP p (MLabelTCB ll r mv pl) fn = withContext "modifyMLabelP" $ do
   guardWriteP p ll
   s <- LIOTCB return
   let run (LIOTCB io) = io s
-  ioTCB $ withMVar mv $ \m -> do
+  ioTCB $ modifyMVar_ mv $ \m -> do
     lold <- readIORef r
     lnew <- run $ fn lold
     () <- run $ mlabelPolicy pl p lold lnew
     writeIORef r lnew
-    sequence_ $ map ($ lnew) $ Map.elems m
+    Map.fromList `fmap` filterM (($ lnew) . snd) (Map.assocs m)
 
 newMLabelTCB :: policy -> l -> l -> LIO l (MLabel policy l)
 newMLabelTCB policy ll l = do
