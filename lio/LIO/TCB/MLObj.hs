@@ -169,7 +169,7 @@ instance LabelIO l (types -> IO r) (types -> LIO l r) where { \
 }
 TypesVals (WRAPIO)
 
-mblessTCB :: (LabelIO l io lio, Label l, PrivDesc l p) =>
+mblessTCB :: (LabelIO l io lio, Label l) =>
              String -> (a -> io) -> MLObj policy l a -> lio
 {-# INLINE mblessTCB #-}
 mblessTCB name io = mblessPTCB name io noPrivs
