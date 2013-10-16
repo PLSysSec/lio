@@ -11,8 +11,9 @@
 -- useful in some cases.
 module LIO.TCB.MLObj where
 
-import safe Control.Concurrent.MVar
+import safe Control.Concurrent.FairRWLock
 import safe Control.Monad
+import safe Data.IORef
 import safe Data.Typeable
 
 import safe LIO.Core
@@ -20,126 +21,97 @@ import safe LIO.Error
 import safe LIO.Label
 import LIO.TCB
 
-data MLObj label object = MLObjTCB
-                          !(MVar label) -- ^ Mutable label
-                          !label        -- ^ Object clearance
-                          !object       -- ^ IO object
-                          deriving (Typeable)
+-- | Class of policies for when it is permissible to update an
+-- 'MLabel'.
+class MLabelPolicy policy l where
+  mlabelPolicy :: (PrivDesc l p) => ml policy l -> p -> l -> l -> LIO l ()
 
-mlObjTCB :: (Label l) => l -> l -> a -> LIO l (MLObj l a)
-mlObjTCB l c a = do
-  unless (l `canFlowTo` c) $ labelError "mlObjTCB" [l, c]
-  mv <- ioTCB $ newMVar l
-  return $ MLObjTCB mv c a
+-- | 'InternalML' is for objects contained entirely within Haskell,
+-- such as a variable.  Raising the label can't cause data to leak.
+data InternalML = InternalML deriving Show
+instance MLabelPolicy InternalML l where
+  mlabelPolicy _ p lold lnew =
+    unless (canFlowToP p lold lnew) $ labelError "InternalML" [lold, lnew]
 
-clearanceOfMLObj :: MLObj l a -> l
-clearanceOfMLObj (MLObjTCB _ c _) = c
+-- | 'ExternalML' is for objects that communicate to the outside
+-- world, where extra privileges are required since once data gets
+-- out, so as to vouch for the fact that the other end of a socket
+-- won't arbitrarily downgrade data.
+data ExternalML = ExternalML deriving Show
+instance MLabelPolicy ExternalML l where
+  mlabelPolicy _ p lold lnew =
+    unless (canFlowToP p lold lnew && canFlowToP p lnew lold) $
+    labelError "ExternalML" [lold, lnew]
 
--- | Return the label of an 'MLObj' if the label can be read with the
--- supplied privileges.  Otherwise return 'Nothing'.
---
--- This function is kind of tricky.  Either you can read the label and
--- know what it is, or you shouldn't find out anything about it.  We
--- can't call 'taintP' to raise the current label, as this would leak
--- whether the object's label is above the calling thread's clearance
--- (which could potentially encode secret information).
-labelOfMLObjP :: (Label l, PrivDesc l p) =>
-                 Priv p -> MLObj l a -> LIO l (Maybe l)
-labelOfMLObjP p (MLObjTCB mv _ _) = do
-  curl <- getLabel
-  ioTCB $ withMVar mv $ \l ->
-    return $ if canFlowToP p l curl then Just l else Nothing
+-- | A mutable label.
+data MLabel policy l = MLabelTCB !l !RWLock !(IORef l)
 
+newMLabelTCB :: l -> l -> LIO l (MLabel policy l)
+newMLabelTCB ll l = do
+  lk <- ioTCB $ Control.Concurrent.FairRWLock.new
+  r <- ioTCB $ newIORef l
+  return $ MLabelTCB ll lk r
 
-modifyMLObjLabelTCB :: (Label l) => (l -> LIO l l) -> MLObj l a -> LIO l ()
-modifyMLObjLabelTCB modifyLabel (MLObjTCB mv c _) =
-  LIOTCB $ \s -> modifyMVar_ mv $ \lold -> do
-    let LIOTCB io = do
-          lnew <- modifyLabel lold
-          unless (lnew `canFlowTo` c) $
-            labelError "modifyMLObjLabelTCB" [lnew, c]
-          return lnew
-    io s
+newMLabel :: (PrivDesc l p) => Priv p -> l -> l -> LIO l (MLabel policy l)
+newMLabel p ll l = do
+  guardAllocP p ll
+  guardAllocP p l
+  newMLabelTCB ll l
 
--- | Suitable function argument to 'modifyMLObjLabelTCB' for external
--- resources such as sockets, where you have to have sufficient
--- privileges to move between the old and new labels, because the
--- other end of the socket might do that.
-externalMLObjPolicy :: (Label l, PrivDesc l p) => Priv p -> l -> l -> LIO l l
-externalMLObjPolicy p lnew lold = do
-  lcur <- getLabel
-  ccur <- getClearance
-  unless (canFlowToP p lcur lold && canFlowTo lnew ccur
-          && canFlowToP p lold lnew && canFlowToP p lnew lold) $
-    labelError "externalMLObjPolicy" [lold, lnew]
-  guardWriteP p lold
-  return lnew
+labelOfMlabel :: MLabel policy l -> l
+labelOfMlabel (MLabelTCB ll _ _) = ll
 
--- | Suitable function argument to 'modifyMLObjLabelTCB' for internal
--- resources such as mutable variables that cannot be directly
--- accessed outside of 'LIO'.
-internalMLObjPolicy :: (Label l, PrivDesc l p) => Priv p -> l -> l -> LIO l l
-internalMLObjPolicy p lnew lold = do
-  lcur <- getLabel
-  ccur <- getClearance
-  unless (canFlowToP p lcur lold && canFlowTo lnew ccur
-          && canFlowToP p lold lnew) $
-    labelError "internalMLObjPolicy" [lold, lnew]
-  guardWriteP p lold
-  return lnew
+readMLabelP :: (PrivDesc l p) => Priv p -> MLabel policy l -> LIO l l
+readMLabelP p (MLabelTCB ll _ r) = do
+  taintP p ll
+  ioTCB $ readIORef r
 
-useMLObjTCB :: (Label l) =>
-               (l -> LIO l ())  -- ^ Check label
-            -> IO r             -- ^ Perform IO action
-            -> MLObj l a
-            -> LIO l r
-useMLObjTCB check action (MLObjTCB mv _ _) =
-  LIOTCB $ \s -> withMVar mv $ \lold -> do
-    () <- case check lold of LIOTCB io -> io s
-    action
+withMLabelTCB :: (Label l) =>
+                 MLabel policy l -> (l -> LIO l a) -> LIO l a
+withMLabelTCB (MLabelTCB _ lk r) fn = do
+  s <- LIOTCB return
+  ioTCB $ withRead lk $ do
+    l <- readIORef r
+    case fn l of LIOTCB io -> io s
 
-withMLObjTCB :: (Label l) =>
-               (l -> LIO l ())  -- ^ Check label
-            -> (a -> IO r)      -- ^ Perform IO action on object
-            -> MLObj l a
-            -> LIO l r
-withMLObjTCB check action mlo@(MLObjTCB _ _ a) =
-  useMLObjTCB check (action a) mlo
+withMLabelP :: (Label l, PrivDesc l p) =>
+               Priv p -> MLabel policy l -> (l -> LIO l a) -> LIO l a
+withMLabelP p ml@(MLabelTCB ll _ _) fn = withContext "withMLabelP" $ do
+  taintP p ll
+  withMLabelTCB ml fn
+
+modifyMLabelP :: (Label l, PrivDesc l p, MLabelPolicy policy l) =>
+                 Priv p -> MLabel policy l -> (l -> LIO l l) -> LIO l ()
+modifyMLabelP p ml@(MLabelTCB ll lk r) fn =
+  withContext "modifyMLabelP" $ do
+    guardWriteP p ll
+    s <- LIOTCB return
+    let go = do
+          lold <- ioTCB $ readIORef r
+          lnew <- fn lold
+          mlabelPolicy ml p lold lnew
+          ioTCB $ writeIORef r lnew
+    ioTCB $ withWrite lk $ case go of LIOTCB io -> io s
 
 
-#if 0
-genTypesVals :: Int -> IO ()
-genTypesVals n0 =
-  putStrLn $ "#define TypesVals(macro) \\\n" ++ concatMap doit [1..n0]
-  where doit n = "  macro(" ++ icl " -> " (as n) ++ ", \\\n" ++
-                 "        " ++ icl " " (as n) ++ ")" ++
-                 (if n < n0 then "; \\\n" else "\n")
-        as n = map (\i -> "a" ++ show i) [1..n]
-        icl _ [] = []
-        icl s (h:t) = h ++ concatMap (\a -> s ++ a) t
-#endif
+-- | Class of objects with mutable labels.
+class MLabelOf t where
+  mLabelOf :: t policy l a -> MLabel policy l
 
-#define TypesVals(macro) \
-  macro(a1, \
-        a1); \
-  macro(a1 -> a2, \
-        a1 a2); \
-  macro(a1 -> a2 -> a3, \
-        a1 a2 a3); \
-  macro(a1 -> a2 -> a3 -> a4, \
-        a1 a2 a3 a4); \
-  macro(a1 -> a2 -> a3 -> a4 -> a5, \
-        a1 a2 a3 a4 a5); \
-  macro(a1 -> a2 -> a3 -> a4 -> a5 -> a6, \
-        a1 a2 a3 a4 a5 a6); \
-  macro(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7, \
-        a1 a2 a3 a4 a5 a6 a7); \
-  macro(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8, \
-        a1 a2 a3 a4 a5 a6 a7 a8); \
-  macro(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> a9, \
-        a1 a2 a3 a4 a5 a6 a7 a8 a9); \
-  macro(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> a9 -> a10, \
-        a1 a2 a3 a4 a5 a6 a7 a8 a9 a10)
+
+-- | IO Object with a mutable label.
+data MLObj policy l object = MLObjTCB !(MLabel policy l) !object
+                             deriving (Typeable)
+
+instance MLabelOf MLObj where
+  mLabelOf (MLObjTCB ml _) = ml
+
+mlObjTCB :: (Label l) => l -> l -> a -> LIO l (MLObj policy l a)
+mlObjTCB ll l a = do
+  ml <- newMLabelTCB ll l
+  return $ MLObjTCB ml a
+
+#include "TypeVals.hs"
 
 class WrapIO l io lio | l io -> lio where
   wrapIO :: (forall r. IO r -> LIO l r) -> io -> lio
@@ -153,12 +125,17 @@ instance WrapIO l (types -> IO r) (types -> LIO l r) where { \
 }
 TypesVals (WRAPIO)
 
-mblessTCB :: (WrapIO l io lio, Label l) =>
-             String -> (a -> io) -> MLObj l a -> lio
-mblessTCB name io mlo@(MLObjTCB _ _ a) = wrapIO check (io a)
-  where check ioa = withContext name $ useMLObjTCB guardWrite ioa mlo
+mblessTCB :: (WrapIO l io lio, Label l, PrivDesc l p) =>
+             String -> (a -> io) -> MLObj policy l a -> lio
+mblessTCB name io (MLObjTCB ml a) = wrapIO check (io a)
+  where check ioa = withContext name $ withMLabelP noPrivs ml $ \l -> do
+          guardWrite l
+          ioTCB ioa
 
 mblessPTCB :: (WrapIO l io lio, Label l, PrivDesc l p) =>
-             String -> (a -> io) -> Priv p -> MLObj l a -> lio
-mblessPTCB name io p mlo@(MLObjTCB _ _ a) = wrapIO check (io a)
-  where check ioa = withContext name $ useMLObjTCB (guardWriteP p) ioa mlo
+              String -> (a -> io) -> Priv p -> MLObj policy l a -> lio
+mblessPTCB name io p (MLObjTCB ml a) = wrapIO check (io a)
+  where check ioa = withContext name $ withMLabelP p ml $ \l -> do
+          guardWriteP p l
+          ioTCB ioa
+

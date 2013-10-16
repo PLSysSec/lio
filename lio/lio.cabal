@@ -53,11 +53,10 @@ Description:
 
 
 Extra-source-files:
+  LIO/TCB/TypeVals.hs
   examples/dclabel.hs
   examples/gate.hs
-  examples/sign.hs
   examples/waitAndCatch.hs
-
 
 Source-repository head
   Type:     git
@@ -69,8 +68,9 @@ Library
    ,containers
    ,bytestring
    ,hashable      >= 1.2
+   ,SafeSemaphore
 
-  GHC-options: -Wall -fno-warn-orphans
+  GHC-options: -Wall -fno-warn-orphans -ILIO/TCB
 
   Exposed-modules:
     -- * Top-level exporter
