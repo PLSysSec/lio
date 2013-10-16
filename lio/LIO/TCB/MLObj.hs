@@ -26,8 +26,9 @@ data MLObj label object = MLObjTCB
                           !object       -- ^ IO object
                           deriving (Typeable)
 
-mlObjTCB :: l -> l -> a -> LIO l (MLObj l a)
+mlObjTCB :: (Label l) => l -> l -> a -> LIO l (MLObj l a)
 mlObjTCB l c a = do
+  unless (l `canFlowTo` c) $ labelError "mlObjTCB" [l, c]
   mv <- ioTCB $ newMVar l
   return $ MLObjTCB mv c a
 
