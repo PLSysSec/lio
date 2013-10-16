@@ -6,10 +6,20 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE CPP #-}
 
--- | IO Objects with mutable labels.  These are tricky to use
--- correctly--remember that a label itself can leak data--but are also
--- useful in some cases.
-module LIO.TCB.MLObj where
+-- | IO Objects with mutable labels.  The mutable labels are
+-- implemented by type 'MLabel', and have a static label protecting
+-- them.
+module LIO.TCB.MLObj (
+  -- * Mutable labels
+    MLabel(..)
+  , newMLabel, labelOfMlabel, readMLabelP, modifyMLabelP
+  , newMLabelTCB, withMLabelTCB
+  , MLabelOf(..)
+  -- * 'MLabel' modificaton policies
+  , MLabelPolicy(..), InternalML(..), ExternalML(..)
+  -- * Objects with mutable labels
+  , MLObj(..), mlObjTCB, mblessTCB, mblessPTCB
+  ) where
 
 import safe Control.Concurrent.FairRWLock
 import safe Control.Monad
@@ -43,7 +53,8 @@ instance MLabelPolicy ExternalML l where
     unless (canFlowToP p lold lnew && canFlowToP p lnew lold) $
     labelError "ExternalML" [lold, lnew]
 
--- | A mutable label.
+-- | A mutable label.  Consists of a static label on the label, a lock
+-- for access to the mutable label, and a mutable label.
 data MLabel policy l = MLabelTCB !l !RWLock !(IORef l)
 
 newMLabelTCB :: l -> l -> LIO l (MLabel policy l)
