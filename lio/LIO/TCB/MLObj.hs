@@ -50,6 +50,8 @@ data InternalML = InternalML deriving (Show, Typeable)
 instance MLabelPolicy InternalML l where
   mlabelPolicy _ p lold lnew =
     unless (canFlowToP p lold lnew) $ labelError "InternalML" [lold, lnew]
+instance MLabelPolicyDefault InternalML where
+  mlabelPolicyDefault = InternalML
 
 -- | 'ExternalML' is for objects that communicate to the outside
 -- world, where extra privileges are required since once data gets
@@ -60,6 +62,8 @@ instance MLabelPolicy ExternalML l where
   mlabelPolicy _ p lold lnew =
     unless (canFlowToP p lold lnew && canFlowToP p lnew lold) $
     labelError "ExternalML" [lold, lnew]
+instance MLabelPolicyDefault ExternalML where
+  mlabelPolicyDefault = ExternalML
 
 -- | A mutable label.  Consists of a static label on the label, a lock
 -- for access to the mutable label, and a mutable label.
