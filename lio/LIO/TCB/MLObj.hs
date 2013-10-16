@@ -26,6 +26,11 @@ data MLObj label object = MLObjTCB
                           !object       -- ^ IO object
                           deriving (Typeable)
 
+mlObj :: l -> l -> a -> LIO l (MLObj l a)
+mlObj l c a = do
+  mv <- ioTCB $ newMVar l
+  return $ MLObjTCB mv c a
+
 clearanceOfMLObj :: MLObj l a -> l
 clearanceOfMLObj (MLObjTCB _ c _) = c
 
