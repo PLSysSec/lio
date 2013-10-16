@@ -68,7 +68,6 @@ Library
    ,containers
    ,bytestring
    ,hashable      >= 1.2
-   ,SafeSemaphore
 
   GHC-options: -Wall -fno-warn-orphans -ILIO/TCB
 

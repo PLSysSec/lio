@@ -12,8 +12,7 @@
 module LIO.TCB.MLObj (
   -- * Mutable labels
     MLabel(..)
-  , newMLabel, labelOfMlabel, readMLabelP, modifyMLabelP
-  , newMLabelTCB, withMLabelTCB
+  , newMLabelP, labelOfMlabel, readMLabelP, withMLabelP, modifyMLabelP
   , MLabelOf(..)
   -- * 'MLabel' modificaton policies
   , MLabelPolicy(..), InternalML(..), ExternalML(..)
@@ -21,24 +20,30 @@ module LIO.TCB.MLObj (
   , MLObj(..), mlObjTCB, mblessTCB, mblessPTCB
   ) where
 
-import safe Control.Concurrent.FairRWLock
+import safe Control.Concurrent
+import safe qualified Control.Exception as IO
 import safe Control.Monad
+import safe Data.Map (Map)
+import safe qualified Data.Map as Map
 import safe Data.IORef
 import safe Data.Typeable
+import safe Data.Unique
 
 import safe LIO.Core
 import safe LIO.Error
 import safe LIO.Label
 import LIO.TCB
 
+
+
 -- | Class of policies for when it is permissible to update an
 -- 'MLabel'.
 class MLabelPolicy policy l where
-  mlabelPolicy :: (PrivDesc l p) => ml policy l -> p -> l -> l -> LIO l ()
+  mlabelPolicy :: (PrivDesc l p) => policy -> p -> l -> l -> LIO l ()
 
 -- | 'InternalML' is for objects contained entirely within Haskell,
 -- such as a variable.  Raising the label can't cause data to leak.
-data InternalML = InternalML deriving Show
+data InternalML = InternalML deriving (Show, Typeable)
 instance MLabelPolicy InternalML l where
   mlabelPolicy _ p lold lnew =
     unless (canFlowToP p lold lnew) $ labelError "InternalML" [lold, lnew]
@@ -47,7 +52,7 @@ instance MLabelPolicy InternalML l where
 -- world, where extra privileges are required since once data gets
 -- out, so as to vouch for the fact that the other end of a socket
 -- won't arbitrarily downgrade data.
-data ExternalML = ExternalML deriving Show
+data ExternalML = ExternalML deriving (Show, Typeable)
 instance MLabelPolicy ExternalML l where
   mlabelPolicy _ p lold lnew =
     unless (canFlowToP p lold lnew && canFlowToP p lnew lold) $
@@ -55,55 +60,81 @@ instance MLabelPolicy ExternalML l where
 
 -- | A mutable label.  Consists of a static label on the label, a lock
 -- for access to the mutable label, and a mutable label.
-data MLabel policy l = MLabelTCB !l !RWLock !(IORef l)
-
-newMLabelTCB :: l -> l -> LIO l (MLabel policy l)
-newMLabelTCB ll l = do
-  lk <- ioTCB $ Control.Concurrent.FairRWLock.new
-  r <- ioTCB $ newIORef l
-  return $ MLabelTCB ll lk r
-
-newMLabel :: (PrivDesc l p) => Priv p -> l -> l -> LIO l (MLabel policy l)
-newMLabel p ll l = do
-  guardAllocP p ll
-  guardAllocP p l
-  newMLabelTCB ll l
+data MLabel policy l = MLabelTCB {
+    mlLabelLabel :: !l
+  , mlLabel :: !(IORef l)
+  , mlUsers :: !(MVar (Map Unique (l -> IO ())))
+  , mlPolicy :: !policy
+  } deriving (Typeable)
 
 labelOfMlabel :: MLabel policy l -> l
-labelOfMlabel (MLabelTCB ll _ _) = ll
+labelOfMlabel (MLabelTCB ll _ _ _) = ll
 
+-- | Retreive a snapshot of the value of a mutable label.  Of course,
+-- it may already have changed by the time you process it.
 readMLabelP :: (PrivDesc l p) => Priv p -> MLabel policy l -> LIO l l
-readMLabelP p (MLabelTCB ll _ r) = do
+readMLabelP p (MLabelTCB ll r _ _) = do
   taintP p ll
   ioTCB $ readIORef r
 
-withMLabelTCB :: (Label l) =>
-                 MLabel policy l -> (l -> LIO l a) -> LIO l a
-withMLabelTCB (MLabelTCB _ lk r) fn = do
-  s <- LIOTCB return
-  ioTCB $ withRead lk $ do
-    l <- readIORef r
-    case fn l of LIOTCB io -> io s
+-- | Run an action that should be protected by a mutable label.  An
+-- exception is thrown if the invoking thread cannot write to the
+-- mutable label given the privileges.  No attempt is made to adjust
+-- the current label, even if doing so would make the permissions
+-- acceptable.
+--
+-- Note that if the label changes after this function has been
+-- invoked, an exception may be raised in the middle of the protected
+-- action.
+withMLabelP :: (PrivDesc l p) =>
+               Priv p -> MLabel policy l -> LIO l a -> LIO l a
+withMLabelP p (MLabelTCB ll r mv _) action = LIOTCB $ \s -> do
+  let run (LIOTCB io) = io s
+  run $ taintP p ll
+  tid <- myThreadId
+  u <- newUnique
+  let check lnew = do
+        LIOState { lioLabel = lcur, lioClearance = ccur } <- readIORef s
+        unless (canFlowToP p lcur lnew && canFlowToP p lnew lcur) $
+          IO.throwTo tid LabelError {
+              lerrContext = []
+            , lerrFailure = "withMLabelP label changed"
+            , lerrCurLabel = lcur
+            , lerrCurClearance = ccur
+            , lerrPrivs = [GenericPrivDesc $ privDesc p]
+            , lerrLabels = [lnew]
+            }
+      enter = modifyMVar_ mv $ \m -> do
+        readIORef r >>= check
+        return $ Map.insert u check m
+      exit = modifyMVar_ mv $ return . Map.delete u
+  IO.bracket_ enter exit $ run action
 
-withMLabelP :: (Label l, PrivDesc l p) =>
-               Priv p -> MLabel policy l -> (l -> LIO l a) -> LIO l a
-withMLabelP p ml@(MLabelTCB ll _ _) fn = withContext "withMLabelP" $ do
-  taintP p ll
-  withMLabelTCB ml fn
-
-modifyMLabelP :: (Label l, PrivDesc l p, MLabelPolicy policy l) =>
+modifyMLabelP :: (PrivDesc l p, MLabelPolicy policy l) =>
                  Priv p -> MLabel policy l -> (l -> LIO l l) -> LIO l ()
-modifyMLabelP p ml@(MLabelTCB ll lk r) fn =
-  withContext "modifyMLabelP" $ do
-    guardWriteP p ll
-    s <- LIOTCB return
-    let go = do
-          lold <- ioTCB $ readIORef r
-          lnew <- fn lold
-          mlabelPolicy ml p lold lnew
-          ioTCB $ writeIORef r lnew
-    ioTCB $ withWrite lk $ case go of LIOTCB io -> io s
+modifyMLabelP p (MLabelTCB ll r mv pl) fn = withContext "modifyMLabelP" $ do
+  guardWriteP p ll
+  s <- LIOTCB return
+  let run (LIOTCB io) = io s
+  ioTCB $ withMVar mv $ \m -> do
+    lold <- readIORef r
+    lnew <- run $ fn lold
+    () <- run $ mlabelPolicy pl p lold lnew
+    writeIORef r lnew
+    sequence_ $ map ($ lnew) $ Map.elems m
 
+newMLabelTCB :: policy -> l -> l -> LIO l (MLabel policy l)
+newMLabelTCB policy ll l = do
+  r <- ioTCB $ newIORef l
+  mv <- ioTCB $ newMVar Map.empty
+  return $ MLabelTCB ll r mv policy
+
+newMLabelP :: (PrivDesc l p) =>
+              Priv p -> policy -> l -> l -> LIO l (MLabel policy l)
+newMLabelP p policy ll l = do
+  guardAllocP p ll
+  guardAllocP p l
+  newMLabelTCB policy ll l
 
 -- | Class of objects with mutable labels.
 class MLabelOf t where
@@ -117,36 +148,32 @@ data MLObj policy l object = MLObjTCB !(MLabel policy l) !object
 instance MLabelOf MLObj where
   mLabelOf (MLObjTCB ml _) = ml
 
-mlObjTCB :: (Label l) => l -> l -> a -> LIO l (MLObj policy l a)
-mlObjTCB ll l a = do
-  ml <- newMLabelTCB ll l
+mlObjTCB :: (Label l) => policy -> l -> l -> a -> LIO l (MLObj policy l a)
+mlObjTCB policy ll l a = do
+  ml <- newMLabelTCB policy ll l
   return $ MLObjTCB ml a
 
 #include "TypeVals.hs"
 
-class WrapIO l io lio | l io -> lio where
-  wrapIO :: (forall r. IO r -> LIO l r) -> io -> lio
-instance WrapIO l (IO r) (LIO l r) where
-  {-# INLINE wrapIO #-}
-  wrapIO f = f
+class LabelIO l io lio | l io -> lio where
+  labelIO :: (forall r. IO r -> LIO l r) -> io -> lio
+instance LabelIO l (IO r) (LIO l r) where
+  {-# INLINE labelIO #-}
+  labelIO f = f
 #define WRAPIO(types, vals) \
-instance WrapIO l (types -> IO r) (types -> LIO l r) where { \
-  {-# INLINE wrapIO #-}; \
-  wrapIO f io vals = f $ io vals; \
+instance LabelIO l (types -> IO r) (types -> LIO l r) where { \
+  {-# INLINE labelIO #-}; \
+  labelIO f io vals = f $ io vals; \
 }
 TypesVals (WRAPIO)
 
-mblessTCB :: (WrapIO l io lio, Label l, PrivDesc l p) =>
+mblessTCB :: (LabelIO l io lio, Label l, PrivDesc l p) =>
              String -> (a -> io) -> MLObj policy l a -> lio
-mblessTCB name io (MLObjTCB ml a) = wrapIO check (io a)
-  where check ioa = withContext name $ withMLabelP noPrivs ml $ \l -> do
-          guardWrite l
-          ioTCB ioa
+{-# INLINE mblessTCB #-}
+mblessTCB name io = mblessPTCB name io noPrivs
 
-mblessPTCB :: (WrapIO l io lio, Label l, PrivDesc l p) =>
+mblessPTCB :: (LabelIO l io lio, Label l, PrivDesc l p) =>
               String -> (a -> io) -> Priv p -> MLObj policy l a -> lio
-mblessPTCB name io p (MLObjTCB ml a) = wrapIO check (io a)
-  where check ioa = withContext name $ withMLabelP p ml $ \l -> do
-          guardWriteP p l
-          ioTCB ioa
-
+{-# INLINE mblessPTCB #-}
+mblessPTCB name io p (MLObjTCB ml a) = labelIO check (io a)
+  where check ioa = withContext name $ withMLabelP p ml $ ioTCB ioa
