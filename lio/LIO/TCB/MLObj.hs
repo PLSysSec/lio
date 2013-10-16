@@ -26,8 +26,8 @@ data MLObj label object = MLObjTCB
                           !object       -- ^ IO object
                           deriving (Typeable)
 
-mlObj :: l -> l -> a -> LIO l (MLObj l a)
-mlObj l c a = do
+mlObjTCB :: l -> l -> a -> LIO l (MLObj l a)
+mlObjTCB l c a = do
   mv <- ioTCB $ newMVar l
   return $ MLObjTCB mv c a
 
