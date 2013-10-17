@@ -69,7 +69,8 @@ Library
    ,bytestring
    ,hashable      >= 1.2
 
-  GHC-options: -Wall -fno-warn-orphans -ILIO/TCB
+  GHC-options: -Wall -fno-warn-orphans
+  include-dirs: LIO/TCB
 
   Exposed-modules:
     -- * Top-level exporter

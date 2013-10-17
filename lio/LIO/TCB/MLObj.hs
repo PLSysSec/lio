@@ -6,18 +6,28 @@
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE CPP #-}
 
--- | IO Objects with mutable labels.  The mutable labels are
--- implemented by type 'MLabel', and have a static label protecting
--- them.
+-- | Helper routines for exposing @IO@ operations on objects with
+-- mutable labels.  The mutable labels are implemented by type
+-- 'MLabel', and have an immutable meta-label (or \"label label\")
+-- protecting the mutable label.
+--
+-- It is reasonable to allow untrusted code to modify labels by
+-- exporting a type-restricted version of 'modifyMLObjLabelP'.  When
+-- this happens, asynchronous exceptions are sent to any other threads
+-- inside 'mblessTCB' or 'mblessPTCB' if the new label revokes their
+-- access.
 module LIO.TCB.MLObj (
+  -- * Objects with mutable labels
+    MLObj(..), mlObjTCB, mlPolicyObjTCB, modifyMLObjLabelP
+  , mblessTCB, mblessPTCB
   -- * Mutable labels
-    MLabel(..)
+  , MLabel(..)
   , newMLabelP, labelOfMlabel, readMLabelP, withMLabelP, modifyMLabelP
   , MLabelOf(..)
-  -- * 'MLabel' modificaton policies
+  -- * MLabel modificaton policies
   , MLabelPolicyDefault(..), MLabelPolicy(..), InternalML(..), ExternalML(..)
-  -- * Objects with mutable labels
-  , MLObj(..), mlObjTCB, mlPolicyObjTCB, mblessTCB, mblessPTCB
+  -- * Misc internals
+  , LabelIO(..)
   ) where
 
 import safe Control.Concurrent
@@ -41,6 +51,9 @@ import LIO.TCB
 class MLabelPolicy policy l where
   mlabelPolicy :: (PrivDesc l p) => policy -> p -> l -> l -> LIO l ()
 
+-- | Class for 'MLabelPolicy's that don't encode any interesting
+-- values.  This allows 'mlObjTCB' to create an 'MLObj' without
+-- requiring a policy argument.
 class MLabelPolicyDefault policy where
   mlabelPolicyDefault :: policy
 
@@ -65,15 +78,22 @@ instance MLabelPolicy ExternalML l where
 instance MLabelPolicyDefault ExternalML where
   mlabelPolicyDefault = ExternalML
 
--- | A mutable label.  Consists of a static label on the label, a lock
--- for access to the mutable label, and a mutable label.
+-- | A mutable label.  Consists of a static label on the label, a
+-- mutable label, and a list of threads currently accessing the label.
+-- This is intended to be used by privileged code implementing @IO@
+-- abstractions with mutable labels.  Routines for accessing such an
+-- @IO@ abstraction should perform tne @IO@ from within a call to
+-- 'withMLabelP', to ensure an exception is raised if another thread
+-- revokes access with 'modifyMLabelP'.
 data MLabel policy l = MLabelTCB {
     mlLabelLabel :: !l
   , mlLabel :: !(IORef l)
   , mlUsers :: !(MVar (Map Unique (l -> IO Bool)))
-  , mlPolicy :: !policy
+  , mlPolicy :: policy
   } deriving (Typeable)
 
+-- | Returns the immutable label that controls access to the mutable
+-- label value of an 'MLabel'.
 labelOfMlabel :: MLabel policy l -> l
 labelOfMlabel (MLabelTCB ll _ _ _) = ll
 
@@ -119,6 +139,9 @@ withMLabelP p (MLabelTCB ll r mv _) action = LIOTCB $ \s -> do
       exit = modifyMVar_ mv $ return . Map.delete u
   IO.bracket_ enter exit $ run action
 
+-- | Change the mutable label in an 'MLabel'.  Raises asynchronous
+-- exceptions in other threads that are inside 'withMLabelP' if the
+-- new label revokes their access.
 modifyMLabelP :: (PrivDesc l p, MLabelPolicy policy l) =>
                  Priv p -> MLabel policy l -> (l -> LIO l l) -> LIO l ()
 modifyMLabelP p (MLabelTCB ll r mv pl) fn = withContext "modifyMLabelP" $ do
@@ -132,12 +155,19 @@ modifyMLabelP p (MLabelTCB ll r mv pl) fn = withContext "modifyMLabelP" $ do
     writeIORef r lnew
     Map.fromList `fmap` filterM (($ lnew) . snd) (Map.assocs m)
 
+-- | @newMLabelP policy ll l@ creates an 'MLabel'.  @policy@ is a
+-- policy specifying under what conditions it is permissible to change
+-- the label.  @ll@ is the immutable label of the mutable label.  @l@
+-- is the initial value of this mutable label.
 newMLabelTCB :: policy -> l -> l -> LIO l (MLabel policy l)
 newMLabelTCB policy ll l = do
   r <- ioTCB $ newIORef l
   mv <- ioTCB $ newMVar Map.empty
   return $ MLabelTCB ll r mv policy
 
+-- | Create an 'MLabel', performing access control checks to ensure
+-- that the labels are within the range allowed given the current
+-- label and clearance, and the supplied privileges.
 newMLabelP :: (PrivDesc l p) =>
               Priv p -> policy -> l -> l -> LIO l (MLabel policy l)
 newMLabelP p policy ll l = do
@@ -149,26 +179,47 @@ newMLabelP p policy ll l = do
 class MLabelOf t where
   mLabelOf :: t policy l a -> MLabel policy l
 
--- | IO Object with a mutable label.
+-- | IO Object with a mutable label.  By contrast with
+-- 'LIO.TCB.LObj.LObj', the label on an 'MLObj' can change over time.
+-- If this happens, the internal 'MLabel' ensures that threads
+-- accessing the object receive an asynchronous exception.
 data MLObj policy l object = MLObjTCB !(MLabel policy l) !object
                              deriving (Typeable)
 
 instance MLabelOf MLObj where
   mLabelOf (MLObjTCB ml _) = ml
 
+-- | Like 'mlObjTCB', but create an 'MLObj' with a particular policy
+-- value.  Note that you don't need to use this for 'ExternalML' and
+-- 'InternalML', as these don't have anything interesting in the
+-- policy value.  This might be useful if, for instance, you wished to
+-- embed a particular clearance in a new type of policy value.
 mlPolicyObjTCB :: policy -> l -> l -> a -> LIO l (MLObj policy l a)
 mlPolicyObjTCB policy ll l a = do
   ml <- newMLabelTCB policy ll l
   return $ MLObjTCB ml a
 
+-- | @'mlObjTCB' ll l a@ Create an 'MLObj' wrapping some @IO@ object
+-- @a@.  Here @ll@ is the label on the label, which remains immutable
+-- over the lifetime of the 'MLObj'.  @l@ is the initial value of the
+-- mutable lable.
 mlObjTCB :: (MLabelPolicyDefault policy) =>
             l -> l -> a -> LIO l (MLObj policy l a)
 mlObjTCB ll l a = do
   ml <- newMLabelTCB mlabelPolicyDefault ll l
   return $ MLObjTCB ml a
 
+-- | Modify the 'MLabel' within an 'MLObj'.
+modifyMLObjLabelP :: (PrivDesc l p, MLabelPolicy policy l) =>
+                     Priv p -> MLObj policy l a -> (l -> LIO l l) -> LIO l ()
+modifyMLObjLabelP p (MLObjTCB ml _) = modifyMLabelP p ml
+
 #include "TypeVals.hs"
 
+-- | Takes a @'liftIO'@-like function and an @IO@ function of an
+-- arbitrary number of arguments (up to 10).  Applies the arguments to
+-- the @IO@ function, then passed the result to its argument funciton
+-- to transform it into an @LIO@ function.
 class LabelIO l io lio | l io -> lio where
   labelIO :: (forall r. IO r -> LIO l r) -> io -> lio
 instance LabelIO l (IO r) (LIO l r) where
@@ -181,11 +232,17 @@ instance LabelIO l (types -> IO r) (types -> LIO l r) where { \
 }
 TypesVals (WRAPIO)
 
+-- | The 'MLObj' equivalent of 'blessTCB' in
+-- "LIO.TCB.LObj#v:blessTCB".  Use this for conveniently providing
+-- @LIO@ versions of standard @IO@ functions.
 mblessTCB :: (LabelIO l io lio, Label l) =>
              String -> (a -> io) -> MLObj policy l a -> lio
 {-# INLINE mblessTCB #-}
 mblessTCB name io = mblessPTCB name io noPrivs
 
+-- | The 'MLObj' equivalent of 'blessPTCB' in
+-- "LIO.TCB.LObj#v:blessPTCB".  Use this for conveniently providing
+-- @LIO@ versions of standard @IO@ functions.
 mblessPTCB :: (LabelIO l io lio, Label l, PrivDesc l p) =>
               String -> (a -> io) -> Priv p -> MLObj policy l a -> lio
 {-# INLINE mblessPTCB #-}
