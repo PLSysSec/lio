@@ -20,13 +20,14 @@ module LIO.TCB.MLObj (
   -- * Objects with mutable labels
     MLObj(..), mlObjTCB, mlPolicyObjTCB, modifyMLObjLabelP
   , mblessTCB, mblessPTCB
-  -- * Mutable labels
+  -- * Internal details
+  -- ** Mutable labels
   , MLabel(..)
   , newMLabelP, labelOfMlabel, readMLabelP, withMLabelP, modifyMLabelP
   , MLabelOf(..)
-  -- * MLabel modificaton policies
+  -- ** MLabel modificaton policies
   , MLabelPolicyDefault(..), MLabelPolicy(..), InternalML(..), ExternalML(..)
-  -- * Misc internals
+  -- ** Helper class for variadic lifting
   , LabelIO(..)
   ) where
 
@@ -192,14 +193,15 @@ instance MLabelOf MLObj where
 -- | Like 'mlObjTCB', but create an 'MLObj' with a particular policy
 -- value.  Note that you don't need to use this for 'ExternalML' and
 -- 'InternalML', as these don't have anything interesting in the
--- policy value.  This might be useful if, for instance, you wished to
--- embed a particular clearance in a new type of policy value.
+-- policy value, only the type matters.  This might be useful if, for
+-- instance, you wished to design a new policy type that embeds a
+-- clearance.
 mlPolicyObjTCB :: policy -> l -> l -> a -> LIO l (MLObj policy l a)
 mlPolicyObjTCB policy ll l a = do
   ml <- newMLabelTCB policy ll l
   return $ MLObjTCB ml a
 
--- | @'mlObjTCB' ll l a@ Create an 'MLObj' wrapping some @IO@ object
+-- | @'mlObjTCB' ll l a@ creates an 'MLObj' wrapping some @IO@ object
 -- @a@.  Here @ll@ is the label on the label, which remains immutable
 -- over the lifetime of the 'MLObj'.  @l@ is the initial value of the
 -- mutable lable.
