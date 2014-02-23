@@ -205,8 +205,12 @@ swapLMVarP = blessPTCB "swapLMVarP" swapMVar
 -- clearance -- the current label is raised to the join of the 'LMVar'
 -- label and the current label.
 isEmptyLMVar :: Label l => LMVar l a -> LIO l Bool
-isEmptyLMVar = blessTCB "isEmptyLMVar" isEmptyMVar
+isEmptyLMVar (LObjTCB l m) =
+  guardIOTCB (withContext "isEmptyLMVar" $ taint l) $
+    isEmptyMVar m
 
 -- | Same as 'isEmptyLMVar', but uses privileges when raising current label.
 isEmptyLMVarP :: PrivDesc l p => Priv p -> LMVar l a -> LIO l Bool
-isEmptyLMVarP = blessPTCB "isEmptyLMVarP" isEmptyMVar
+isEmptyLMVarP p (LObjTCB l m) =
+  guardIOTCB (withContext "isEmptyLMVarP" $ taintP p l) $
+    isEmptyMVar m
