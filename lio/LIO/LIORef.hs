@@ -55,17 +55,15 @@ newLIORef :: Label l
           => l                  -- ^ Label of reference
           -> a                  -- ^ Initial value
           -> LIO l (LIORef l a) -- ^ Mutable reference
-newLIORef l a = do
-  withContext "newLIORef" $ guardAlloc l
-  ioTCB (LObjTCB l `fmap` newIORef a)
+newLIORef l a = guardIOTCB (withContext "newLIORef" $ guardAlloc l) $
+  LObjTCB l `fmap` newIORef a
 
 -- | Same as 'newLIORef' except @newLIORefP@ takes privileges which
 -- make the comparison to the current label more permissive, as
 -- enforced by 'guardAllocP'.
 newLIORefP :: PrivDesc l p => Priv p -> l -> a -> LIO l (LIORef l a)
-newLIORefP p l a = do
-  withContext "newLIORefP" $ guardAllocP p l
-  ioTCB (LObjTCB l `fmap` newIORef a)
+newLIORefP p l a = guardIOTCB (withContext "newLIORefP" $ guardAllocP p l) $
+  LObjTCB l `fmap` newIORef a
 
 --
 -- Read 'LIORef's
@@ -78,17 +76,15 @@ newLIORefP p l a = do
 -- (introduced by the 'taint' guard) use 'labelOf' to check that a
 -- read will succeed.
 readLIORef :: Label l => LIORef l a -> LIO l a
-readLIORef (LObjTCB l r) = do
-  withContext "readLIORef" $ taint l
-  ioTCB (readIORef r)
+readLIORef (LObjTCB l r) =
+  guardIOTCB (withContext "readLIORef" $ taint l) $ readIORef r
 
 -- | Same as 'readLIORef', except @readLIORefP@ takes a privilege
 -- object which is used when the current label is raised (using
 -- 'taintP' instead of 'taint').
 readLIORefP :: PrivDesc l p => Priv p -> LIORef l a -> LIO l a
-readLIORefP p (LObjTCB l r) = do
-  withContext "readLIORefP" $ taintP p l
-  ioTCB (readIORef r)
+readLIORefP p (LObjTCB l r) =
+  guardIOTCB (withContext "readLIORefP" $ taintP p l) $ readIORef r
 
 --
 -- Write 'LIORef's
@@ -99,17 +95,16 @@ readLIORefP p (LObjTCB l r) = do
 -- label of the reference can-flow-to the current clearance. Otherwise,
 -- an exception is raised by the underlying 'guardAlloc' guard.
 writeLIORef :: Label l => LIORef l a -> a -> LIO l ()
-writeLIORef (LObjTCB l r) a = do
-  withContext "writeLIORef" $ guardAlloc l
-  ioTCB (writeIORef r a)
+writeLIORef (LObjTCB l r) a =
+  guardIOTCB (withContext "writeLIORef" $ guardAlloc l) $ writeIORef r a
 
 -- | Same as 'writeLIORef' except @writeLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of the
 -- reference to the current label.
 writeLIORefP :: PrivDesc l p => Priv p -> LIORef l a -> a -> LIO l ()
-writeLIORefP p (LObjTCB l r) a = do
-  withContext "writeLIORefP" $ guardAllocP p l
-  ioTCB (writeIORef r a)
+writeLIORefP p (LObjTCB l r) a =
+  guardIOTCB (withContext "writeLIORefP" $ guardAllocP p l) $
+    writeIORef r a
 
 --
 -- Modify 'LIORef's
@@ -127,17 +122,17 @@ modifyLIORef :: Label l
              =>  LIORef l a            -- ^ Labeled reference
              -> (a -> a)               -- ^ Modifier
              -> LIO l ()
-modifyLIORef (LObjTCB l r) f = do
-  withContext "modifyLIORef" $ guardAlloc l
-  ioTCB (modifyIORef r f)
+modifyLIORef (LObjTCB l r) f =
+  guardIOTCB (withContext "modifyLIORef" $ guardAlloc l)
+    modifyIORef r f
 
 -- | Like 'modifyLIORef', but takes a privilege argument and guards
 -- execution with 'guardAllocP' instead of 'guardAlloc'.
 modifyLIORefP :: PrivDesc l p
               =>  Priv p -> LIORef l a -> (a -> a) -> LIO l ()
-modifyLIORefP p (LObjTCB l r) f = do
-  withContext "modifyLIORefP" $ guardAllocP p l
-  ioTCB (modifyIORef r f)
+modifyLIORefP p (LObjTCB l r) f =
+  guardIOTCB (withContext "modifyLIORefP" $ guardAllocP p l) $
+    modifyIORef r f
 
 -- | Atomically modifies the contents of an 'LIORef'. It is required
 -- that the label of the reference be above the current label, but

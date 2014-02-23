@@ -63,17 +63,16 @@ type LMVar l a = LObj l (MVar a)
 newEmptyLMVar :: Label l
               => l                -- ^ Label of @LMVar@
               -> LIO l (LMVar l a)    -- ^ New mutable location
-newEmptyLMVar l = do
-  withContext "newEmptyLMVar" $ guardAlloc l
-  ioTCB (LObjTCB l `fmap` newEmptyMVar)
+newEmptyLMVar l = guardIOTCB (withContext "newEmptyLMVar" $ guardAlloc l) $
+  LObjTCB l `fmap` newEmptyMVar
 
 -- | Same as 'newEmptyLMVar' except it takes a set of privileges which
 -- are accounted for in comparing the label of the MVar to the current
 -- label and clearance.
 newEmptyLMVarP :: PrivDesc l p => Priv p -> l -> LIO l (LMVar l a)
-newEmptyLMVarP p l = do
-  withContext "newEmptyLMVarP" $ guardAllocP p l
-  ioTCB $ LObjTCB l `fmap` newEmptyMVar
+newEmptyLMVarP p l =
+  guardIOTCB (withContext "newEmptyLMVarP" $ guardAllocP p l) $
+    LObjTCB l `fmap` newEmptyMVar
 
 -- | Create a new labeled MVar, in an filled state with the supplied
 -- value. Note that the supplied label must be above the current label
@@ -82,17 +81,15 @@ newLMVar :: Label l
          => l                       -- ^ Label of @LMVar@
          -> a                       -- ^ Initial value of @LMVar@
          -> LIO l (LMVar l a)       -- ^ New mutable location
-newLMVar l a = do
-  withContext "newLMVar" $ guardAlloc l
-  ioTCB (LObjTCB l `fmap` newMVar a)
+newLMVar l a = guardIOTCB (withContext "newLMVar" $ guardAlloc l) $
+  LObjTCB l `fmap` newMVar a
 
 -- | Same as 'newLMVar' except it takes a set of privileges which are
 -- accounted for in comparing the label of the MVar to the current label
 -- and clearance.
 newLMVarP :: PrivDesc l p => Priv p -> l -> a -> LIO l (LMVar l a)
-newLMVarP p l a = do
-  withContext "newLMVarP" $ guardAllocP p l
-  ioTCB $ LObjTCB l `fmap` newMVar a
+newLMVarP p l a = guardIOTCB (withContext "newLMVarP" $ guardAllocP p l) $
+  LObjTCB l `fmap` newMVar a
 
 --
 -- Take 'LMVar'
