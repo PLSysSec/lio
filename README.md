@@ -60,6 +60,8 @@ This repository is divided into three packages:
 
 - `lio`: The main LIO library
 
+- `lio-fs`: Simple IFC filesystem library
+
 - `quickcheck-lio-instances`: QuickCheck2 instances for LIO
 
 - `lio-eval`: Tests and benchmarks. This is a package solely because it
