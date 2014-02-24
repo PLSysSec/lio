@@ -1,32 +1,24 @@
 {-# LANGUAGE Safe #-}
 {- |
 
-This module exposes some wrapper functions for executing 'LIO' actions
-using 'DCLabel's with simple ("LIO.FS.Simple") filesystem support.
+This module exposes a function for initializing a labeled filestore
+with the default label 'dcPublic'.
 
 -}
 
 module LIO.FS.Simple.DCLabel (
-    evalDCWithRoot 
-  , tryDCWithRoot 
+    initializeDCFS
+  , withDCFS
   ) where
 
-import safe LIO
+import safe Control.Monad (void)
 import safe LIO.DCLabel
-import safe LIO.FS.Simple
+import safe LIO.FS.Simple (initializeLIOFS, withLIOFS)
 
--- | Like 'evalDC', execute a 'DC' action, but with filesystem
--- support. The filesystme root is supplied, while the root label is
--- 'dcPublic'. See "LIO.FS.Simple" for a description of the simple
--- filesystem API.
-evalDCWithRoot :: FilePath -- ^ Filesystem root
-               -> DC a     -- ^ LIO action
-               -> IO a
-evalDCWithRoot root dc = evalLIOWithRoot root (Just dcPublic) dc dcDefaultState
+-- | Initialize root filesystem at supplied path with public label.
+initializeDCFS :: FilePath -> IO ()
+initializeDCFS path = void $ initializeLIOFS path (Just dcPublic)
 
--- | Similar to 'evalDCWithRoot', but catches the end exception. See
--- 'tryDC'.
-tryDCWithRoot :: FilePath -- ^ Filesystem root
-              -> DC a     -- ^ LIO action
-              -> IO (Either SomeException a, LIOState DCLabel)
-tryDCWithRoot root dc = tryLIOWithRoot root (Just dcPublic) dc dcDefaultState
+-- | Top-level IO wrapper for using filesystem.
+withDCFS :: FilePath -> IO a -> IO a
+withDCFS path = withLIOFS path (Just dcPublic)

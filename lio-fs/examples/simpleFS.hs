@@ -3,8 +3,8 @@
 import safe Control.Monad
 import safe Prelude hiding (writeFile, readFile)
 import safe LIO
-import safe LIO.FS.Simple
 import safe LIO.DCLabel
+import safe LIO.FS.Simple
 import safe LIO.FS.Simple.DCLabel
 import safe qualified Data.ByteString.Char8 as S8
 import LIO.TCB
@@ -14,7 +14,7 @@ import LIO.TCB
 alice = PrivTCB  $ toCNF "alice"
 bob   = PrivTCB  $ toCNF "bob"
 
-main = tryDCWithRoot "/tmp/fslio/root" $ do
+main = withDCFS "/tmp/fslio/root" $ tryDC $ do
   putStrLnTCB "ALICE:"
   aliceCode
   putStrLnTCB "\nBOB:"

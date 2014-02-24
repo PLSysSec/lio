@@ -6,7 +6,7 @@
 
 This module exports the basic interface for creating and using the
 labeled file system, implemented as a file store. Trusted code should
-use 'initFSTCB' to set the root of the labeled file system. Moreover,
+use 'initializeLIOFS' to set the root of the labeled file system. Moreover,
 trusted code should implement all the IO functions in terms of
 'createFileTCB', 'createDirectoryTCB', and 'getPathLabelTCB' and
 'setPathLabelTCB'.
@@ -21,7 +21,7 @@ filesystem extended attributes are large, but limited).
 -}
 module LIO.FS.TCB (
   -- * Initializing labeled filesystem
-    initFSTCB, mkFSTCB, setFSTCB
+    initializeLIOFS, withLIOFS 
   , getRootDirTCB
   -- * Handling path labels
   , setPathLabelTCB
@@ -35,7 +35,6 @@ module LIO.FS.TCB (
 
 import safe Data.Maybe (listToMaybe)
 import safe Data.Typeable
-import safe Data.IORef
 import safe qualified Data.ByteString.Char8 as S8
 import safe qualified Data.ByteString as S
 import safe qualified Data.ByteString.Lazy.Char8 as L8
@@ -43,6 +42,7 @@ import safe qualified Data.Digest.Pure.SHA as SHA
 
 import safe Control.Monad
 import safe Control.Exception
+import safe Control.Concurrent.MVar
 import safe qualified Control.Exception as E
                  
 import safe System.FilePath
@@ -96,23 +96,20 @@ magicContent = S.pack  [ 0x7f, 0x45, 0x4c, 0x46, 0x01
                        , 0x00, 0x00, 0x00, 0x00, 0x00
                        , 0x00, 0xde, 0xad, 0xbe, 0xef]
 
--- | Root of labeled filesystem.
-rootDir :: IORef FilePath
-{-# NOINLINE rootDir #-}
-rootDir = unsafePerformIO $ newIORef (error "LIO Filesystem not initialized.")
-
 -- | Get the root directory.
 getRootDirTCB :: Label l => LIO l FilePath
-getRootDirTCB = withContext "getRootDirTCB" $ ioTCB $ readIORef rootDir
+getRootDirTCB = withContext "getRootDirTCB" $ do ioTCB $ getRoot
 
--- | Create a the file store (i.e., labeled file system) with a given
+-- | Create a file store (i.e., labeled file system) with a given
 -- label and root file path.  The path must be an absolute path,
--- otherwise @initFSTCB@ throws 'FSRootInvalid'.
+-- otherwise @initializeLIOFS@ throws 'FSRootInvalid'.
+-- This function simply returns the label of the filesystem for
+-- conveniance.
 mkFSTCB :: Label l
         => FilePath      -- ^ Path to the filesystem root
         -> l             -- ^ Label of root
-        -> LIO l ()
-mkFSTCB path l = withContext "mkFSTCB" $ ioTCB $ do
+        -> IO l
+mkFSTCB path l = do
   unless (isAbsolute path) $ throwIO FSRootInvalid
   -- Create root of filesystem:
   createDirectory path
@@ -120,15 +117,15 @@ mkFSTCB path l = withContext "mkFSTCB" $ ioTCB $ do
   setPathLabelTCB path l
   -- Create magic attribute:
   lsetxattr path magicAttr magicContent CreateMode
-  -- Set the root filesystem:
-  writeIORef rootDir path
+  -- Return label:
+  return l
 
--- | Set the given file path as the root of the labeled filesystem.  This
--- function throws a 'FSLabelCorrupt' if the directory does not contain a
--- valid label, and  a 'FSRootCorrupt' if the 'magicAttr' attribute is
--- missing.
-setFSTCB :: Label l => FilePath -> LIO l l
-setFSTCB path = withContext "setFSTCB" $ ioTCB $ do
+-- | Check that the supplied pathis a vaild labeled filesystem root.
+-- This function throws a 'FSLabelCorrupt' if the directory does not
+-- contain a valid label, and  a 'FSRootCorrupt' if the 'magicAttr'
+-- attribute is missing.
+checkFSTCB :: Label l => FilePath -> IO l
+checkFSTCB path = do
   -- Path must be absolute
   unless (isAbsolute path) $ throwIO FSRootInvalid
   -- Path must be a directory
@@ -136,10 +133,7 @@ setFSTCB path = withContext "setFSTCB" $ ioTCB $ do
   -- Check magic attribute:
   checkMagic
   -- Get the label of the root
-  l <- getPathLabelTCB path
-  -- Set the root directory
-  writeIORef rootDir path
-  return l
+  getPathLabelTCB path
    where checkMagic = do
            magicOK <-(==magicContent) `liftM` 
                       (throwOnFail $ lgetxattr path magicAttr)
@@ -150,23 +144,53 @@ setFSTCB path = withContext "setFSTCB" $ ioTCB $ do
          doFail = throwIO FSRootCorrupt
          throwOnFail act = act `E.catch` (\(_:: SomeException) -> doFail)
 
--- | Initialize filesystem at the given path. The supplied path must be
--- absolute, otherwise @initFSTCB@ throw 'FSRootInvalid'.  If the FS has
--- already been created then @initFSTCB@ solely verifies that the root
--- directory is not corrupt (see 'setFSTCB') and returns the label of
--- the root. Otherwise, a new FS is created with the supplied label
--- (see 'mkFSTCB').
+-- | TVar containing per process filestore root.
+rootDir :: MVar (Maybe FilePath)
+{-# NOINLINE rootDir #-}
+rootDir = unsafePerformIO $ newMVar Nothing
+
+-- | Get the filestore root.
+getRoot :: IO FilePath
+getRoot = do
+  mfp <- readMVar rootDir
+  maybe (throwIO FSRootNoExist) return mfp
+ 
+-- | Set the filestore root, throw 'FSRootExists' if already set.
+setRoot :: FilePath -> IO ()
+setRoot fp = do
+  act <- modifyMVarMasked rootDir $ \mfp ->
+    case mfp of
+      Just _  -> return $ (mfp, throwIO FSRootExists)
+      Nothing -> return $ (Just fp, return ())
+  act
+
+-- | Initialize filesystem at the given path. The supplied path must
+-- be absolute, otherwise @initializeLIOFS@ throw 'FSRootInvalid'.  If
+-- the FS has already been created then @initializeLIOFS@ solely
+-- verifies that the root directory is not corrupt (see 'checkFSTCB')
+-- and returns the label of the root. Otherwise, a new FS is created
+-- with the supplied label (see 'mkFSTCB').
 --
--- This function performs several checks that 'setFSTCB' and 'mkFSTCB' perform,
--- so when considering performance they should be called directly.
-initFSTCB :: Label l => FilePath -> Maybe l -> LIO l l
-initFSTCB path ml = withContext "initFSTCB" $ do
- unless (isAbsolute path) $ ioTCB $ throwIO FSRootInvalid
- exists <- ioTCB $ doesDirectoryExist path
- (if exists then setFSTCB else mkFSTCB') path
-  where mkFSTCB' f = maybe (throwLIO FSRootNeedLabel) 
-                           (\l -> mkFSTCB f l >> return l) ml
-                    
+-- NOTE: This function should only be called once per process.
+initializeLIOFS :: Label l => FilePath -> Maybe l -> IO l
+initializeLIOFS path ml = do
+ unless (isAbsolute path) $ throwIO FSRootInvalid
+ exists <- doesDirectoryExist path
+ l <- (if exists then checkFSTCB else mkFSTCB') path
+ setRoot path
+ -- If setRoot fails, we leave the filesystem dirty
+ return l
+  where mkFSTCB' f = maybe (throwIO FSRootNeedLabel) (mkFSTCB f) ml
+
+-- | Top-level wrapper thatexecutes 'initializeLIOFS' followed by the
+-- supplied action.
+--
+-- NOTE: This function should only be called once per process.
+withLIOFS :: Label l => FilePath -> Maybe l -> IO a -> IO a
+withLIOFS path ml act = do
+  void $ initializeLIOFS path ml
+  act
+  
 
 --
 -- Objects

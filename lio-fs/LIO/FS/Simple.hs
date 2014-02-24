@@ -18,15 +18,16 @@ The actual storage of labeled files is handled by the "LIO.FS.TCB"
 module.  The filesystem is implemented as a file store in which labels
 are associated with files and directories using, extended attributes.
 
-/IMPORTANT:/ To use the labeled filesystem you must use
-'evalLIOWithRoot' (or other initializers from "LIO.FS.TCB"), otherwise
-any actions built using the combinators of this module will crash.
+/IMPORTANT:/ To use the labeled filesystem you must use 'withLIOFS'
+(or other initializers), otherwise any actions built using the
+combinators of this module will crash.
 
 An example use case shown below: 
 
+>  import LIO.FS.Simple
 >  import LIO.FS.Simple.DCLabel
 >
->  main = evalDCWithRoot "/tmp/lioFS" $ do
+>  main = withDCFS "/tmp/lioFS" $ evalDC $ do
 >    createDirectoryP p lsecrets "secrets"
 >    writeFileP p ("secrets" </> "alice" ) "I like Bob!"
 >      where p = ...
@@ -47,8 +48,8 @@ links.
 
 -}
 module LIO.FS.Simple (
-  -- * Filesystem support for LIO
-    evalLIOWithRoot, tryLIOWithRoot
+  -- * Initializing labeled filesystem
+    initializeLIOFS, withLIOFS 
   -- * File operations
   , readFile, readFileP
   , writeFile, writeFileP
@@ -78,41 +79,10 @@ import safe qualified System.Directory as IO
 import safe System.FilePath
 
 import safe LIO
-import safe LIO.Run (tryLIO)
 import safe LIO.Error
 import LIO.TCB
 import LIO.FS.TCB
 
---
--- LIO related
---
-
-
--- | Same as 'evalLIO', but takes two additional parameters
--- corresponding to the path of the labeled filesystem store and the
--- label of the root. If the labeled filesystem store does not exist,
--- it is created at the specified path with the root having the
--- supplied label.
--- If the filesystem does exist, the supplied label is /ignored/.
--- However, if the root label is not provided and the filesystem has
--- not been initialized, a 'FSRootNeedLabel' exception will be thrown.
-evalLIOWithRoot :: Label l
-                => FilePath   -- ^ Filesystem root
-                -> Maybe l    -- ^ Label of root
-                -> LIO l a    -- ^ LIO action
-                -> LIOState l -- ^ Initial state
-                -> IO a
-evalLIOWithRoot path ml act = evalLIO (initFSTCB path ml >> act)
-
--- | Same as 'evalLIOWithRoot', but using 'tryLIO' to exectute the LIO
--- action and thus catch all exceptions.
-tryLIOWithRoot :: Label l
-               => FilePath   -- ^ Filesystem root
-               -> Maybe l    -- ^ Label of root
-               -> LIO l a    -- ^ LIO action
-               -> LIOState l -- ^ Initial state
-               -> IO (Either SomeException a, LIOState l)
-tryLIOWithRoot path ml act = tryLIO (initFSTCB path ml >> act)
 
 --
 -- LIO directory operations
