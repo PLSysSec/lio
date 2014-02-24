@@ -1,0 +1,53 @@
+Name:           lio-fs
+Version:        0.0.0.1
+Cabal-Version:  >= 1.8
+Build-type:     Simple
+License:        GPL
+License-File:   LICENSE
+Author:         Hails team
+Maintainer:	Hails team <hails at scs dot stanford dot edu>
+Synopsis:       Labeled File System interface for LIO
+Category:       Security
+Stability:      Experimental
+Description:
+  A very simple file system interface for LIO. Labels are associated
+  with files and directories in the form of extended attributes.  This
+  library exposes a simple API for on files and directories that
+  abides by information flow control: a label on the file protects its
+  contents, while a directory label protects the containing files'
+  attributes (names and labels).
+
+  .
+
+  See "LIO.FS.TCB" for a description of the filestore implementation
+  and "LIO.FS.Simple" for a description of the actual API.
+
+  .
+
+  This library is still under development, use with care.
+
+Extra-source-files:
+  examples/simpleFS.hs
+
+
+Source-repository head
+  Type:     git
+  Location: git://github.com/scslab/lio.git
+
+Library
+  Build-Depends:
+     base         >= 4.5     && < 5.0
+   , containers
+   , bytestring
+   , filepath
+   , directory
+   , lio
+   , xattr
+   , SHA
+
+  GHC-options: -Wall -fno-warn-orphans
+
+  Exposed-modules:
+    LIO.FS.Simple.DCLabel
+    LIO.FS.Simple
+    LIO.FS.TCB

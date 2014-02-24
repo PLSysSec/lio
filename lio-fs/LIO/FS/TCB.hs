@@ -11,6 +11,13 @@ trusted code should implement all the IO functions in terms of
 'createFileTCB', 'createDirectoryTCB', and 'getPathLabelTCB' and
 'setPathLabelTCB'.
 
+The current implementation uses the 'Show' and 'Read' instance to
+serialize and de-serialize labels, respectively. While this is
+inefficient, it make it easy to use tools like /getfattr/ to inspect
+the labels of files. In a future version we may modify this
+implementation to use binary encoding and/or compression (since
+filesystem extended attributes are large, but limited).
+
 -}
 module LIO.FS.TCB (
   -- * Initializing labeled filesystem
@@ -19,52 +26,35 @@ module LIO.FS.TCB (
   -- * Handling path labels
   , setPathLabelTCB
   , getPathLabelTCB
-  -- * Creating labeled objects
-  , createFileTCB
+  -- * Helpers for creating labeled objects
+  , createFileTCB, createBinaryFileTCB
   , createDirectoryTCB
-  -- * Labeled 'FilePath'
-  , LFilePath(..)
   -- * Filesystem errors
   , FSError(..)
-  -- * Serializable label constraint
-  , SLabel
-  , lazyEncodeLabel, encodeLabel, decodeLabel
   ) where
 
-import           Data.Binary
-import           Data.Typeable
-import           Data.IORef
-import qualified Data.ByteString as S
-import qualified Data.ByteString.Char8 as S8
-import qualified Data.ByteString.Lazy as L
-import qualified Data.ByteString.Lazy.Char8 as L8
-import qualified Data.Digest.Pure.SHA as SHA
+import safe Data.Maybe (listToMaybe)
+import safe Data.Typeable
+import safe Data.IORef
+import safe qualified Data.ByteString.Char8 as S8
+import safe qualified Data.ByteString as S
+import safe qualified Data.ByteString.Lazy.Char8 as L8
+import safe qualified Data.Digest.Pure.SHA as SHA
 
-import           Codec.Compression.Zlib hiding (compress)
-
-import           Control.Monad
-import           Control.Exception
-import qualified Control.Exception as E
+import safe Control.Monad
+import safe Control.Exception
+import safe qualified Control.Exception as E
                  
-import           System.FilePath
-import           System.Directory
-import           System.IO
-import           System.IO.Unsafe
-import           System.Xattr
+import safe System.FilePath
+import safe System.Directory
+import safe System.IO
+import System.IO.Unsafe
+import safe System.Xattr
 
-import           LIO.Label
-import           LIO.Core
-import           LIO.TCB
-
--- | Synonym for strict ByteString
-type S8 = S8.ByteString
+import safe LIO
+import safe LIO.Error
+import LIO.TCB
  
--- | Synonym for lazy ByteString
-type L8 = L8.ByteString
-
--- | Constraintfor serializable labels
-type SLabel l = (Label l, Binary l)
-
 --
 -- Exception thrown by the file store interface
 --
@@ -112,48 +102,49 @@ rootDir :: IORef FilePath
 rootDir = unsafePerformIO $ newIORef (error "LIO Filesystem not initialized.")
 
 -- | Get the root directory.
-getRootDirTCB :: SLabel l => LIO l FilePath
-getRootDirTCB = ioTCB $ readIORef rootDir
+getRootDirTCB :: Label l => LIO l FilePath
+getRootDirTCB = withContext "getRootDirTCB" $ ioTCB $ readIORef rootDir
 
 -- | Create a the file store (i.e., labeled file system) with a given
 -- label and root file path.  The path must be an absolute path,
 -- otherwise @initFSTCB@ throws 'FSRootInvalid'.
-mkFSTCB :: SLabel l
+mkFSTCB :: Label l
         => FilePath      -- ^ Path to the filesystem root
         -> l             -- ^ Label of root
         -> LIO l ()
-mkFSTCB path l = do
-  unless (isAbsolute path) $ ioTCB $ throwIO FSRootInvalid
+mkFSTCB path l = withContext "mkFSTCB" $ ioTCB $ do
+  unless (isAbsolute path) $ throwIO FSRootInvalid
   -- Create root of filesystem:
-  ioTCB $ createDirectory path
+  createDirectory path
   -- Set root label:
   setPathLabelTCB path l
   -- Create magic attribute:
-  ioTCB $ lsetxattr path magicAttr magicContent CreateMode
+  lsetxattr path magicAttr magicContent CreateMode
   -- Set the root filesystem:
-  ioTCB $ writeIORef rootDir path
+  writeIORef rootDir path
 
 -- | Set the given file path as the root of the labeled filesystem.  This
 -- function throws a 'FSLabelCorrupt' if the directory does not contain a
 -- valid label, and  a 'FSRootCorrupt' if the 'magicAttr' attribute is
 -- missing.
-setFSTCB :: SLabel l => FilePath -> LIO l ()
-setFSTCB path = do
+setFSTCB :: Label l => FilePath -> LIO l l
+setFSTCB path = withContext "setFSTCB" $ ioTCB $ do
   -- Path must be absolute
-  unless (isAbsolute path) $ ioTCB $ throwIO FSRootInvalid
+  unless (isAbsolute path) $ throwIO FSRootInvalid
   -- Path must be a directory
   checkDirExists
   -- Check magic attribute:
   checkMagic
-  -- Check that the label of the root is valid
-  void $ getPathLabelTCB path
+  -- Get the label of the root
+  l <- getPathLabelTCB path
   -- Set the root directory
-  ioTCB $ writeIORef rootDir path
-   where checkMagic = ioTCB $ do
+  writeIORef rootDir path
+  return l
+   where checkMagic = do
            magicOK <-(==magicContent) `liftM` 
                       (throwOnFail $ lgetxattr path magicAttr)
            unless magicOK doFail
-         checkDirExists = ioTCB $ do
+         checkDirExists = do
           e <- doesDirectoryExist path
           unless e $ throwIO FSRootNoExist
          doFail = throwIO FSRootCorrupt
@@ -162,17 +153,19 @@ setFSTCB path = do
 -- | Initialize filesystem at the given path. The supplied path must be
 -- absolute, otherwise @initFSTCB@ throw 'FSRootInvalid'.  If the FS has
 -- already been created then @initFSTCB@ solely verifies that the root
--- directory is not corrupt (see 'setFSTCB'). Otherwise, a new FS is created
--- with the supplied label (see 'mkFSTCB').
+-- directory is not corrupt (see 'setFSTCB') and returns the label of
+-- the root. Otherwise, a new FS is created with the supplied label
+-- (see 'mkFSTCB').
 --
 -- This function performs several checks that 'setFSTCB' and 'mkFSTCB' perform,
 -- so when considering performance they should be called directly.
-initFSTCB :: SLabel l => FilePath -> Maybe l -> LIO l ()
-initFSTCB path ml = do
+initFSTCB :: Label l => FilePath -> Maybe l -> LIO l l
+initFSTCB path ml = withContext "initFSTCB" $ do
  unless (isAbsolute path) $ ioTCB $ throwIO FSRootInvalid
  exists <- ioTCB $ doesDirectoryExist path
  (if exists then setFSTCB else mkFSTCB') path
-  where mkFSTCB' p = maybe (ioTCB $ throwIO FSRootNeedLabel) (mkFSTCB p) ml
+  where mkFSTCB' f = maybe (throwLIO FSRootNeedLabel) 
+                           (\l -> mkFSTCB f l >> return l) ml
                     
 
 --
@@ -188,79 +181,55 @@ labelHashAttr :: AttrName
 labelHashAttr = "user._lio_label_sha"
 
 -- | Encode a label into an attribute value.
-lazyEncodeLabel :: SLabel l => l -> L8
-lazyEncodeLabel = compress . encode
-
--- | Encode a label into an attribute value.
-encodeLabel :: SLabel l => l -> AttrValue
-encodeLabel = strictify . lazyEncodeLabel
+encodeLabel :: Label l => l -> AttrValue
+encodeLabel = S8.pack . show
 
 -- | Descode label from an attribute value.
-decodeLabel :: SLabel l => AttrValue -> Either String l
-decodeLabel = decode . decompress . lazyfy
+decodeLabel :: Label l => AttrValue -> Maybe l
+decodeLabel = fmap fst . listToMaybe . reads . S8.unpack
 
 -- | Set the label of a given path. This function sets the 'labelAttr'
 -- attribute to the encoded label, and the hash to 'labelHashAttr'.
-setPathLabelTCB :: SLabel l => FilePath -> l -> LIO l ()
-setPathLabelTCB path l = ioTCB $ do
-  lsetxattr path labelAttr     (strictify lEnc) RegularMode
-  lsetxattr path labelHashAttr lHsh             RegularMode
-    where lEnc = lazyEncodeLabel l
-          lHsh = strictify . SHA.bytestringDigest . SHA.sha1 $ lEnc
+setPathLabelTCB :: Label l => FilePath -> l -> IO ()
+setPathLabelTCB path l = do
+  lsetxattr path labelAttr     lEnc        RegularMode
+  lsetxattr path labelHashAttr (hash lEnc) RegularMode
+    where lEnc = encodeLabel l
+          hash = L8.toStrict . SHA.bytestringDigest . SHA.sha1 . L8.fromStrict
 
 -- | Get the label of a given path. If the object does not have an
 -- associated label or the hash of the label and stored-hash are not
 -- equal, this function throws 'FSLabelCorrupt'.
-getPathLabelTCB :: SLabel l => FilePath -> LIO l l
-getPathLabelTCB path = rethrowIoTCB $ do
+getPathLabelTCB :: Label l => FilePath -> IO l
+getPathLabelTCB path = do
   (b, h) <- throwOnFail $ do b <- lgetxattr path labelAttr
                              h <- lgetxattr path labelHashAttr
                              return (b, h)
-  let b' = lazyfy b
-      h' = strictify . SHA.bytestringDigest . SHA.sha1 $ b'
+  let b' = L8.fromStrict b
+      h' = L8.toStrict . SHA.bytestringDigest . SHA.sha1 $ b'
   case decodeLabel b of
-    Right l | h == h' -> return l
-    _                 -> doFail
+    Just l | h == h' -> return l
+    _                -> doFail
   where doFail = throwIO $ FSLabelCorrupt path
         throwOnFail act = act `E.catch` (\(_:: SomeException) -> doFail)
 
-
--- | Create a directory object with the given label.
-createDirectoryTCB :: (SLabel l) => l -> FilePath -> LIO l ()
-createDirectoryTCB l path = do
-  rethrowIoTCB $ createDirectory path
-  setPathLabelTCB path l
-
 -- | Create a file object with the given label and return a handle to
 -- the new file.
-createFileTCB :: (SLabel l) => l -> FilePath -> IOMode -> LIO l Handle
-createFileTCB l path mode = do
-  h <- rethrowIoTCB $ openFile path mode
+createFileTCB :: Label l => l -> FilePath -> IOMode -> LIO l Handle
+createFileTCB l path mode = withContext "createFileTCB" $ ioTCB $ do
+  h <- openFile path mode
   setPathLabelTCB path l
   return h
 
---
--- Labeled 'FilePath's
---
+-- | Same as 'createFileTCB' but opens the file in binary mode.
+createBinaryFileTCB :: Label l => l -> FilePath -> IOMode -> LIO l Handle
+createBinaryFileTCB l path mode = withContext "createBinaryFileTCB" $ioTCB $ do
+  h <- openBinaryFile path mode
+  setPathLabelTCB path l
+  return h
 
-data LFilePath l = LFilePathTCB { labelOfFilePath :: l
-                                -- ^ Label of file path
-                                , unlabelFilePathTCB :: FilePath
-                                -- ^ Unlabel a filepath, ignoring IFC.
-                                } 
-
---
--- Misc helper
---
-
--- | Convert lazy ByteString to strict ByteString.
-strictify :: L8 -> S8
-strictify = S8.concat . L.toChunks
-
--- | Convert strict ByteString to lazy ByteString.
-lazyfy :: S8 -> L8
-lazyfy x = L8.fromChunks [x]
-
--- | Compress with zlib (optimized for speed).
-compress :: L8 -> L8
-compress = compressWith (defaultCompressParams { compressLevel = bestSpeed })
+-- | Create a directory object with the given label.
+createDirectoryTCB :: Label l => l -> FilePath -> LIO l ()
+createDirectoryTCB l path = withContext "createDirectoryTCB" $ ioTCB $ do
+  createDirectory path
+  setPathLabelTCB path l
