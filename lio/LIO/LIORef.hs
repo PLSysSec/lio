@@ -33,7 +33,6 @@ import safe Data.IORef
 import safe LIO.Core
 import safe LIO.Error
 import safe LIO.Label
-import LIO.TCB
 import LIO.TCB.LObj
 
 --

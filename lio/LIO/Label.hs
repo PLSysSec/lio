@@ -56,7 +56,7 @@ l2@.  By transitifity of the ``canFlowTo`` relation, it holds that @l1
 -- 'canFlowTo' partially orders labels.
 -- 'lub' and 'glb' compute the least upper bound and greatest lower
 -- bound of two labels, respectively.
-class (Eq l, Show l, Typeable l) => Label l where
+class (Eq l, Show l, Read l, Typeable l) => Label l where
   -- | Compute the /least upper bound/, or join, of two labels.  When
   -- data carrying two different labels is mixed together in a
   -- document, the @lub@ of the two labels is the lowest safe value
