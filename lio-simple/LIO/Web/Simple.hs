@@ -78,6 +78,11 @@ lioDefaultGetTemplate fp = do
     Right tmpl -> return tmpl
 
 
+-- | Provide an instance for MonadController in the LIO monad. Note
+-- that th 'body' implementation consumes the body from a Source IO
+-- Bytestring. Since the 'Request' constructor is exposed by
+-- "Network.Wai.Internal", it's important to disallow construction of
+-- such values when considering untrusted code.
 instance Label l => MonadController (LIO l) where
   parseForm = do
     req <- request
