@@ -1,0 +1,29 @@
+name:                Blog
+version:             0.0.0.0
+--author:              YOUR NAME
+--maintainer:          your@email.com
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.8
+
+executable blog
+  main-is: Main.hs
+  ghc-options: -threaded -O2
+  build-depends:
+    base
+    , bytestring
+    , aeson
+    , directory
+    , filepath
+    , http-types
+    , transformers
+    , simple >= 0.7.0
+    , wai
+    , wai-extra
+    , warp
+    , lio
+    , lio-fs
+    , lio-simple
+    , conduit
+    , simple-templates
+    , text

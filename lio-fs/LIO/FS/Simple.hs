@@ -63,7 +63,7 @@ module LIO.FS.Simple (
   -- * Filesystem errors
   , FSError(..)
   -- * Misc helpers
-  , cleanUpPath
+  , cleanUpPath, taintObjPathP
   ) where
 
 import Prelude hiding (readFile, writeFile, appendFile)

@@ -1,0 +1,46 @@
+name:                lio-simple
+version:             0.0.0.1
+synopsis: LIO support for the Simple web framework
+description:
+
+  See "Web.Simple" for a more detailed introduction.
+
+homepage:            http://simple.cx
+license:             LGPL-3
+license-file:        LICENSE
+author:              Hails team
+maintainer:          hails@scs.stanford.edu
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.10
+
+library
+  build-depends:
+      base < 6
+    , bytestring
+    , conduit
+    , directory
+    , filepath
+    , wai >= 2.0
+    , wai-extra
+    , warp
+    , http-types
+    , simple
+    , simple-session
+    , simple-templates
+    , lio
+    , lio-fs
+    , text
+    , unix
+
+  ghc-options: -Wall -fno-warn-unused-do-bind -fno-warn-orphans
+
+  exposed-modules:
+    LIO.Web.Simple
+    LIO.Web.Simple.TCB
+  default-language: Haskell2010
+
+source-repository head
+  type: git
+  location: git://github.com/scslab/lio.git
+
