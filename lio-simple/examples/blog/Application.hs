@@ -31,7 +31,8 @@ app runner = do
 
   runner $ controllerApp settings $ do
     get "/" $ do
-      posts <- liftController $ do
+      counter <- incCounter
+      posts <- liftLIO $ do
         dataDir <- getDirectoryContents' "data"
         let postFiles = sort $
               filter (not . isPrefixOf ".") dataDir
@@ -39,7 +40,10 @@ app runner = do
           obj <- (read . S8.unpack) `liftM` readFile ("data" </> postFile)
           return $ object ["id"     .= postFile
                           , "title" .= postTitle obj]
-      render "index.html" $ object ["posts" .= posts]
+      lcurr <- liftLIO $ getLabel
+      render "index.html" $ object [ "posts"   .= posts
+                                   , "counter" .= counter
+                                   , "label"   .= show lcurr]
 
     -- Respond to "/new"
     get "/new" $ do
@@ -47,11 +51,16 @@ app runner = do
 
     -- Repond to "/:post_id"
     get "/:post_id" $ routeTop $ do
+      liftLIO $ do lclear <- getClearance 
+                   taint lclear
       postId <- queryParam' "post_id"
       let postFile = "data" </> (takeFileName postId)
-      post <- liftController $ do
+      post <- liftLIO $ do
+        lcurr <- getLabel
         obj <- (read . S8.unpack) `liftM` readFile postFile
-        return $ object ["title" .= postTitle obj, "body" .= postBody obj]
+        return $ object ["title"   .= postTitle obj
+                        , "body"   .= postBody obj
+                        , "label"  .= show lcurr]
       render "show.html" post
     -- Create form
     post "/" $ do
@@ -81,3 +90,4 @@ app runner = do
           createDirectory lcurr dir
             `LIO.catch` (\(e::SomeException) -> return ())
           getDirectoryContents dir
+

@@ -11,13 +11,25 @@ import LIO
 import LIO.DCLabel
 import LIO.Web.Simple
 
-data AppSettings = AppSettings {  }
+import LIO.Concurrent.LMVar
+
+data AppSettings = AppSettings { reqCounter :: LMVar DCLabel Int }
 
 newAppSettings :: DC AppSettings
 newAppSettings = do
-  return $ AppSettings
-
+  lcurr <- getLabel
+  counter <- newLMVar lcurr 0
+  return $ AppSettings { reqCounter = counter }
 
 instance HasTemplates AppSettings DC where
   defaultLayout = Just <$> getTemplate "layouts/main.html"
   getTemplate = lioDefaultGetTemplate
+
+incCounter :: ControllerM AppSettings DC Int
+incCounter = do
+  as <- controllerState
+  let mv = reqCounter as
+  liftLIO $ do
+    cnt <- (+1) <$> takeLMVar mv
+    putLMVar mv cnt
+    return cnt
