@@ -393,13 +393,20 @@ stripSlash [] = []
 stripSlash xx@(x:xs) | x == pathSeparator = stripSlash xs
                      | otherwise          = xx
 
--- | Cleanup a file path, if it starts out with a @..@, we consider this
--- invalid as it can be used explore parts of the filesystem that should
--- otherwise be unaccessible. Similarly, we remove any @.@ from the path.
-cleanUpPath :: MonadLIO l m => FilePath -> m FilePath 
-cleanUpPath = liftLIO . ioTCB . doit . splitDirectories . normalise . stripSlash
-  where doit []          = return []
-        doit ("..":_)    = throwIO FSIllegalFileName
-        doit (_:"..":xs) = doit xs
-        doit (".":xs)    = doit xs
-        doit (x:xs)      = (x </>) `liftM` doit xs
+-- | Class for generating clean filepaths
+class CleanUpPath m where
+  -- | Cleanup a file path, if it starts out with a @..@, we consider this
+  -- invalid as it can be used explore parts of the filesystem that should
+  -- otherwise be unaccessible. Similarly, we remove any @.@ from the path.
+  cleanUpPath :: FilePath -> m FilePath 
+
+instance CleanUpPath IO where
+  cleanUpPath = doit . splitDirectories . normalise . stripSlash
+    where doit []          = return []
+          doit ("..":_)    = throwIO FSIllegalFileName
+          doit (_:"..":xs) = doit xs
+          doit (".":xs)    = doit xs
+          doit (x:xs)      = (x </>) `liftM` doit xs
+
+instance Label l => CleanUpPath (LIO l) where
+  cleanUpPath = ioTCB . cleanUpPath

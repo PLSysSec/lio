@@ -214,6 +214,9 @@ decodeLabel = fmap fst . listToMaybe . reads . S8.unpack
 
 -- | Set the label of a given path. This function sets the 'labelAttr'
 -- attribute to the encoded label, and the hash to 'labelHashAttr'.
+--
+-- NOTE: This function takes an arbitrary path, hence must not be
+-- available to untrusted code.
 setPathLabelTCB :: Label l => FilePath -> l -> IO ()
 setPathLabelTCB path l = do
   lsetxattr path labelAttr     lEnc        RegularMode
@@ -224,6 +227,9 @@ setPathLabelTCB path l = do
 -- | Get the label of a given path. If the object does not have an
 -- associated label or the hash of the label and stored-hash are not
 -- equal, this function throws 'FSLabelCorrupt'.
+--
+-- NOTE: This function takes an arbitrary path, hence must not be
+-- available to untrusted code.
 getPathLabelTCB :: Label l => FilePath -> IO l
 getPathLabelTCB path = do
   (b, h) <- throwOnFail $ do b <- lgetxattr path labelAttr
