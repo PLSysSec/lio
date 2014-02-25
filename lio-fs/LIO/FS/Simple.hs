@@ -62,6 +62,8 @@ module LIO.FS.Simple (
   , removeDirectory, removeDirectoryP
   -- * Filesystem errors
   , FSError(..)
+  -- * Misc helpers
+  , cleanUpPath
   ) where
 
 import Prelude hiding (readFile, writeFile, appendFile)
