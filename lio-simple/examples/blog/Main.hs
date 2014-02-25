@@ -2,6 +2,7 @@
 module Main where
 
 import Application
+import Control.Monad
 import Network.Wai.Middleware.RequestLogger
 import System.Environment
 import Web.Simple
@@ -22,9 +23,8 @@ main = do
   fsRoot <- (\d -> d </> "liofs") `liftM` getCurrentDirectory
   withDCFS fsRoot $ do
     -- label views and layouts public
-    let pub = fsRoot </> "public"
-    labelDirectoryRecursively dcPublic $ pub </> "views"
-    labelDirectoryRecursively dcPublic $ pub </> "layouts"
+    labelDirectoryRecursively dcPublic $ fsRoot </> "views"
+    labelDirectoryRecursively dcPublic $ fsRoot </> "layouts"
 
     -- run app
     env <- getEnvironment
