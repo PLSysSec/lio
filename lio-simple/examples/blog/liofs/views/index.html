@@ -3,8 +3,7 @@ No posts.
 $else$
 <ul>
 $for(post in posts)$
-<li><a href="/$post.id$">$post.title$</a></li>
+<li><a href="/$post.postId$">$post.postTitle$</a></li>
 $endfor$
 </ul>
 $endif$
-<hr/> Main page visit count: $counter$, $label$
