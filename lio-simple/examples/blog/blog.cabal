@@ -1,7 +1,7 @@
 name:                Blog
 version:             0.0.0.0
---author:              YOUR NAME
---maintainer:          your@email.com
+author:              Hails team
+maintainer:          hails@scs.stanford.edu
 category:            Web
 build-type:          Simple
 cabal-version:       >=1.8

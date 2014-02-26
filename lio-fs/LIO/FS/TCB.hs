@@ -68,7 +68,7 @@ data FSError = FSRootCorrupt           -- ^ Root structure is corrupt.
              | FSObjNeedLabel          -- ^ FSobjectcannot be created without a label.
              | FSLabelCorrupt FilePath -- ^ Object label is corrupt.
              | FSIllegalFileName       -- ^ Supplied file name is illegal.
-      deriving Typeable
+      deriving (Eq, Typeable)
 
 instance Exception FSError
 
@@ -112,7 +112,7 @@ mkFSTCB :: Label l
 mkFSTCB path l = do
   unless (isAbsolute path) $ throwIO FSRootInvalid
   -- Create root of filesystem:
-  createDirectory path
+  createDirectoryIfMissing False path
   -- Set root label:
   setPathLabelTCB path l
   -- Create magic attribute:
@@ -121,9 +121,12 @@ mkFSTCB path l = do
   return l
 
 -- | Check that the supplied pathis a vaild labeled filesystem root.
--- This function throws a 'FSLabelCorrupt' if the directory does not
--- contain a valid label, and  a 'FSRootCorrupt' if the 'magicAttr'
--- attribute is missing.
+-- This function throws:
+--
+--   * 'FSLabelCorrupt' if the directory does not contain a valid label
+--   * 'FSRootCorrupt' if the 'magicAttr' attribute is invalid
+--   * 'FSRootNoExist' if the directory does not exist or 'magicAttr' is missing
+--
 checkFSTCB :: Label l => FilePath -> IO l
 checkFSTCB path = do
   -- Path must be absolute
@@ -135,14 +138,12 @@ checkFSTCB path = do
   -- Get the label of the root
   getPathLabelTCB path
    where checkMagic = do
-           magicOK <-(==magicContent) `liftM` 
-                      (throwOnFail $ lgetxattr path magicAttr)
-           unless magicOK doFail
+           magic <- lgetxattr path magicAttr `E.catch`
+                      (\(_:: SomeException) -> throwIO FSRootNoExist)
+           unless (magic == magicContent) $ throwIO FSRootCorrupt
          checkDirExists = do
           e <- doesDirectoryExist path
           unless e $ throwIO FSRootNoExist
-         doFail = throwIO FSRootCorrupt
-         throwOnFail act = act `E.catch` (\(_:: SomeException) -> doFail)
 
 -- | TVar containing per process filestore root.
 rootDir :: MVar (Maybe FilePath)
@@ -176,7 +177,11 @@ initializeLIOFS :: Label l => FilePath -> Maybe l -> IO l
 initializeLIOFS path ml = do
  unless (isAbsolute path) $ throwIO FSRootInvalid
  exists <- doesDirectoryExist path
- l <- (if exists then checkFSTCB else mkFSTCB') path
+ l <- if exists
+        then checkFSTCB path `E.catch` (\e -> if e == FSRootNoExist
+                                               then mkFSTCB' path
+                                               else throwIO e)
+        else mkFSTCB' path
  setRoot path
  -- If setRoot fails, we leave the filesystem dirty
  return l
