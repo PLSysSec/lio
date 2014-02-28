@@ -26,7 +26,6 @@ library
     , warp
     , http-types
     , simple
-    , simple-session
     , simple-templates
     , lio
     , lio-fs
