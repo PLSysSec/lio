@@ -1,0 +1,22 @@
+<h2>$group.groupName$</h2>
+<p>
+<ul>
+$for(member in group.groupMembers)$
+  <li>$member$</li>
+$endfor$
+</ul>
+
+
+<hr/>
+<a href="/post/$group.groupId$/new">new post</a>
+<hr/>
+
+$if(null(posts))$
+No posts.
+$else$
+<ul>
+$for(post in posts)$
+<li><a href="/post/$post.postGroupId$/$post.postId$">$post.postTitle$</a></li>
+$endfor$
+</ul>
+$endif$

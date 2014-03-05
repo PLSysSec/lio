@@ -1,0 +1,9 @@
+$if(null(groups))$
+No groups.
+$else$
+<ul>
+$for(group in groups)$
+<li><a href="/group/$group.groupId$">$group.groupName$</a></li>
+$endfor$
+</ul>
+$endif$

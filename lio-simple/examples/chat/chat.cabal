@@ -1,0 +1,30 @@
+name:                Chat
+version:             0.0.0.0
+author:              Hails team
+maintainer:          hails@scs.stanford.edu
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.8
+
+executable chat
+  main-is: Main.hs
+  ghc-options: -threaded -O2
+  build-depends:
+    base
+    , bytestring
+    , aeson
+    , directory
+    , filepath
+    , http-types
+    , transformers
+    , simple >= 0.7.0
+    , wai
+    , wai-extra
+    , warp
+    , lio
+    , lio-fs
+    , lio-simple
+    , conduit
+    , simple-templates
+    , text
+    , containers
