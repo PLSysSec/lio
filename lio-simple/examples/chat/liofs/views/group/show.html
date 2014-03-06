@@ -1,22 +1,38 @@
-<h2>$group.groupName$</h2>
-<p>
-<ul>
-$for(member in group.groupMembers)$
-  <li>$member$</li>
-$endfor$
-</ul>
-
-
-<hr/>
-<a href="/post/$group.groupId$/new">new post</a>
-<hr/>
-
+<div class="content">
+<div class="content-title">$group.groupName$</div>
 $if(null(posts))$
-No posts.
+  No posts.
 $else$
-<ul>
-$for(post in posts)$
-<li><a href="/post/$post.postGroupId$/$post.postId$">$post.postTitle$</a></li>
-$endfor$
-</ul>
+  $for(post in posts)$
+  <div>
+    <em>$post.postAuthor$:</em>
+    $post.postBody$
+  </div>
+  $endfor$
 $endif$
+</div>
+
+<div id="post" class="highlight">
+<form action="/group/$group.groupId$/newpost" method="POST">
+    <label for="body">$user$:</label>
+    <input type="text" name="body" id="postBody"/>
+    <input type="submit" value="send"/>
+</form>
+</div>
+
+<script type="text/javascript">
+  document.getElementById('postBody').focus();
+
+  var t;
+  var startTimer = function () {
+    t = setTimeout(function() { location.reload(true); }, 2500);
+  };
+
+  startTimer();
+
+  var post = document.getElementById('post');
+  post.addEventListener("mouseover", function() { 
+      clearTimeout(t); 
+  });
+  post.addEventListener("mouseout", startTimer);
+</script>

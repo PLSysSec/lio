@@ -1,9 +1,14 @@
 $if(null(groups))$
-No groups.
+  No groups.
 $else$
-<ul>
-$for(group in groups)$
-<li><a href="/group/$group.groupId$">$group.groupName$</a></li>
-$endfor$
-</ul>
+  $for(group in groups)$
+    <div class="tight-content">
+    <a href="/group/$group.groupId$"><strong>$group.groupName$</strong></a>:
+      $for(member in group.groupMembers)$
+        $member$
+      $sep$
+      ,
+      $endfor$
+    </div>
+  $endfor$
 $endif$

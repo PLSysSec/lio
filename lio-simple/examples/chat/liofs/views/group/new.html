@@ -1,12 +1,15 @@
 <form action="/group" method="POST">
-  <div>
+  <div class="form-group">
     <label for="name">Group name</label>
-    <input type="text" name="name" id="name" placeholder="A team"/>
+    <input type="text" name="name" class="form-control"
+           placeholder="A team"/>
   </div>
-  <div>
+  <div class="form-group">
     <label for="members">Users</label>
-    <input type="text" name="members" id="memebers" 
+    <input type="text" name="members" class="form-control"
            placeholder="Baracus, Tempeton, ..."/>
   </div>
-  <div><input type="submit" value="Create"/></div>
+  <div>
+    <button type="submit" class="btn">Create</button>
+  </div>
 </form>

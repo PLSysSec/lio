@@ -80,7 +80,6 @@ saveGroup m g = case groupId g of
 
 -- | Datatype representing a chat log
 data Post = Post { postId      :: Maybe ObjId
-                 , postTitle   :: S8.ByteString
                  , postBody    :: S8.ByteString
                  , postAuthor  :: UserName
                  , postGroupId :: ObjId
@@ -93,7 +92,6 @@ data Post = Post { postId      :: Maybe ObjId
 
 instance ToJSON Post where
   toJSON post = object [ "postId"      .= pid
-                       , "postTitle"   .= (S8.unpack $ postTitle post)
                        , "postBody"    .= (S8.unpack $ postBody post)
                        , "postAuthor"  .= (S8.unpack $ postAuthor post)
                        , "postGroupId" .= (show $ postGroupId post) ]
@@ -134,11 +132,13 @@ app runner = do
 
     -- Repond to GET "/group/:id"
     get "/group/:id" $ routeTop $ do
+      user  <- currentUser
       gId   <- read `liftM` queryParam' "id"
       group <- findObj groupModel gId
       posts <- findAll postModel
       let posts' = filter ((== gId) . postGroupId) posts
-      render "group/show.html" $ object [ "group"   .= group
+      render "group/show.html" $ object [ "user"    .= S8.unpack user
+                                        , "group"   .= group
                                         , "posts"   .= posts' ]
 
     -- Create new group
@@ -154,41 +154,18 @@ app runner = do
                            , groupMembers = members 
                            , groupPosts   = [] }
       case mgroup of
-        Just group -> void $ saveGroup groupModel group
+        Just group -> do gId <- saveGroup groupModel group
+                         respond $ redirectTo $ S8.pack $ "/group/" ++ show gId
         _          -> redirectBack 
-      respond $ redirectTo "/"
-
-    --
-    -- Posts
-    --
-
-    get "/post/:gid" $ do
-      gId   <- read `liftM` queryParam' "gid"
-      posts <- findAll postModel
-      let posts' = filter ((==gId) . postGroupId) posts
-      render "post/index.html" $ object [ "posts"   .= posts' ]
-
-    -- Respond to "/new"
-    get "/post/:gid/new" $ do
-      gId <- read `liftM` queryParam' "gid"
-      render "post/new.html" $ object [ "groupId" .= show (gId :: Int)]
-
-    -- Repond to GET "/post/:id"
-    get "/post/:gid/:pid" $ routeTop $ do
-      pId   <- read `liftM` queryParam' "pid"
-      post <- findObj postModel pId
-      render "post/show.html" post
 
     -- Create new post
-    post "/post/:gid" $ do
-      gId   <- read `liftM` queryParam' "gid"
+    post "/group/:gid/newpost" $ do
       user <- currentUser
+      gId  <- read `liftM` queryParam' "gid"
       (params, _) <- parseForm
       let mpost = do
-            title    <- notNull `mfilter` lookup "title" params
             body     <- notNull `mfilter` lookup "body" params
             return $ Post { postId      = Nothing
-                          , postTitle   = title
                           , postBody    = body
                           , postAuthor  = user
                           , postGroupId = gId }
@@ -199,7 +176,7 @@ app runner = do
           void $ saveGroup groupModel $ 
             group { groupPosts = groupPosts group ++ [pid] }
         _         -> redirectBack 
-      respond $ redirectTo "/"
+      redirectBack 
 
 --
 -- Helpers
