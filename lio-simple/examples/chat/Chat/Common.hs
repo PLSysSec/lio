@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Chat.Common where
 
 import Prelude hiding (writeFile, readFile, appendFile)
@@ -27,10 +27,12 @@ import System.FilePath
 
 import LIO.Concurrent.LMVar
 
-data AppSettings = AppSettings
+import Data.Dynamic
 
-newAppSettings :: DC AppSettings
-newAppSettings = return AppSettings
+data AppSettings = AppSettings { modelMap :: Map String Dynamic }
+
+newAppSettings :: AppSettings
+newAppSettings = AppSettings Map.empty
 
 nextId :: MonadLIO DCLabel m => LMVar DCLabel Int -> m Int
 nextId mv = liftLIO $ do
@@ -38,13 +40,23 @@ nextId mv = liftLIO $ do
     putLMVar mv cnt
     return cnt
 
-newModel :: (Read t, MonadLIO DCLabel m) => String -> m (Model t)
+newModel :: Read t => String -> DC (Model t)
 newModel name = liftLIO $ do
   let m = Model { modelNextId = undefined, modelName = name }
   oId   <- length `liftM` getAllIds m
   lcurr <- getLabel
   mv    <- newLMVar lcurr oId
   return $ m { modelNextId = nextId mv, modelName = name }
+
+addModelToApp :: Typeable t => AppSettings -> Model t -> AppSettings
+addModelToApp as m =
+  let mm = Map.insert (modelName m) (toDyn m) $ modelMap as
+  in as { modelMap = mm }
+
+getModel :: Typeable t => String -> ControllerM AppSettings DC (Model t)
+getModel name = do
+ mm <- modelMap `liftM` controllerState
+ return $ fromDyn  (mm Map.! name) $ error "Invalid type cast"
 
 instance HasTemplates AppSettings DC where
   defaultLayout = Just <$> getTemplate "layouts/main.html"
@@ -59,7 +71,7 @@ type ObjId = Int
 
 -- | Data type abstracting a model, @t@ is a phantom type
 data Model t = Model { modelNextId :: ControllerM AppSettings DC ObjId
-                     , modelName   :: FilePath }
+                     , modelName   :: FilePath } deriving Typeable
 
 
 --

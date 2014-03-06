@@ -1,5 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 module Application where
 
 import Control.Applicative
@@ -7,6 +8,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Chat.Common
 import Data.Aeson
+import Data.Typeable
 import qualified Data.ByteString.Char8 as S8
 import qualified Data.Maybe as Maybe
 import Network.HTTP.Types
@@ -17,13 +19,6 @@ import Web.Frank
 
 import LIO
 import LIO.DCLabel
-
---
--- Data model
---
-
-class LabelPolicy t where
-  genLabel :: Model t -> t -> DCLabel
 
 --
 -- Users
@@ -53,7 +48,7 @@ data Group = Group { groupId      :: Maybe ObjId
                    , groupName    :: GroupName
                    , groupMembers :: [UserName]
                    , groupPosts   :: [ObjId]
-                   } deriving (Show, Read, Eq)
+                   } deriving (Show, Read, Eq, Typeable)
 
 instance ToJSON Group where
   toJSON group = object 
@@ -63,11 +58,6 @@ instance ToJSON Group where
      , "groupPosts"   .= (map show $ groupPosts group) ]
    -- convert groupId to string since Aeson numbers are not integral
    where gid = maybe Null (toJSON . show) $ groupId group
-
-instance LabelPolicy Group where
-  genLabel _ l = 
-    let us = toCNF . dFromList . map principalBS . groupMembers $ l 
-    in  us %% us
 
 saveGroup :: Model Group -> Group -> ControllerM AppSettings DC ObjId
 saveGroup m g = case groupId g of
@@ -83,11 +73,8 @@ data Post = Post { postId      :: Maybe ObjId
                  , postBody    :: S8.ByteString
                  , postAuthor  :: UserName
                  , postGroupId :: ObjId
-                 } deriving (Show, Read, Eq)
+                 } deriving (Show, Read, Eq, Typeable)
 
---instance LabelPolicy Log where
---  genLabel l = let us = toCNF . dFromList . map principal . logOwners $ l 
---               in  us %% us
 
 
 instance ToJSON Post where
@@ -109,9 +96,11 @@ savePost m p = case postId p of
 
 app :: (SimpleApplication DC -> DC ()) -> DC ()
 app runner = do
-  settings <- newAppSettings
-  groupModel <- newModel "group"
-  postModel  <- newModel "post"
+  groupModel <- liftLIO $ newModel "group"
+  postModel  <- liftLIO $ newModel "post"
+
+  let settings = newAppSettings `addModelToApp` groupModel
+                                `addModelToApp` postModel
 
   runner $ controllerApp settings $ withLogin $ do
     get "/" $ do
