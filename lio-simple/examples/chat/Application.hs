@@ -21,23 +21,6 @@ import LIO
 import LIO.DCLabel
 
 --
--- Users
---
-
-type UserName = S8.ByteString
-
--- | Login without any username/passsword checking
-withLogin :: MonadLIO DCLabel m
-          => ControllerM r m a -> ControllerM r m a
-withLogin = authRewriteReq (basicAuthRoute "chat") (\u p -> return True)
-
-
-currentUser :: MonadLIO DCLabel m => ControllerM r m UserName
-currentUser = do
-  mu <- requestHeader "X-User"
-  maybe (fail "User not logged-in") return mu
-
---
 -- Groups
 --
 
@@ -49,6 +32,9 @@ data Group = Group { groupId      :: Maybe ObjId
                    , groupMembers :: [UserName]
                    , groupPosts   :: [ObjId]
                    } deriving (Show, Read, Eq, Typeable)
+
+instance LabelPolicy Group where
+  genLabel post = return dcPublic
 
 instance ToJSON Group where
   toJSON group = object 
@@ -76,6 +62,13 @@ data Post = Post { postId      :: Maybe ObjId
                  } deriving (Show, Read, Eq, Typeable)
 
 
+instance LabelPolicy Post where
+  genLabel post = do
+    groupModel <- getModel "group"
+    group <- findObj groupModel $ postGroupId post
+    let us = toCNF . dFromList . map principalBS . groupMembers $ group
+    return $ us %% cTrue
+
 
 instance ToJSON Post where
   toJSON post = object [ "postId"      .= pid
@@ -102,7 +95,7 @@ app runner = do
   let settings = newAppSettings `addModelToApp` groupModel
                                 `addModelToApp` postModel
 
-  runner $ controllerApp settings $ withLogin $ do
+  runner $ controllerApp settings $ do
     get "/" $ do
       user  <- currentUser
       render "index.html" $ object [ "user" .= S8.unpack user ]

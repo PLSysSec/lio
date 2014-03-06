@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -9,6 +10,7 @@ module Chat.Common where
 import Prelude hiding (writeFile, readFile, appendFile)
 import Control.Applicative
 import Control.Monad
+import Data.Maybe
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.List as List
@@ -78,33 +80,41 @@ data Model t = Model { modelNextId :: ControllerM AppSettings DC ObjId
 -- Simple DB-like interface
 --
 
--- | Get object by id
+class LabelPolicy t where
+  genLabel :: t -> ControllerM AppSettings DC DCLabel
+
+-- | Get object by id. The function throws an exception if the label of the
+-- object is above the current label.
 findObj :: (Read t, MonadLIO DCLabel m) => Model t -> ObjId -> m t
 findObj m oid = let objFile = "model" </> modelName m </> show oid
                 in liftLIO $ (read . S8.unpack) `liftM` readFile objFile
 
--- | Get all objects
-findAll :: (Read t, MonadLIO DCLabel m) => Model t -> m [t]
-findAll m = do
-  ids <- getAllIds m
-  mapM (findObj m) ids
 
--- | Save object to file
-insert :: Show t 
+-- | Get all objects below the current clearance.
+findAll :: (Read t, MonadLIO DCLabel m) => Model t -> m [t]
+findAll m = liftLIO $ do
+  ids <- getAllIds m
+  catMaybes `liftM` mapM findObj' ids
+  where findObj' i = do
+          (Just `liftM` findObj m i) `LIO.catch` 
+                  (\(e::SomeException) -> return Nothing)
+ 
+
+-- | Save object to file.
+insert :: (Show t, LabelPolicy t)
        => Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
 insert m f = do
   oId <- modelNextId m
   let obj = f oId
-  lcurr <- liftLIO getLabel
-  writeFile (Just lcurr) ("model" </> modelName m </> show oId) $ 
+  lobj <- genLabel obj
+  writeFile (Just lobj) ("model" </> modelName m </> show oId) $ 
     S8.pack (show obj)
   return oId
 
--- | Save object to file
+-- | Save object to file; file elready exists
 update :: Show t => Model t -> t -> ObjId -> ControllerM AppSettings DC ()
 update m obj oId = do
-  lcurr <- liftLIO getLabel
-  writeFile (Just lcurr) ("model" </> modelName m </> show oId) $ 
+  writeFile Nothing ("model" </> modelName m </> show oId) $ 
     S8.pack (show obj)
 
 -- | Get all the post id's
@@ -119,3 +129,15 @@ getAllIds m = do
   dirs <- getDirectoryContents modelDir
   let oids = List.sort $ filter (\fp -> fp `notElem` [".", ".."]) dirs
   return $ map read oids
+
+
+--
+-- Users
+--
+
+type UserName = S8.ByteString
+
+currentUser :: MonadLIO DCLabel m => ControllerM r m UserName
+currentUser = do
+  mu <- requestHeader "X-User"
+  maybe (fail "User not logged-in") return mu
