@@ -55,7 +55,6 @@ instance LabelOf LObj where
 instance (Label l, Show t) => ShowTCB (LObj l t) where
   showTCB (LObjTCB l t) = show t ++ " {" ++ show l ++ "}"
 
-#include "TypeVals.hs"
 
 -- | Class for lifting 'IO' actions.
 class GuardIO l io lio | l io -> lio where
@@ -70,7 +69,27 @@ instance GuardIO l (types -> IO r) (types -> LIO l r) where { \
   {-# INLINE guardIOTCB #-}; \
   guardIOTCB guard io vals = guard >> ioTCB (io vals); \
 }
-TypesVals (GUARDIO)
+
+GUARDIO(a1, \
+      a1); \
+GUARDIO(a1 -> a2, \
+      a1 a2); \
+GUARDIO(a1 -> a2 -> a3, \
+      a1 a2 a3); \
+GUARDIO(a1 -> a2 -> a3 -> a4, \
+      a1 a2 a3 a4); \
+GUARDIO(a1 -> a2 -> a3 -> a4 -> a5, \
+      a1 a2 a3 a4 a5); \
+GUARDIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6, \
+      a1 a2 a3 a4 a5 a6); \
+GUARDIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7, \
+      a1 a2 a3 a4 a5 a6 a7); \
+GUARDIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8, \
+      a1 a2 a3 a4 a5 a6 a7 a8); \
+GUARDIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> a9, \
+      a1 a2 a3 a4 a5 a6 a7 a8 a9); \
+GUARDIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> a9 -> a10, \
+      a1 a2 a3 a4 a5 a6 a7 a8 a9 a10)
 
 -- | This function can be used to turn an 'IO' function into an 'LIO'
 -- one.  The 'LIO' version expects a 'LObj' argument, and before

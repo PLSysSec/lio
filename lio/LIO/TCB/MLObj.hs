@@ -216,8 +216,6 @@ modifyMLObjLabelP :: (PrivDesc l p, MLabelPolicy policy l) =>
                      Priv p -> MLObj policy l a -> (l -> LIO l l) -> LIO l ()
 modifyMLObjLabelP p (MLObjTCB ml _) = modifyMLabelP p ml
 
-#include "TypeVals.hs"
-
 -- | Takes a @'liftIO'@-like function and an @IO@ function of an
 -- arbitrary number of arguments (up to 10).  Applies the arguments to
 -- the @IO@ function, then passed the result to its argument funciton
@@ -232,7 +230,27 @@ instance LabelIO l (types -> IO r) (types -> LIO l r) where { \
   {-# INLINE labelIO #-}; \
   labelIO f io vals = f $ io vals; \
 }
-TypesVals (WRAPIO)
+
+WRAPIO(a1, \
+      a1); \
+WRAPIO(a1 -> a2, \
+      a1 a2); \
+WRAPIO(a1 -> a2 -> a3, \
+      a1 a2 a3); \
+WRAPIO(a1 -> a2 -> a3 -> a4, \
+      a1 a2 a3 a4); \
+WRAPIO(a1 -> a2 -> a3 -> a4 -> a5, \
+      a1 a2 a3 a4 a5); \
+WRAPIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6, \
+      a1 a2 a3 a4 a5 a6); \
+WRAPIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7, \
+      a1 a2 a3 a4 a5 a6 a7); \
+WRAPIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8, \
+      a1 a2 a3 a4 a5 a6 a7 a8); \
+WRAPIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> a9, \
+      a1 a2 a3 a4 a5 a6 a7 a8 a9); \
+WRAPIO(a1 -> a2 -> a3 -> a4 -> a5 -> a6 -> a7 -> a8 -> a9 -> a10, \
+      a1 a2 a3 a4 a5 a6 a7 a8 a9 a10)
 
 -- | The 'MLObj' equivalent of 'blessTCB' in
 -- "LIO.TCB.LObj#v:blessTCB".  Use this for conveniently providing
