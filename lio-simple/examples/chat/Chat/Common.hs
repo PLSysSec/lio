@@ -82,61 +82,70 @@ data Model t = Model { modelNextId :: ControllerM AppSettings DC ObjId
 --
 
 class LabelPolicy t where
-  genLabel :: t -> ControllerM AppSettings DC DCLabel
+  genLabel :: DCPriv -> t -> ControllerM AppSettings DC DCLabel
 
 -- | Get object by id. The function throws an exception if the label of the
 -- object is above the current label.
 findObj :: (Read t, MonadLIO DCLabel m) => Model t -> ObjId -> m t
-findObj m oid = let objFile = "model" </> modelName m </> show oid
-                in liftLIO $ (read . S8.unpack) `liftM` readFile objFile
+findObj = findObjP mempty
+
+findObjP :: (Read t, MonadLIO DCLabel m) => DCPriv -> Model t -> ObjId -> m t
+findObjP priv m oid = let objFile = "model" </> modelName m </> show oid
+                      in liftLIO $ (read . S8.unpack) `liftM` readFileP priv objFile
 
 
 -- | Get all objects below the current clearance.
 findAll :: (Read t, MonadLIO DCLabel m) => Model t -> m [t]
-findAll m = liftLIO $ do
-  ids <- getAllIds m
+findAll = findAllP mempty
+
+findAllP :: (Read t, MonadLIO DCLabel m) => DCPriv -> Model t -> m [t]
+findAllP priv m = liftLIO $ do
+  ids <- getAllIdsP priv m
   catMaybes `liftM` mapM findObj' ids
   where findObj' i = do
-          (Just `liftM` findObj m i) `LIO.catch` 
+          (Just `liftM` findObjP priv m i) `LIO.catch` 
                   (\(e::SomeException) -> return Nothing)
  
 
 -- | Save object to file.
 insert :: (Show t, LabelPolicy t)
        => Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
-insert m = insertP m mempty
+insert = insertP mempty
 
 insertP :: (Show t, LabelPolicy t)
-       => Model t -> DCPriv -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
-insertP m privs f = do
+       => DCPriv -> Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
+insertP priv m f = do
   oId <- modelNextId m
   let obj = f oId
-  lobj <- genLabel obj
-  writeFileP privs (Just lobj) ("model" </> modelName m </> show oId) $ 
+  lobj <- genLabel priv obj
+  writeFileP priv (Just lobj) ("model" </> modelName m </> show oId) $ 
     S8.pack (show obj)
   return oId
 
 -- | Save object to file; file elready exists
 update :: Show t 
        => Model t -> t -> ObjId -> ControllerM AppSettings DC ()
-update m = updateP m mempty
+update = updateP mempty
 
 updateP :: Show t 
-        => Model t -> DCPriv -> t -> ObjId -> ControllerM AppSettings DC ()
-updateP m privs obj oId = do
-  writeFileP privs Nothing ("model" </> modelName m </> show oId) $ 
+        => DCPriv -> Model t -> t -> ObjId -> ControllerM AppSettings DC ()
+updateP priv m obj oId = do
+  writeFileP priv Nothing ("model" </> modelName m </> show oId) $ 
     S8.pack (show obj)
 
 -- | Get all the post id's
 getAllIds :: MonadLIO DCLabel m => Model t -> m [ObjId]
-getAllIds m = do
+getAllIds = getAllIdsP mempty
+
+getAllIdsP :: MonadLIO DCLabel m => DCPriv -> Model t -> m [ObjId]
+getAllIdsP priv m = do
   let modelDir = "model" </> modelName m
   liftLIO $ do lcurr <- getLabel
-               createDirectory lcurr "model" `LIO.catch` 
+               createDirectoryP priv lcurr "model" `LIO.catch` 
                   (\(e::SomeException) -> return ())
-               createDirectory lcurr modelDir `LIO.catch` 
+               createDirectoryP priv lcurr modelDir `LIO.catch` 
                   (\(e::SomeException) -> return ())
-  dirs <- getDirectoryContents modelDir
+  dirs <- getDirectoryContentsP priv modelDir
   let oids = List.sort $ filter (\fp -> fp `notElem` [".", ".."]) dirs
   return $ map read oids
 
