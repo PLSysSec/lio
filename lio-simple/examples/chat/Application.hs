@@ -19,6 +19,8 @@ import Web.Frank
 
 import LIO
 import LIO.DCLabel
+import LIO.Web.Simple
+import LIO.Web.Simple.DCLabel
 
 --
 -- Groups
@@ -34,10 +36,12 @@ data Group = Group { groupId      :: Maybe ObjId
                    } deriving (Show, Read, Eq, Typeable)
 
 instance LabelPolicy Group where
-  genLabel post = return dcPublic
+  genLabel group =
+    let us = toCNF . dFromList . map principalBS . groupMembers $ group
+    in return $ cTrue %% us
 
 instance ToJSON Group where
-  toJSON group = object 
+  toJSON group = object
      [ "groupId"      .= gid
      , "groupName"    .= (S8.unpack $ groupName group)
      , "groupMembers" .= (map S8.unpack $ groupMembers group)
@@ -45,10 +49,10 @@ instance ToJSON Group where
    -- convert groupId to string since Aeson numbers are not integral
    where gid = maybe Null (toJSON . show) $ groupId group
 
-saveGroup :: Model Group -> Group -> ControllerM AppSettings DC ObjId
-saveGroup m g = case groupId g of
-                    Just gid -> update m g gid >> return gid
-                    _        -> insert m (\gid -> g { groupId = Just gid })
+saveGroup :: Model Group -> DCPriv -> Group -> ControllerM AppSettings DC ObjId
+saveGroup m priv g = case groupId g of
+  Just gid -> updateP m priv g gid >> return gid
+  _        -> insertP m priv (\gid -> g { groupId = Just gid })
 
 --
 -- Logs
@@ -67,7 +71,7 @@ instance LabelPolicy Post where
     groupModel <- getModel "group"
     group <- findObj groupModel $ postGroupId post
     let us = toCNF . dFromList . map principalBS . groupMembers $ group
-    return $ us %% cTrue
+    return $ us %% (principalBS . postAuthor $ post)
 
 
 instance ToJSON Post where
@@ -78,16 +82,16 @@ instance ToJSON Post where
    -- convert postId to string since Aeson numbers are not integral
    where pid = maybe Null (toJSON . show) $ postId post
 
-savePost :: Model Post -> Post -> ControllerM AppSettings DC ObjId
-savePost m p = case postId p of
-                   Just pid -> update m p pid >> return pid
-                   _        -> insert m (\pid -> p { postId = Just pid })
+savePost :: Model Post -> DCPriv -> Post -> ControllerM AppSettings DC ObjId
+savePost m priv p = case postId p of
+  Just pid -> updateP m priv p pid >> return pid
+  _        -> insertP m priv (\pid -> p { postId = Just pid })
 
 --
 -- Controller
 --
 
-app :: (SimpleApplication DC -> DC ()) -> DC ()
+app :: (SimpleDCApplication -> DC ()) -> DC ()
 app runner = do
   groupModel <- liftLIO $ newModel "group"
   postModel  <- liftLIO $ newModel "post"
@@ -95,7 +99,7 @@ app runner = do
   let settings = newAppSettings `addModelToApp` groupModel
                                 `addModelToApp` postModel
 
-  runner $ controllerApp settings $ do
+  runner $ \priv -> controllerApp settings $ do
     get "/" $ do
       user  <- currentUser
       render "index.html" $ object [ "user" .= S8.unpack user ]
@@ -133,12 +137,12 @@ app runner = do
             let members = user : (filter notNull $ S8.split ',' members')
             return $ Group { groupId      = Nothing
                            , groupName    = name
-                           , groupMembers = members 
+                           , groupMembers = members
                            , groupPosts   = [] }
       case mgroup of
-        Just group -> do gId <- saveGroup groupModel group
+        Just group -> do gId <- saveGroup groupModel priv group
                          respond $ redirectTo $ S8.pack $ "/group/" ++ show gId
-        _          -> redirectBack 
+        _          -> redirectBack
 
     -- Create new post
     post "/group/:gid/newpost" $ do
@@ -154,11 +158,11 @@ app runner = do
       case mpost of
         Just post -> do
           group <- findObj groupModel gId
-          pid <- savePost postModel post
-          void $ saveGroup groupModel $ 
+          pid <- savePost postModel priv post
+          void $ saveGroup groupModel priv $
             group { groupPosts = groupPosts group ++ [pid] }
-        _         -> redirectBack 
-      redirectBack 
+        _         -> redirectBack
+      redirectBack
 
 --
 -- Helpers

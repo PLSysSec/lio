@@ -11,6 +11,7 @@ import Prelude hiding (writeFile, readFile, appendFile)
 import Control.Applicative
 import Control.Monad
 import Data.Maybe
+import Data.Monoid
 import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.List as List
@@ -103,18 +104,27 @@ findAll m = liftLIO $ do
 -- | Save object to file.
 insert :: (Show t, LabelPolicy t)
        => Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
-insert m f = do
+insert m = insertP m mempty
+
+insertP :: (Show t, LabelPolicy t)
+       => Model t -> DCPriv -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
+insertP m privs f = do
   oId <- modelNextId m
   let obj = f oId
   lobj <- genLabel obj
-  writeFile (Just lobj) ("model" </> modelName m </> show oId) $ 
+  writeFileP privs (Just lobj) ("model" </> modelName m </> show oId) $ 
     S8.pack (show obj)
   return oId
 
 -- | Save object to file; file elready exists
-update :: Show t => Model t -> t -> ObjId -> ControllerM AppSettings DC ()
-update m obj oId = do
-  writeFile Nothing ("model" </> modelName m </> show oId) $ 
+update :: Show t 
+       => Model t -> t -> ObjId -> ControllerM AppSettings DC ()
+update m = updateP m mempty
+
+updateP :: Show t 
+        => Model t -> DCPriv -> t -> ObjId -> ControllerM AppSettings DC ()
+updateP m privs obj oId = do
+  writeFileP privs Nothing ("model" </> modelName m </> show oId) $ 
     S8.pack (show obj)
 
 -- | Get all the post id's
