@@ -38,6 +38,7 @@ library
   exposed-modules:
     LIO.Web.Simple
     LIO.Web.Simple.Auth
+    LIO.Web.Simple.DCLabel
     LIO.Web.Simple.TCB
   default-language: Haskell2010
 

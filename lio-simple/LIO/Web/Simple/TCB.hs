@@ -12,13 +12,15 @@
 
 -}
 
-module LIO.Web.Simple.TCB ( 
+module LIO.Web.Simple.TCB (
+    -- * LIO applications
+    SimpleLIOApplication, SimpleLIOMiddleware
     -- * Runners
-    run 
+  , run, runP
     -- * Middleware
   , browserLabelGuard
-  , removeRequestHeaders 
-  , removeResponseHeaders 
+  , removeRequestHeaders
+  , removeResponseHeaders
   ) where
 
 import LIO
@@ -34,20 +36,34 @@ import Network.Wai.Internal
 import Network.Wai.Handler.Warp hiding (run)
 import qualified Network.Wai.Handler.Warp as Warp
 
+-- | An LIO simple aplpication is an 'LIO' computation mapping a set
+-- of privileges and request to a response. While privileges can be
+-- provided in terms of a e.g., 'Reader' monad, in certain cases not
+-- having the privilege as part of the sate is cleaner.
+type SimpleLIOApplication p l = Priv p -> SimpleApplication (LIO l)
+
+-- | Simple LIO middleware.
+type SimpleLIOMiddleware p l = SimpleLIOApplication p l -> SimpleLIOApplication p l
+
 -- | Run an LIO web app wrapped by some middleware. Since web servers
 -- can be quite messy it is important that you provide middleware to
 -- sanitize responses to prevent data leakage.
--- 
+--
 -- Since security properties vary across applications, we do not
 -- impose any conditions on the requests and reponses. The latter can
 -- be sanitized by supplying a middleware, while the former can simply
 -- be baked-into the app (as 'SimpleMiddleware'.
---
 run :: Label l => Port -> Middleware -> SimpleApplication (LIO l) -> LIO l ()
-run port middleware app = do
+run port middleware app = runP port middleware noPrivs (const app)
+
+-- | Same as 'run', but run 'SimpleLIOApplication's, i.e.,
+-- applications that take privileges.
+runP :: (PrivDesc l p, Label l)
+     => Port -> Middleware -> Priv p -> SimpleLIOApplication p l -> LIO l ()
+runP port middleware priv app = do
   state <- getLIOStateTCB
-  ioTCB $ Warp.run port $ middleware . filterFileResponses $ 
-    \req -> evalLIO (app req) state
+  ioTCB $ Warp.run port $ middleware . filterFileResponses $
+    \req -> evalLIO (app priv req) state
 
 -- | Remove any responses that were built with 'responseFile' or
 -- 'responseSource'.
@@ -63,10 +79,10 @@ filterFileResponses app req = do
 -- result label of the app computation and the label of the browser). If
 -- the response is not readable by the browser, the middleware sends a
 -- 403 (unauthorized) response instead.
-browserLabelGuard :: Label l => l -> SimpleMiddleware (LIO l)
+browserLabelGuard :: MonadLIO l m => l -> SimpleMiddleware m
 browserLabelGuard browserLabel app req = do
   resp <- app req
-  resultLabel <- getLabel
+  resultLabel <- liftLIO $ getLabel
   return $ if resultLabel `canFlowTo` browserLabel
              then resp
              else forbidden

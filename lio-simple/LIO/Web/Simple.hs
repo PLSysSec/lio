@@ -25,6 +25,8 @@ module LIO.Web.Simple (
   , browserLabelGuard
   , removeRequestHeaders
   , removeResponseHeaders 
+    -- * LIO applications
+  , SimpleLIOApplication, SimpleLIOMiddleware
   ) where
 
 import Prelude hiding (readFile)
