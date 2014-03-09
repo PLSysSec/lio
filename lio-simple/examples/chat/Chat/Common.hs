@@ -20,6 +20,8 @@ import Control.Applicative
 import Control.Monad (foldM)
 import Web.Simple
 import Web.Simple.Templates
+import LIO.Run (privInit)
+import LIO.TCB (ioTCB)
 
 import LIO
 import LIO.DCLabel
@@ -70,6 +72,7 @@ instance HasTemplates AppSettings DC where
 -- Data model
 --
 
+-- | Object Ids. Use random integers when considering malicious code.
 type ObjId = Int
 
 -- | Data type abstracting a model, @t@ is a phantom type
@@ -160,3 +163,73 @@ currentUser :: MonadLIO DCLabel m => ControllerM r m UserName
 currentUser = do
   mu <- requestHeader "X-User"
   maybe (fail "User not logged-in") return mu
+
+--
+-- Groups
+--
+
+type GroupName = UserName
+
+-- | Datatype representing a chat group
+data Group = Group { groupId      :: Maybe ObjId
+                   , groupName    :: GroupName
+                   , groupMembers :: [UserName]
+                   , groupPosts   :: [ObjId]
+                   } deriving (Show, Read, Eq, Typeable)
+
+instance LabelPolicy Group where
+  genLabel _ group = 
+    let c = case groupId group of
+              Just gid -> ("#group-" ++ show gid) \/ admin
+              _        -> cTrue
+    in return $ c %% c
+
+admin :: Principal
+admin = principalBS "admin"
+
+-- | Return the privileges corresponding to the groups that the user
+-- is a member of. This fetches all the groups, so it's obviously very
+-- slow, but since this is a toy application we will not optimize this.
+getGroupPriv :: UserName -> Gate CNF (ControllerM AppSettings DC DCPriv)
+getGroupPriv user = guardGate "getGroupPrivs" (toCNF $ principalBS user) $ do
+  groupModel <- getModel "group"
+  adminPriv  <- liftLIO . ioTCB . privInit $ toCNF admin
+  groups     <- filter (elem user . groupMembers) `liftM` 
+                  findAllP adminPriv groupModel
+  liftLIO $ ioTCB . putStrLn $ show groups
+  let f group c = c /\ (("#group-"++ (show . fromJust . groupId $ group)) \/ admin)
+  return $ delegate adminPriv $ foldr f cTrue groups
+
+-- | Create a new group
+createNewGroup :: DCPriv -> Group -> ControllerM AppSettings DC ObjId
+createNewGroup upriv group' = do
+  groupModel <- getModel "group"
+  gId <- modelNextId (groupModel :: Model Group)
+  let group = group' { groupId = Just gId }
+  lgroup <- genLabel upriv group
+  liftLIO $ do
+    priv<- mappend upriv `liftM` 
+               (ioTCB . privInit $ admin \/ ("#group-" ++ show gId))
+    clr  <- getClearance
+    withClearanceP priv (clr `lub` (privDesc priv %% cTrue)) $ do
+      writeFileP priv (Just lgroup) 
+                 ("model" </> modelName groupModel </> show gId) $ S8.pack (show group)
+    return gId
+
+--
+-- Posts
+--
+
+-- | Datatype representing a chat post
+data Post = Post { postId      :: Maybe ObjId
+                 , postBody    :: S8.ByteString
+                 , postAuthor  :: UserName
+                 , postGroupId :: ObjId
+                 } deriving (Show, Read, Eq, Typeable)
+
+instance LabelPolicy Post where
+  genLabel priv post = do
+    groupModel <- getModel "group"
+    group <- findObjP priv groupModel $ postGroupId post
+    -- Use the same label as the group
+    genLabel priv (group :: Group)

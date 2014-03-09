@@ -7,10 +7,12 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.IO.Class
 import Chat.Common
+import Data.Monoid
 import Data.Aeson
 import Data.Typeable
 import qualified Data.ByteString.Char8 as S8
 import qualified Data.Maybe as Maybe
+import qualified Data.List as List
 import Network.HTTP.Types
 import Web.Simple
 import Web.Simple.Templates
@@ -22,23 +24,10 @@ import LIO.DCLabel
 import LIO.Web.Simple
 import LIO.Web.Simple.DCLabel
 
+
 --
 -- Groups
 --
-
-type GroupName = UserName
-
--- | Datatype representing a chat group
-data Group = Group { groupId      :: Maybe ObjId
-                   , groupName    :: GroupName
-                   , groupMembers :: [UserName]
-                   , groupPosts   :: [ObjId]
-                   } deriving (Show, Read, Eq, Typeable)
-
-instance LabelPolicy Group where
-  genLabel _ group =
-    let us = toCNF . dFromList . map principalBS . groupMembers $ group
-    in return $ cTrue %% us
 
 instance ToJSON Group where
   toJSON group = object
@@ -52,26 +41,11 @@ instance ToJSON Group where
 saveGroup :: DCPriv -> Model Group -> Group -> ControllerM AppSettings DC ObjId
 saveGroup priv m g = case groupId g of
   Just gid -> updateP priv m g gid >> return gid
-  _        -> insertP priv m (\gid -> g { groupId = Just gid })
+  _        -> createNewGroup priv g
 
 --
--- Logs
+-- Posts
 --
-
--- | Datatype representing a chat log
-data Post = Post { postId      :: Maybe ObjId
-                 , postBody    :: S8.ByteString
-                 , postAuthor  :: UserName
-                 , postGroupId :: ObjId
-                 } deriving (Show, Read, Eq, Typeable)
-
-
-instance LabelPolicy Post where
-  genLabel priv post = do
-    groupModel <- getModel "group"
-    group <- findObjP priv groupModel $ postGroupId post
-    let us = toCNF . dFromList . map principalBS . groupMembers $ group
-    return $ us %% (principalBS . postAuthor $ post)
 
 
 instance ToJSON Post where
@@ -99,7 +73,7 @@ app runner = do
   let settings = newAppSettings `addModelToApp` groupModel
                                 `addModelToApp` postModel
 
-  runner $ \priv -> controllerApp settings $ do
+  runner $ \upriv -> controllerApp settings $ withUser upriv $ \user priv -> do
     get "/" $ do
       user  <- currentUser
       render "index.html" $ object [ "user" .= S8.unpack user ]
@@ -108,17 +82,16 @@ app runner = do
     -- Groups
     --
 
-    get "/group" $ do
+    get "/group" $ do -- withUser upriv $ \user priv -> do
       groups <- findAllP priv groupModel
-      render "group/index.html" $ object [ "groups"   .= groups ]
+      render "group/index.html" $ object [ "groups" .= groups ]
 
     -- Respond to "/new"
     get "/group/new" $ do
       render "group/new.html" ()
 
     -- Repond to GET "/group/:id"
-    get "/group/:id" $ routeTop $ do
-      user  <- currentUser
+    get "/group/:id" $ do -- withUser upriv $ \user priv -> do
       gId   <- read `liftM` queryParam' "id"
       group <- findObjP priv groupModel gId
       posts <- findAllP priv postModel
@@ -128,8 +101,7 @@ app runner = do
                                         , "posts"   .= posts' ]
 
     -- Create new group
-    post "/group" $ do
-      user <- currentUser
+    post "/group" $ do -- withUser upriv $ \user priv -> do
       (params, _) <- parseForm
       let mgroup = do
             name     <- notNull `mfilter` lookup "name" params
@@ -145,8 +117,7 @@ app runner = do
         _          -> redirectBack
 
     -- Create new post
-    post "/group/:gid/newpost" $ do
-      user <- currentUser
+    post "/group/:gid/newpost" $ do -- withUser upriv $ \user priv -> do
       gId  <- read `liftM` queryParam' "gid"
       (params, _) <- parseForm
       let mpost = do
@@ -173,3 +144,13 @@ notNull = not . S8.null
 
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . Maybe.listToMaybe . reads
+
+withUser upriv act = do
+  user <- currentUser
+  priv <- mappend upriv `liftM` callGate (getGroupPriv user) upriv
+  -- raise clearance
+  -- since the action is in a lifted monad, we cannot generally
+  -- restore the clearance, but runner does this anyway
+  clr <- liftLIO getClearance
+  liftLIO $ setClearanceP priv $ clr `lub` (privDesc priv %% cTrue)
+  act user priv
