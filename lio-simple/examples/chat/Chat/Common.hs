@@ -196,7 +196,6 @@ getGroupPriv user = guardGate "getGroupPrivs" (toCNF $ principalBS user) $ do
   adminPriv  <- liftLIO . ioTCB . privInit $ toCNF admin
   groups     <- filter (elem user . groupMembers) `liftM` 
                   findAllP adminPriv groupModel
-  liftLIO $ ioTCB . putStrLn $ show groups
   let f group c = c /\ (("#group-"++ (show . fromJust . groupId $ group)) \/ admin)
   return $ delegate adminPriv $ foldr f cTrue groups
 

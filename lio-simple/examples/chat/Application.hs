@@ -33,7 +33,7 @@ instance ToJSON Group where
   toJSON group = object
      [ "groupId"      .= gid
      , "groupName"    .= (S8.unpack $ groupName group)
-     , "groupMembers" .= (map S8.unpack $ groupMembers group)
+     , "groupMembers" .= (S8.unpack . S8.unwords $ groupMembers group)
      , "groupPosts"   .= (map show $ groupPosts group) ]
    -- convert groupId to string since Aeson numbers are not integral
    where gid = maybe Null (toJSON . show) $ groupId group
@@ -106,15 +106,35 @@ app runner = do
       let mgroup = do
             name     <- notNull `mfilter` lookup "name" params
             members' <- lookup "members" params
-            let members = user : (filter notNull $ S8.split ',' members')
+            let members = user : S8.words members'
             return $ Group { groupId      = Nothing
                            , groupName    = name
-                           , groupMembers = members
+                           , groupMembers = List.nub $ members
                            , groupPosts   = [] }
       case mgroup of
         Just group -> do gId <- saveGroup priv groupModel group
                          respond $ redirectTo $ S8.pack $ "/group/" ++ show gId
         _          -> redirectBack
+
+    -- Repond to GET "/group/:id/edit"
+    get "/group/:id/edit" $ do -- withUser upriv $ \user priv -> do
+      gId   <- read `liftM` queryParam' "id"
+      group <- findObjP priv groupModel gId
+      render "group/edit.html" $ 
+        group { groupMembers = List.delete user $ groupMembers group }
+
+    -- Update group
+    post "/group/:id" $ do 
+      gId   <- read `liftM` queryParam' "id"
+      group <- findObjP priv groupModel gId
+      (params, _) <- parseForm
+      let name = maybe (groupName group) id $ 
+                   notNull `mfilter` lookup "name" params
+          members = maybe (groupMembers group) 
+                          (\m -> user : S8.words m) $ lookup "members" params
+      void $ saveGroup priv groupModel $ 
+        group { groupName = name, groupMembers = List.nub $ members }
+      respond $ redirectTo "/group"
 
     -- Create new post
     post "/group/:gid/newpost" $ do -- withUser upriv $ \user priv -> do
@@ -145,6 +165,9 @@ notNull = not . S8.null
 maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . Maybe.listToMaybe . reads
 
+withUser :: DCPriv 
+         -> (UserName -> DCPriv -> ControllerM AppSettings DC a)
+         -> ControllerM AppSettings DC a
 withUser upriv act = do
   user <- currentUser
   priv <- mappend upriv `liftM` callGate (getGroupPriv user) upriv
