@@ -24,6 +24,7 @@ import LIO.Run (privInit)
 import LIO.TCB (ioTCB)
 
 import LIO
+import qualified LIO as LIO
 import LIO.DCLabel
 import LIO.Web.Simple
 import LIO.FS.Simple
@@ -47,11 +48,16 @@ nextId mv = liftLIO $ do
 
 newModel :: Read t => String -> DC (Model t)
 newModel name = liftLIO $ do
-  let m = Model { modelNextId = undefined, modelName = name }
+  let m = Model { modelName   = name
+                , modelNextId = undefined
+                , modelLocks  = undefined }
   oId   <- length `liftM` getAllIds m
   lcurr <- getLabel
   mv    <- newLMVar lcurr oId
-  return $ m { modelNextId = nextId mv, modelName = name }
+  lock  <- newLMVar lcurr Map.empty
+  return $ m { modelNextId = nextId mv
+             , modelName   = name 
+             , modelLocks  = lock }
 
 addModelToApp :: Typeable t => AppSettings -> Model t -> AppSettings
 addModelToApp as m =
@@ -75,9 +81,16 @@ instance HasTemplates AppSettings DC where
 -- | Object Ids. Use random integers when considering malicious code.
 type ObjId = Int
 
+-- | Lock map. When updating an object, we lock it to ensure that
+-- concurrent requests do not modify the same object.
+type LockMap = LMVar DCLabel (Map ObjId (LMVar DCLabel ()))
+
+
 -- | Data type abstracting a model, @t@ is a phantom type
-data Model t = Model { modelNextId :: ControllerM AppSettings DC ObjId
-                     , modelName   :: FilePath } deriving Typeable
+data Model t = Model { modelNextId :: DC ObjId
+                     , modelName   :: FilePath 
+                     , modelLocks  :: LockMap
+                     } deriving Typeable
 
 
 --
@@ -85,7 +98,7 @@ data Model t = Model { modelNextId :: ControllerM AppSettings DC ObjId
 --
 
 class LabelPolicy t where
-  genLabel :: DCPriv -> t -> ControllerM AppSettings DC DCLabel
+  genLabel :: t -> DCLabel
 
 -- | Get object by id. The function throws an exception if the label of the
 -- object is above the current label.
@@ -111,32 +124,32 @@ findAllP priv m = liftLIO $ do
  
 
 -- | Save object to file.
-insert :: (Show t, LabelPolicy t)
-       => Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
+insert :: (Show t, LabelPolicy t, MonadLIO DCLabel m)
+       => Model t -> (ObjId -> t) -> m ObjId
 insert = insertP mempty
 
-insertP :: (Show t, LabelPolicy t)
-       => DCPriv -> Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
+insertP :: (Show t, LabelPolicy t, MonadLIO DCLabel m)
+       => DCPriv -> Model t -> (ObjId -> t) -> m ObjId
 insertP priv m f = do
-  oId <- modelNextId m
-  let obj = f oId
-  lobj <- genLabel priv obj
+  oId <- liftLIO $ modelNextId m
+  let obj  = f oId
+      lobj = genLabel obj
   writeFileP priv (Just lobj) ("model" </> modelName m </> show oId) $ 
     S8.pack (show obj)
   return oId
 
 -- | Save object to file; file elready exists
-update :: Show t 
-       => Model t -> t -> ObjId -> ControllerM AppSettings DC ()
+update :: (MonadLIO DCLabel m, Show t)
+       => Model t -> t -> ObjId -> m ()
 update = updateP mempty
 
-updateP :: Show t 
-        => DCPriv -> Model t -> t -> ObjId -> ControllerM AppSettings DC ()
+updateP :: (MonadLIO DCLabel m, Show t) 
+        => DCPriv -> Model t -> t -> ObjId -> m ()
 updateP priv m obj oId = do
   writeFileP priv Nothing ("model" </> modelName m </> show oId) $ 
     S8.pack (show obj)
 
--- | Get all the post id's
+-- | Get all the object id's of a model
 getAllIds :: MonadLIO DCLabel m => Model t -> m [ObjId]
 getAllIds = getAllIdsP mempty
 
@@ -152,6 +165,30 @@ getAllIdsP priv m = do
   let oids = List.sort $ filter (\fp -> fp `notElem` [".", ".."]) dirs
   return $ map read oids
 
+-- | Execute an action, holding a lock on the object ID.
+withObjId :: MonadLIO DCLabel m => Model t -> ObjId -> DC a -> m a
+withObjId = withObjIdP mempty
+
+withObjIdP :: MonadLIO DCLabel m => DCPriv -> Model t -> ObjId -> DC a -> m a
+withObjIdP priv m oId act = liftLIO $ do
+  -- 1. Get (create if doesn't exist) the object lock
+  lockMap <- takeLMVarP priv $ modelLocks m
+  (olock, lockMap') <- case Map.lookup oId lockMap of
+    Just olock -> return (olock, lockMap)
+    Nothing -> do olock <- doit $ \p l -> newLMVarP p l ()
+                  return (olock, Map.insert oId olock lockMap)
+  putLMVarP priv (modelLocks m) lockMap'
+  LIO.bracket 
+    (doit $ \p _ -> void $ takeLMVarP p olock)    -- 2. Aquire object lock
+    (const . doit $ \p _ -> putLMVarP p olock ()) -- 4. Release object lock
+    (const act)                                   -- 3. Perform action
+  where doit act = do
+          let c = admin \/ principalBS "#objectLock"
+              l = c %% c
+          lpriv <- liftLIO . ioTCB . privInit $ c
+          clr  <- getClearance
+          withClearanceP (priv `mappend` lpriv) (clr `lub` l) $ do
+           act (priv `mappend` lpriv) l
 
 --
 -- Users
@@ -178,11 +215,11 @@ data Group = Group { groupId      :: Maybe ObjId
                    } deriving (Show, Read, Eq, Typeable)
 
 instance LabelPolicy Group where
-  genLabel _ group = 
+  genLabel group = 
     let c = case groupId group of
               Just gid -> ("#group-" ++ show gid) \/ admin
               _        -> cTrue
-    in return $ c %% c
+    in c %% c
 
 admin :: Principal
 admin = principalBS "admin"
@@ -203,9 +240,9 @@ getGroupPriv user = guardGate "getGroupPrivs" (toCNF $ principalBS user) $ do
 createNewGroup :: DCPriv -> Group -> ControllerM AppSettings DC ObjId
 createNewGroup upriv group' = do
   groupModel <- getModel "group"
-  gId <- modelNextId (groupModel :: Model Group)
+  gId <- liftLIO $ modelNextId (groupModel :: Model Group)
   let group = group' { groupId = Just gId }
-  lgroup <- genLabel upriv group
+      lgroup = genLabel group
   liftLIO $ do
     priv<- mappend upriv `liftM` 
                (ioTCB . privInit $ admin \/ ("#group-" ++ show gId))
@@ -227,8 +264,5 @@ data Post = Post { postId      :: Maybe ObjId
                  } deriving (Show, Read, Eq, Typeable)
 
 instance LabelPolicy Post where
-  genLabel priv post = do
-    groupModel <- getModel "group"
-    group <- findObjP priv groupModel $ postGroupId post
-    -- Use the same label as the group
-    genLabel priv (group :: Group)
+  genLabel post = let c = ("#group-" ++ (show . postGroupId $ post)) \/ admin
+                  in  c %% c

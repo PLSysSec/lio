@@ -38,10 +38,11 @@ instance ToJSON Group where
    -- convert groupId to string since Aeson numbers are not integral
    where gid = maybe Null (toJSON . show) $ groupId group
 
-saveGroup :: DCPriv -> Model Group -> Group -> ControllerM AppSettings DC ObjId
+saveGroup :: MonadLIO DCLabel m
+          => DCPriv -> Model Group -> Group -> m ObjId
 saveGroup priv m g = case groupId g of
   Just gid -> updateP priv m g gid >> return gid
-  _        -> createNewGroup priv g
+  _        -> fail "Expected group to already exist"
 
 --
 -- Posts
@@ -56,7 +57,8 @@ instance ToJSON Post where
    -- convert postId to string since Aeson numbers are not integral
    where pid = maybe Null (toJSON . show) $ postId post
 
-savePost :: DCPriv -> Model Post -> Post -> ControllerM AppSettings DC ObjId
+savePost :: MonadLIO DCLabel m 
+         => DCPriv -> Model Post -> Post -> m ObjId
 savePost priv m p = case postId p of
   Just pid -> updateP priv m p pid >> return pid
   _        -> insertP priv m (\pid -> p { postId = Just pid })
@@ -82,7 +84,7 @@ app runner = do
     -- Groups
     --
 
-    get "/group" $ do -- withUser upriv $ \user priv -> do
+    get "/group" $ do
       groups <- findAllP priv groupModel
       render "group/index.html" $ object [ "groups" .= groups ]
 
@@ -91,7 +93,7 @@ app runner = do
       render "group/new.html" ()
 
     -- Repond to GET "/group/:id"
-    get "/group/:id" $ do -- withUser upriv $ \user priv -> do
+    get "/group/:id" $ do
       gId   <- read `liftM` queryParam' "id"
       group <- findObjP priv groupModel gId
       posts <- findAllP priv postModel
@@ -101,7 +103,7 @@ app runner = do
                                         , "posts"   .= posts' ]
 
     -- Create new group
-    post "/group" $ do -- withUser upriv $ \user priv -> do
+    post "/group" $ do
       (params, _) <- parseForm
       let mgroup = do
             name     <- notNull `mfilter` lookup "name" params
@@ -112,12 +114,13 @@ app runner = do
                            , groupMembers = List.nub $ members
                            , groupPosts   = [] }
       case mgroup of
-        Just group -> do gId <- saveGroup priv groupModel group
+        Just group -> do gId <- createNewGroup priv group
+--        saveGroup priv groupModel group
                          respond $ redirectTo $ S8.pack $ "/group/" ++ show gId
         _          -> redirectBack
 
     -- Repond to GET "/group/:id/edit"
-    get "/group/:id/edit" $ do -- withUser upriv $ \user priv -> do
+    get "/group/:id/edit" $ do
       gId   <- read `liftM` queryParam' "id"
       group <- findObjP priv groupModel gId
       render "group/edit.html" $ 
@@ -126,18 +129,19 @@ app runner = do
     -- Update group
     post "/group/:id" $ do 
       gId   <- read `liftM` queryParam' "id"
-      group <- findObjP priv groupModel gId
       (params, _) <- parseForm
-      let name = maybe (groupName group) id $ 
-                   notNull `mfilter` lookup "name" params
-          members = maybe (groupMembers group) 
-                          (\m -> user : S8.words m) $ lookup "members" params
-      void $ saveGroup priv groupModel $ 
-        group { groupName = name, groupMembers = List.nub $ members }
+      withObjIdP priv groupModel gId $ do
+        group <- findObjP priv groupModel gId
+        let name = maybe (groupName group) id $ 
+                     notNull `mfilter` lookup "name" params
+            members = maybe (groupMembers group) 
+                            (\m -> user : S8.words m) $ lookup "members" params
+        void $ saveGroup priv groupModel $ 
+          group { groupName = name, groupMembers = List.nub $ members }
       respond $ redirectTo "/group"
 
     -- Create new post
-    post "/group/:gid/newpost" $ do -- withUser upriv $ \user priv -> do
+    post "/group/:gid/newpost" $ do
       gId  <- read `liftM` queryParam' "gid"
       (params, _) <- parseForm
       let mpost = do
@@ -148,11 +152,12 @@ app runner = do
                           , postGroupId = gId }
       case mpost of
         Just post -> do
-          group <- findObjP priv groupModel gId
-          pid <- savePost priv postModel post
-          void $ saveGroup priv groupModel $
-            group { groupPosts = groupPosts group ++ [pid] }
-        _         -> redirectBack
+          withObjIdP priv groupModel gId $ do
+            group <- findObjP priv groupModel gId
+            pid <- savePost priv postModel post
+            void $ saveGroup priv groupModel $
+              group { groupPosts = groupPosts group ++ [pid] }
+        _         -> return ()
       redirectBack
 
 --
