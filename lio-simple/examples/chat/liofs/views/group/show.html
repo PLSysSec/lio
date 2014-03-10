@@ -34,5 +34,8 @@ $endif$
   post.addEventListener("mouseover", function() { 
       clearTimeout(t); 
   });
+  document.getElementById('postBody').addEventListener("input", function() {
+      clearTimeout(t);
+  });
   post.addEventListener("mouseout", startTimer);
 </script>

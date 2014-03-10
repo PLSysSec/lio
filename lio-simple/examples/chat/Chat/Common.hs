@@ -174,7 +174,6 @@ type GroupName = UserName
 data Group = Group { groupId      :: Maybe ObjId
                    , groupName    :: GroupName
                    , groupMembers :: [UserName]
-                   , groupPosts   :: [ObjId]
                    } deriving (Show, Read, Eq, Typeable)
 
 instance LabelPolicy Group where
