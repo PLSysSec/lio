@@ -21,6 +21,7 @@ executable blog
     , wai
     , wai-extra
     , warp
+    , unix
     , lio
     , lio-fs
     , lio-simple

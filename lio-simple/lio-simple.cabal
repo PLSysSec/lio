@@ -29,7 +29,6 @@ library
     , simple
     , simple-templates
     , lio
-    , lio-fs
     , text
     , unix
 

@@ -1,4 +1,5 @@
 {-# LANGUAGE Unsafe #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 {- |
  
@@ -21,15 +22,23 @@ module LIO.Web.Simple.TCB (
   , browserLabelGuard
   , removeRequestHeaders
   , removeResponseHeaders
+    -- * Templates
+  , lioGetTemplateTCB
   ) where
+
+import Data.Text.Encoding
+
+import safe Control.Applicative
 
 import LIO
 import LIO.TCB (ioTCB, getLIOStateTCB)
 
 import qualified Data.List as List
+import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteString.Lazy.Char8 as L8
 
 import Web.Simple
+import safe Web.Simple.Templates.Language
 
 import Network.HTTP.Types
 import Network.Wai.Internal
@@ -106,3 +115,20 @@ rmResponseHeader (ResponseSource  x hs y  ) h = ResponseSource  x hs' y   where 
 
 rm :: HeaderName -> [Header] -> [Header]
 rm h = List.filter ((/= h) . fst)
+
+-- | Function to use to get a template. When the underlying monad is
+-- 'LIO', it looks in the 'viewDirectory' for the given file name and
+-- compiles the file into a template.
+--
+-- This function should be used only when the everything reachable
+-- from the 'viewDirectory' is public.
+--
+-- Since this funciton does not use the 'lio-fs' filesystem @readFile@,
+-- but rather the 'IO' @readFile@, it should not be exposed to
+-- untrusted code.
+lioGetTemplateTCB :: Label l => FilePath -> LIO l Template
+lioGetTemplateTCB fp = do
+  eres <- compileTemplate . decodeUtf8 <$> (ioTCB $ S8.readFile fp)
+  case eres of
+    Left str -> fail str
+    Right tmpl -> return tmpl

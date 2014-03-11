@@ -14,6 +14,7 @@ import LIO.DCLabel
 import LIO.DCLabel
 import LIO.Run (evalLIO, privInit)
 import LIO.TCB (ioTCB, getLIOStateTCB, putLIOStateTCB)
+import LIO.FS.Simple
 import LIO.FS.Simple.DCLabel
 import LIO.Web.Simple
 import LIO.Web.Simple.Auth

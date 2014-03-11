@@ -1,3 +1,4 @@
+{-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -16,10 +17,12 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import qualified Data.List as List
 import qualified Data.ByteString.Char8 as S8
+import Data.Text.Encoding
 import Control.Applicative
 import Control.Monad (foldM)
 import Web.Simple
 import Web.Simple.Templates
+import Web.Simple.Templates.Language
 import LIO.Run (privInit)
 import LIO.TCB (ioTCB)
 
@@ -231,3 +234,20 @@ instance LabelPolicy Post where
     group <- findObjP priv groupModel $ postGroupId post
     -- Use the same label as the group
     genLabel priv (group :: Group)
+
+
+-- | Function to use to get a template. When the underlying monad is
+-- 'LIO', it looks in the 'viewDirectory' for the given file name and
+-- compiles the file into a template.
+--
+-- Make sure that you execute the application within a 'withLIOFS'
+-- block.
+--
+-- To ensure that all the files in the 'viewDirector' are (publicly)
+-- labeled use 'labelDirectoryRecursively'.
+lioDefaultGetTemplate :: Label l => FilePath -> ControllerM hs (LIO l) Template
+lioDefaultGetTemplate fp = do
+  eres <- compileTemplate . decodeUtf8 <$> liftLIO (readFile fp)
+  case eres of
+    Left str -> fail str
+    Right tmpl -> return tmpl

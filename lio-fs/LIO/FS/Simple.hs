@@ -63,7 +63,7 @@ module LIO.FS.Simple (
   -- * Filesystem errors
   , FSError(..)
   -- * Misc helpers
-  , cleanUpPath, taintObjPathP
+  , cleanUpPath, taintObjPathP, labelDirectoryRecursively 
   ) where
 
 import Prelude hiding (readFile, writeFile, appendFile)
@@ -79,6 +79,7 @@ import safe qualified System.IO as IO
 import safe qualified System.IO.Error as IO
 import safe qualified System.Directory as IO
 import safe System.FilePath
+import safe System.Posix.Files
 
 import safe LIO
 import safe LIO.Error
@@ -412,3 +413,24 @@ instance CleanUpPath IO where
 
 instance Label l => CleanUpPath (LIO l) where
   cleanUpPath = ioTCB . cleanUpPath
+
+
+-- | Label the directory and every file within recursively with the
+-- supplied label. Note this funciton expects a full path.
+labelDirectoryRecursively :: Label l => l -> FilePath -> IO ()
+labelDirectoryRecursively l dir = do
+  exists <- IO.doesDirectoryExist dir
+  unless exists $ throwIO $ IO.mkIOError IO.doesNotExistErrorType
+                                        ctx Nothing (Just dir)
+  setPathLabelTCB dir l
+  fs <- filter (\f -> f `notElem` [".", ".."]) `liftM` IO.getDirectoryContents dir
+  forM_ fs $ \f -> do
+    let file = dir </> f
+    stat <- getFileStatus file
+    case () of
+      _ | isRegularFile stat -> setPathLabelTCB file l
+      _ | isDirectory stat   -> labelDirectoryRecursively l file
+      _ -> throwIO $ IO.mkIOError IO.illegalOperationErrorType ctx
+                                  Nothing (Just file)
+
+  where ctx = "labelDirectoryRecursively"
