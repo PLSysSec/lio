@@ -1,0 +1,13 @@
+$if(null(groups))$
+  No groups.
+$else$
+  $for(group in groups)$
+  <div class="tight-content">
+    <a href="/group/$group.groupId$"><strong>$group.groupName$</strong></a>:
+    $group.groupMembers$
+    <div class="pull-right">
+      [<a href="/group/$group.groupId$/edit">edit</a>]
+    </div>
+  </div>
+  $endfor$
+$endif$

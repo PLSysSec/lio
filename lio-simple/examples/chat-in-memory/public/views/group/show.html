@@ -1,0 +1,41 @@
+<div class="content">
+<div class="content-title">$group.groupName$</div>
+$if(null(posts))$
+  No posts.
+$else$
+  $for(post in posts)$
+  <div>
+    <em>$post.postAuthor$:</em>
+    $post.postBody$
+  </div>
+  $endfor$
+$endif$
+</div>
+
+<div id="post" class="highlight">
+<form action="/group/$group.groupId$/newpost" method="POST">
+    <label for="body">$user$:</label>
+    <input type="text" name="body" id="postBody"/>
+    <input type="submit" value="send"/>
+</form>
+</div>
+
+<script type="text/javascript">
+  document.getElementById('postBody').focus();
+
+  var t;
+  var startTimer = function () {
+    t = setTimeout(function() { location.reload(true); }, 2500);
+  };
+
+  startTimer();
+
+  var post = document.getElementById('post');
+  post.addEventListener("mouseover", function() { 
+      clearTimeout(t); 
+  });
+  document.getElementById('postBody').addEventListener("input", function() {
+      clearTimeout(t);
+  });
+  post.addEventListener("mouseout", startTimer);
+</script>
