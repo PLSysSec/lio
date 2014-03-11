@@ -26,24 +26,29 @@ module LIO.Web.Simple.TCB (
   , lioGetTemplateTCB
   ) where
 
+import safe Control.Monad
+
 import Data.Text.Encoding
 
 import safe Control.Applicative
 
-import LIO
+import safe LIO
+import safe LIO.Error
 import LIO.TCB (ioTCB, getLIOStateTCB)
 
-import qualified Data.List as List
-import qualified Data.ByteString.Char8 as S8
-import qualified Data.ByteString.Lazy.Char8 as L8
+import safe qualified Data.List as List
+import safe qualified Data.ByteString.Char8 as S8
+import safe qualified Data.ByteString.Lazy.Char8 as L8
 
-import Web.Simple
+import safe Web.Simple
 import safe Web.Simple.Templates.Language
 
 import Network.HTTP.Types
 import Network.Wai.Internal
 import Network.Wai.Handler.Warp hiding (run)
 import qualified Network.Wai.Handler.Warp as Warp
+
+import safe System.FilePath
 
 -- | An LIO simple aplpication is an 'LIO' computation mapping a set
 -- of privileges and request to a response. While privileges can be
@@ -123,12 +128,38 @@ rm h = List.filter ((/= h) . fst)
 -- This function should be used only when the everything reachable
 -- from the 'viewDirectory' is public.
 --
+-- To ensure that the function cannot be abused the function first
+-- cleans up the file path: if it starts out with a @..@, we consider
+-- this invalid as it can be used explore parts of the filesystem that
+-- should otherwise be unaccessible. Similarly, we remove any @.@ from
+-- the path.
+--
 -- Since this funciton does not use the 'lio-fs' filesystem @readFile@,
 -- but rather the 'IO' @readFile@, it should not be exposed to
 -- untrusted code.
 lioGetTemplateTCB :: Label l => FilePath -> LIO l Template
 lioGetTemplateTCB fp = do
-  eres <- compileTemplate . decodeUtf8 <$> (ioTCB $ S8.readFile fp)
+  fp'  <- cleanUpPath fp
+  eres <- compileTemplate . decodeUtf8 <$> (ioTCB $ S8.readFile fp')
   case eres of
     Left str -> fail str
     Right tmpl -> return tmpl
+
+-- | Cleanup a file path, if it starts out with a @..@, we consider this
+-- invalid as it can be used explore parts of the filesystem that should
+-- otherwise be unaccessible. Similarly, we remove any @.@ from the path.
+cleanUpPath :: Label l => FilePath -> LIO l FilePath 
+cleanUpPath path = withContext "cleanUpPath" $
+                    doit . splitDirectories . normalise . stripSlash $ path
+  where doit []          = return []
+        doit ("..":_)    = throwLIO $ userError "Path cannot contain .."
+        doit (_:"..":xs) = doit xs
+        doit (".":xs)    = doit xs
+        doit (x:xs)      = (x </>) `liftM` doit xs
+
+-- | Remove any 'pathSeparator's from the front of a file path.
+stripSlash :: FilePath -> FilePath 
+stripSlash [] = []
+stripSlash xx@(x:xs) | x == pathSeparator = stripSlash xs
+                     | otherwise          = xx
+
