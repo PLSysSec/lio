@@ -1,9 +1,10 @@
 name:                lio-simple
 version:             0.0.0.1
-synopsis: LIO support for the Simple web framework
+synopsis:            LIO support for the Simple web framework
 description:
 
-  See "Web.Simple" for a more detailed introduction.
+  LIO support for the Simple web framework.
+  See the 'lio' and 'simple' packages for more information.
 
 homepage:            http://simple.cx
 license:             LGPL-3
@@ -44,4 +45,3 @@ library
 source-repository head
   type: git
   location: git://github.com/scslab/lio.git
-
