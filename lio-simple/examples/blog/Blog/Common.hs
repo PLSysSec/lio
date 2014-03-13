@@ -8,13 +8,13 @@ import Control.Monad
 import Control.Applicative
 
 import Data.Text.Encoding
-import Web.Simple
 import Web.Simple.Templates
 import Web.Simple.Templates.Language
 
 import LIO
 import LIO.DCLabel
 import LIO.Web.Simple
+import LIO.Web.Simple.DCLabel
 import LIO.Concurrent.LMVar
 
 import qualified LIO.FS.Simple as FS
@@ -27,11 +27,11 @@ newAppSettings nr = do
   counter <- newLMVar lcurr nr
   return $ AppSettings { postNr = counter }
 
-instance HasTemplates AppSettings DC where
+instance HasTemplates DC AppSettings where
   defaultLayout = Just <$> getTemplate "layouts/main.html"
   getTemplate = lioDefaultGetTemplate
 
-getNextPostNr :: ControllerM AppSettings DC Int
+getNextPostNr :: DCController AppSettings Int
 getNextPostNr = do
   as <- controllerState
   let mv = postNr as
@@ -49,7 +49,7 @@ getNextPostNr = do
 --
 -- To ensure that all the files in the 'viewDirector' are (publicly)
 -- labeled use 'labelDirectoryRecursively'.
-lioDefaultGetTemplate :: Label l => FilePath -> ControllerM hs (LIO l) Template
+lioDefaultGetTemplate :: Label l => FilePath -> LIOController l hs Template
 lioDefaultGetTemplate fp = do
   eres <- compileTemplate . decodeUtf8 <$> liftLIO (liftLIO $ FS.readFile fp)
   case eres of

@@ -10,7 +10,7 @@ import Data.ByteString.Base64
 import Network.HTTP.Types
 import Network.Wai
 import Web.Simple.Responses
-import Web.Simple.Middleware
+import Web.Simple.Controller.Trans
 
 
 -- | A 'Route' that uses HTTP basic authentication to authenticate a

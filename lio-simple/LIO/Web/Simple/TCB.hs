@@ -41,6 +41,7 @@ import safe qualified Data.ByteString.Char8 as S8
 import safe qualified Data.ByteString.Lazy.Char8 as L8
 
 import safe Web.Simple
+import safe Web.Simple.Controller.Trans
 import safe Web.Simple.Templates.Language
 
 import Network.HTTP.Types

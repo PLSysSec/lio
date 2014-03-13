@@ -20,11 +20,12 @@ import qualified Data.ByteString.Char8 as S8
 import Data.Text.Encoding
 import Control.Applicative
 import Control.Monad (foldM)
-import Web.Simple
-import Web.Simple.Templates
-import Web.Simple.Templates.Language
 import LIO.Run (privInit)
 import LIO.TCB (ioTCB)
+
+import LIO.Web.Simple
+import LIO.Web.Simple.DCLabel
+import Web.Simple.Templates.Language
 
 import LIO
 import LIO.DCLabel
@@ -61,12 +62,12 @@ addModelToApp as m =
   let mm = Map.insert (modelName m) (toDyn m) $ modelMap as
   in as { modelMap = mm }
 
-getModel :: Typeable t => String -> ControllerM AppSettings DC (Model t)
+getModel :: Typeable t => String -> DCController AppSettings (Model t)
 getModel name = do
  mm <- modelMap `liftM` controllerState
  return $ fromDyn  (mm Map.! name) $ error "Invalid type cast"
 
-instance HasTemplates AppSettings DC where
+instance HasTemplates DC AppSettings where
   defaultLayout = Just <$> getTemplate "layouts/main.html"
   getTemplate = lioDefaultGetTemplate
 
@@ -79,7 +80,7 @@ instance HasTemplates AppSettings DC where
 type ObjId = Int
 
 -- | Data type abstracting a model, @t@ is a phantom type
-data Model t = Model { modelNextId :: ControllerM AppSettings DC ObjId
+data Model t = Model { modelNextId :: DCController AppSettings ObjId
                      , modelName   :: FilePath } deriving Typeable
 
 
@@ -88,7 +89,7 @@ data Model t = Model { modelNextId :: ControllerM AppSettings DC ObjId
 --
 
 class LabelPolicy t where
-  genLabel :: DCPriv -> t -> ControllerM AppSettings DC DCLabel
+  genLabel :: DCPriv -> t -> DCController AppSettings DCLabel
 
 -- | Get object by id. The function throws an exception if the label of the
 -- object is above the current label.
@@ -115,11 +116,11 @@ findAllP priv m = liftLIO $ do
 
 -- | Save object to file.
 insert :: (Show t, LabelPolicy t)
-       => Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
+       => Model t -> (ObjId -> t) -> DCController AppSettings ObjId
 insert = insertP mempty
 
 insertP :: (Show t, LabelPolicy t)
-       => DCPriv -> Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
+       => DCPriv -> Model t -> (ObjId -> t) -> DCController AppSettings ObjId
 insertP priv m f = do
   oId <- modelNextId m
   let obj = f oId
@@ -130,11 +131,11 @@ insertP priv m f = do
 
 -- | Save object to file; file elready exists
 update :: Show t 
-       => Model t -> t -> ObjId -> ControllerM AppSettings DC ()
+       => Model t -> t -> ObjId -> DCController AppSettings ()
 update = updateP mempty
 
 updateP :: Show t 
-        => DCPriv -> Model t -> t -> ObjId -> ControllerM AppSettings DC ()
+        => DCPriv -> Model t -> t -> ObjId -> DCController AppSettings ()
 updateP priv m obj oId = do
   writeFileP priv Nothing ("model" </> modelName m </> show oId) $ 
     S8.pack (show obj)
@@ -162,7 +163,7 @@ getAllIdsP priv m = do
 
 type UserName = S8.ByteString
 
-currentUser :: MonadLIO DCLabel m => ControllerM r m UserName
+currentUser :: DCController r UserName
 currentUser = do
   mu <- requestHeader "X-User"
   maybe (fail "User not logged-in") return mu
@@ -192,7 +193,7 @@ admin = principalBS "admin"
 -- | Return the privileges corresponding to the groups that the user
 -- is a member of. This fetches all the groups, so it's obviously very
 -- slow, but since this is a toy application we will not optimize this.
-getGroupPriv :: UserName -> Gate CNF (ControllerM AppSettings DC DCPriv)
+getGroupPriv :: UserName -> Gate CNF (DCController AppSettings DCPriv)
 getGroupPriv user = guardGate "getGroupPrivs" (toCNF $ principalBS user) $ do
   groupModel <- getModel "group"
   adminPriv  <- liftLIO . ioTCB . privInit $ toCNF admin
@@ -202,7 +203,7 @@ getGroupPriv user = guardGate "getGroupPrivs" (toCNF $ principalBS user) $ do
   return $ delegate adminPriv $ foldr f cTrue groups
 
 -- | Create a new group
-createNewGroup :: DCPriv -> Group -> ControllerM AppSettings DC ObjId
+createNewGroup :: DCPriv -> Group -> DCController AppSettings ObjId
 createNewGroup upriv group' = do
   groupModel <- getModel "group"
   gId <- modelNextId (groupModel :: Model Group)
@@ -245,7 +246,7 @@ instance LabelPolicy Post where
 --
 -- To ensure that all the files in the 'viewDirector' are (publicly)
 -- labeled use 'labelDirectoryRecursively'.
-lioDefaultGetTemplate :: Label l => FilePath -> ControllerM hs (LIO l) Template
+lioDefaultGetTemplate :: Label l => FilePath -> LIOController l hs Template
 lioDefaultGetTemplate fp = do
   eres <- compileTemplate . decodeUtf8 <$> liftLIO (readFile fp)
   case eres of

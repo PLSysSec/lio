@@ -20,8 +20,9 @@ import qualified Data.ByteString.Char8 as S8
 import Data.Text.Encoding
 import Control.Applicative
 import Control.Monad (foldM)
-import Web.Simple
-import Web.Simple.Templates
+
+import LIO.Web.Simple
+import LIO.Web.Simple.DCLabel
 import Web.Simple.Templates.Language
 
 import LIO
@@ -61,12 +62,12 @@ addModelToApp as m =
   let mm = Map.insert (modelName m) (toDyn m) $ modelMap as
   in as { modelMap = mm }
 
-getModel :: Typeable t => String -> ControllerM AppSettings DC (Model t)
+getModel :: Typeable t => String -> DCController AppSettings (Model t)
 getModel name = do
  mm <- modelMap `liftM` controllerState
  return $ fromDyn  (mm Map.! name) $ error "Invalid type cast"
 
-instance HasTemplates AppSettings DC where
+instance HasTemplates DC AppSettings where
   viewDirectory = return "public/views"
   defaultLayout = Just <$> getTemplate "public/layouts/main.html"
   getTemplate = liftLIO . lioGetTemplateTCB
@@ -98,7 +99,7 @@ deadlocks.
 --
 
 class LabelPolicy t where
-  genLabel :: DCPriv -> t -> ControllerM AppSettings DC DCLabel
+  genLabel :: DCPriv -> t -> DCController AppSettings DCLabel
 
 -- | Get object by id. The function throws an exception if the label of the
 -- object is above the current label.
@@ -126,11 +127,11 @@ findAllP priv m = liftLIO $ do
 
 -- | Save object to file.
 insert :: (Show t, LabelPolicy t)
-       => Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
+       => Model t -> (ObjId -> t) -> DCController AppSettings ObjId
 insert = insertP mempty
 
 insertP :: (Show t, LabelPolicy t)
-       => DCPriv -> Model t -> (ObjId -> t) -> ControllerM AppSettings DC ObjId
+       => DCPriv -> Model t -> (ObjId -> t) -> DCController AppSettings ObjId
 insertP priv m f = do
   oId  <- liftLIO $ modelNextId m priv 
   let obj = f oId
@@ -168,7 +169,7 @@ getAllIdsP priv m = liftLIO $ do
 
 type UserName = S8.ByteString
 
-currentUser :: MonadLIO DCLabel m => ControllerM r m UserName
+currentUser :: DCController r UserName
 currentUser = do
   mu <- requestHeader "X-User"
   maybe (fail "User not logged-in") return mu
@@ -198,7 +199,7 @@ admin = principalBS "admin"
 -- | Return the privileges corresponding to the groups that the user
 -- is a member of. This fetches all the groups, so it's obviously very
 -- slow, but since this is a toy application we will not optimize this.
-getGroupPriv :: UserName -> Gate CNF (ControllerM AppSettings DC DCPriv)
+getGroupPriv :: UserName -> Gate CNF (DCController AppSettings DCPriv)
 getGroupPriv user = guardGate "getGroupPrivs" (toCNF $ principalBS user) $ do
   groupModel <- getModel "group"
   adminPriv  <- liftLIO . ioTCB . privInit $ toCNF admin
@@ -208,7 +209,7 @@ getGroupPriv user = guardGate "getGroupPrivs" (toCNF $ principalBS user) $ do
   return $ delegate adminPriv $ foldr f cTrue groups
 
 -- | Create a new group
-createNewGroup :: DCPriv -> Group -> ControllerM AppSettings DC ObjId
+createNewGroup :: DCPriv -> Group -> DCController AppSettings ObjId
 createNewGroup upriv group' = do
   groupModel <- getModel "group"
   gId <- liftLIO $ modelNextId (groupModel :: Model Group) upriv

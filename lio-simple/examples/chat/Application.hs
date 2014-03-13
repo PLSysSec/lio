@@ -14,16 +14,14 @@ import qualified Data.ByteString.Char8 as S8
 import qualified Data.Maybe as Maybe
 import qualified Data.List as List
 import Network.HTTP.Types
-import Web.Simple
-import Web.Simple.Templates
-import Web.Simple.Auth
-import Web.Frank
 
 import LIO
 import LIO.DCLabel
 import LIO.Web.Simple
 import LIO.Web.Simple.DCLabel
 
+
+import Web.Frank
 
 --
 -- Groups
@@ -37,7 +35,7 @@ instance ToJSON Group where
    -- convert groupId to string since Aeson numbers are not integral
    where gid = maybe Null (toJSON . show) $ groupId group
 
-saveGroup :: DCPriv -> Model Group -> Group -> ControllerM AppSettings DC ObjId
+saveGroup :: DCPriv -> Model Group -> Group -> DCController AppSettings ObjId
 saveGroup priv m g = case groupId g of
   Just gid -> updateP priv m g gid >> return gid
   _        -> createNewGroup priv g
@@ -55,7 +53,7 @@ instance ToJSON Post where
    -- convert postId to string since Aeson numbers are not integral
    where pid = maybe Null (toJSON . show) $ postId post
 
-savePost :: DCPriv -> Model Post -> Post -> ControllerM AppSettings DC ObjId
+savePost :: DCPriv -> Model Post -> Post -> DCController AppSettings ObjId
 savePost priv m p = case postId p of
   Just pid -> updateP priv m p pid >> return pid
   _        -> insertP priv m (\pid -> p { postId = Just pid })
@@ -160,8 +158,8 @@ maybeRead :: Read a => String -> Maybe a
 maybeRead = fmap fst . Maybe.listToMaybe . reads
 
 withUser :: DCPriv 
-         -> (UserName -> DCPriv -> ControllerM AppSettings DC a)
-         -> ControllerM AppSettings DC a
+         -> (UserName -> DCPriv -> DCController AppSettings a)
+         -> DCController AppSettings a
 withUser upriv act = do
   user <- currentUser
   priv <- mappend upriv `liftM` callGate (getGroupPriv user) upriv

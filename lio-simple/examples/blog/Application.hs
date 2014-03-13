@@ -13,9 +13,10 @@ import qualified Data.ByteString.Char8 as S8
 import Data.List
 import Network.HTTP.Types
 import System.FilePath
-import Web.Simple
-import Web.Simple.Templates
+
 import Web.Frank
+import LIO.Web.Simple
+import LIO.Web.Simple.DCLabel
 
 import LIO
 import LIO.DCLabel
@@ -50,7 +51,7 @@ findAllPosts = do
   mapM findPost postIds
 
 -- | Save post to file
-insertPost :: Post -> ControllerM AppSettings DC ()
+insertPost :: Post -> DCController AppSettings ()
 insertPost post' = do
   postNo <- getNextPostNr
   let post = post' { postId = Just postNo }
