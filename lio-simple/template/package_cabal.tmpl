@@ -1,0 +1,24 @@
+name:                $module$
+version:             0.0.0.0
+--author:              YOUR NAME
+--maintainer:          your@email.com
+category:            Web
+build-type:          Simple
+cabal-version:       >=1.8
+
+executable $appname$
+  main-is: Main.hs
+  ghc-options: -threaded -O2
+  build-depends:
+    base
+    , simple >= 0.8.0
+    , lio
+    , lio-simple
+    , wai-extra
+    , warp$if(include_fs)$
+    , lio-fs
+    , filepath
+    , directory$if(include_templates)$
+    , simple-templates
+    , text$endif$$else$$if(include_templates)$
+    , filepath$endif$$endif$

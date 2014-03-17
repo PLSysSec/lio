@@ -1,0 +1,49 @@
+{-# LANGUAGE Trustworthy #-}
+$if(include_templates)$
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+$endif$
+module $module$.Common where
+
+import Prelude hiding (readFile, appendFile)
+import LIO
+import LIO.DCLabel
+$if(include_templates)$
+import LIO.Web.Simple
+import LIO.Web.Simple.DCLabel
+import Web.Simple.Templates
+import Control.Applicative
+import System.FilePath
+$if(include_fs)$
+import LIO.FS.Simple
+import Data.Text.Encoding
+import Web.Simple.Templates.Language
+$else$
+import LIO.Web.Simple.TCB (lioGetTemplateTCB)
+$endif$
+$endif$
+
+data AppSettings = AppSettings { }
+
+newAppSettings :: DC AppSettings
+newAppSettings = do
+  return AppSettings
+
+$if(include_templates)$
+instance HasTemplates DC AppSettings where
+$if(include_fs)$
+  viewDirectory = return $$ "views"
+  defaultLayout = Just <$$> getTemplate ("layouts" </> "main.html")
+  getTemplate fp = do
+    eres <- compileTemplate . decodeUtf8 <$$> liftLIO (liftLIO $$ readFile fp)
+    case eres of
+      Left str -> fail str
+      Right tmpl -> return tmpl
+$else$
+  viewDirectory = return $$ "liofs" </> "views"
+  defaultLayout = Just <$$> getTemplate ("liofs" </> "layouts" </> "main.html")
+  getTemplate = liftLIO . lioGetTemplateTCB
+  -- NOTE: We assume that "liofs" only contains public data, DO NOT
+  -- store any sensitive data in this directory
+$endif$
+$endif$

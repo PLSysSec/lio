@@ -8,12 +8,9 @@ import System.Environment
 import Web.Simple
 
 import LIO.DCLabel
-import LIO.Run (evalLIO)
-import LIO.TCB (ioTCB, getLIOStateTCB, putLIOStateTCB)
 import LIO.FS.Simple
 import LIO.FS.Simple.DCLabel
-import LIO.Web.Simple
-import LIO.Web.Simple.TCB
+import LIO.Web.Simple.TCB (run)
 
 import System.Directory
 import System.FilePath
@@ -31,4 +28,3 @@ main = do
     env <- getEnvironment
     let port = maybe 3000 read $ lookup "PORT" env
     evalDC $ app $ run port logStdout
-

@@ -1,0 +1,22 @@
+{-# LANGUAGE OverloadedStrings #-}
+module Application where
+
+import $module$.Common
+
+import LIO
+import LIO.DCLabel
+import LIO.Web.Simple
+import LIO.Web.Simple.DCLabel
+import Web.Frank
+
+app :: (SimpleApplication DC -> DC ()) -> DC ()
+app runner = do
+  settings <- newAppSettings
+
+  runner $$ controllerApp settings $$ do
+    get "/" $$ do$if(include_templates)$
+      render "index.html" ()
+$else$
+      respond $$ okHtml "Hello World"
+$endif$
+

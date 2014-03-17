@@ -1,5 +1,4 @@
 {-# LANGUAGE Trustworthy #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 module Blog.Common where
@@ -47,7 +46,7 @@ getNextPostNr = do
 -- Make sure that you execute the application within a 'withLIOFS'
 -- block.
 --
--- To ensure that all the files in the 'viewDirector' are (publicly)
+-- To ensure that all the files in the 'viewDirectory' are (publicly)
 -- labeled use 'labelDirectoryRecursively'.
 lioDefaultGetTemplate :: Label l => FilePath -> LIOController l hs Template
 lioDefaultGetTemplate fp = do

@@ -1,5 +1,5 @@
 name:                lio-simple
-version:             0.0.0.1
+version:             0.0.0.2
 synopsis:            LIO support for the Simple web framework
 description:
 
@@ -14,6 +14,8 @@ maintainer:          hails@scs.stanford.edu
 category:            Web
 build-type:          Simple
 cabal-version:       >=1.10
+
+data-files:          template/*.tmpl
 
 library
   build-depends:
@@ -41,6 +43,23 @@ library
     LIO.Web.Simple.DCLabel
     LIO.Web.Simple.TCB
   default-language: Haskell2010
+
+executable lio-simple
+  Main-Is: lio-simple.hs
+  ghc-options: -Wall -fno-warn-unused-do-bind
+  build-depends:
+      base < 6
+    , aeson
+    , attoparsec
+    , bytestring
+    , cmdargs
+    , directory
+    , filepath
+    , simple-templates >= 0.7.0
+    , text
+    , unordered-containers
+  default-language: Haskell2010
+
 
 source-repository head
   type: git
