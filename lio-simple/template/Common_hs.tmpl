@@ -4,7 +4,7 @@
 $endif$
 module $module$.Common where
 
-import Prelude hiding (readFile, appendFile)
+import Prelude hiding (readFile, writeFile, appendFile, catch)
 import LIO
 import LIO.DCLabel
 $if(include_templates)$
