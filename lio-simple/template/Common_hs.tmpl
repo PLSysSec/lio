@@ -1,5 +1,4 @@
-{-# LANGUAGE Trustworthy #-}
-$if(include_templates)$
+{-# LANGUAGE Trustworthy #-}$if(include_templates)$
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 $endif$
@@ -30,16 +29,14 @@ newAppSettings = do
   return AppSettings
 
 $if(include_templates)$
-instance HasTemplates DC AppSettings where
-$if(include_fs)$
+instance HasTemplates DC AppSettings where$if(include_fs)$
   viewDirectory = return $$ "views"
   defaultLayout = Just <$$> getTemplate ("layouts" </> "main.html")
   getTemplate fp = do
     eres <- compileTemplate . decodeUtf8 <$$> liftLIO (liftLIO $$ readFile fp)
     case eres of
       Left str -> fail str
-      Right tmpl -> return tmpl
-$else$
+      Right tmpl -> return tmpl$else$
   viewDirectory = return $$ "liofs" </> "views"
   defaultLayout = Just <$$> getTemplate ("liofs" </> "layouts" </> "main.html")
   getTemplate = liftLIO . lioGetTemplateTCB
