@@ -510,6 +510,10 @@ Browse the source:
 
 * [blog](https://github.com/scslab/lio/tree/master/lio-simple/examples/blog): memblog-like app, but writes posts to files
 
+* Slides: [Intro to Haskell with LIO](http://www.scs.stanford.edu/~deian/lio-tutorial/day1-slides.html) 
+
+* Slides: [Intro to LIO](http://www.scs.stanford.edu/~deian/lio-tutorial/day2-slides.html)
+
 In later tutorials I will show you how to use the power of LIO to bulid apps with some interesting security policies. Stay tuned!
 
 ## Acknowledgements

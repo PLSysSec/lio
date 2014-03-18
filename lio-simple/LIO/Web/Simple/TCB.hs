@@ -118,6 +118,7 @@ rmResponseHeader :: Response -> HeaderName -> Response
 rmResponseHeader (ResponseFile    x hs y z) h = ResponseFile    x hs' y z where hs' = rm h hs
 rmResponseHeader (ResponseBuilder x hs y  ) h = ResponseBuilder x hs' y   where hs' = rm h hs
 rmResponseHeader (ResponseSource  x hs y  ) h = ResponseSource  x hs' y   where hs' = rm h hs
+rmResponseHeader (ResponseRaw     x r     ) h = ResponseRaw x (rmResponseHeader r h)
 
 rm :: HeaderName -> [Header] -> [Header]
 rm h = List.filter ((/= h) . fst)

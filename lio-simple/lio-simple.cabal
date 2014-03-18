@@ -24,7 +24,7 @@ library
     , conduit
     , directory
     , filepath
-    , wai >= 2.0
+    , wai >= 2.1
     , wai-extra
     , warp
     , http-types
