@@ -34,18 +34,18 @@ app runner = do
       pId  <- queryParam' "pId"
       post <- getPostById pId
       render "edit.html" post
-    post "/" $ do
-      post <- formToPost Nothing
+    post "/" $ withUser $ \user -> do
+      post <- formToPost user Nothing
       pId  <- insertPost post
       respond . redirectTo . S8.pack $ "/" ++ pId
-    post "/:pId" $ do
+    post "/:pId" $ withUser $ \user -> do
       pId  <- queryParam' "pId"
-      post <- formToPost (Just pId)
+      post <- formToPost user (Just pId)
       updatePost pId post
       respond . redirectTo . S8.pack $ "/" ++ pId
 
-formToPost :: Maybe PostId -> DCController AppSettings Post
-formToPost mpId = do
+formToPost :: UserName -> Maybe PostId -> DCController AppSettings Post
+formToPost user mpId = do
   (params, _) <- parseForm
   let mpost = do
         title <- lookup "title" params
@@ -57,6 +57,7 @@ formToPost mpId = do
                              , postTitle = S8.unpack title
                              , postBody  = S8.unpack body 
                              , postIsPublished = pub
+                             , postAuthor = user
                              }
   case mpost of
     Nothing   -> redirectBack'

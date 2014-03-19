@@ -49,6 +49,7 @@ data Post = Post { postId          :: PostId
                  , postTitle       :: String
                  , postBody        :: String 
                  , postIsPublished :: Bool
+                 , postAuthor      :: UserName
                  } deriving (Show, Read)
 
 deriving instance Generic Post
@@ -95,6 +96,7 @@ post0 = Post {
      [ "Lorem ipsum dolor sit amet, consectetur adipiscing elit."
      , "Etiam vitae interdum sapien. In congue..." ] 
   , postIsPublished = True
+  , postAuthor = "cicero"
   }
 
 post1 :: Post
@@ -105,4 +107,5 @@ post1 = Post {
      [ "Aliquam tempor varius justo vitae bibendum! Duis vitae rutrum"
      , "neque. Sed ut sed..." ]
   , postIsPublished = False
+  , postAuthor = "cicero"
   }
