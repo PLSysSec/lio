@@ -1,0 +1,16 @@
+<form action="/$postId$" method="POST">
+  <div>
+    <label for="title">Title</label>
+    <input type="text" name="title" id="title" value="$postTitle$"/>
+  </div>
+  <div>
+    <label for="body">Body</label>
+    <textarea name="body" id="body">$postBody$</textarea>
+  </div>
+  <div>
+    <input type="checkbox" name="publish" 
+           id="publish" $if(postIsPublished)$ checked="true" $endif$/>
+    <label for="publish">Publish?</label>
+  </div>
+  <input type="submit" value="Update"/>
+</form>
