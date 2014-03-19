@@ -37,6 +37,10 @@ instance HasTemplates DC AppSettings where
   -- NOTE: We assume that "liofs" only contains public data, DO NOT
   -- store any sensitive data in this directory
 
+
+-- | UserName's are just Strings
+type UserName = String
+
 -- | Post Id's are stringified Ints
 type PostId = String
 
@@ -71,13 +75,12 @@ insertPost post = do
   liftLIO $ putLMVar (db settings) $ post' : posts
   return pId
 
-updatePost :: Post -> DCController AppSettings ()
-updatePost post = do
+updatePost :: PostId -> Post -> DCController AppSettings ()
+updatePost pId post = do
   settings  <- controllerState
   posts     <- liftLIO $ takeLMVar $ db settings
   liftLIO $ putLMVar (db settings) $ map f posts
-    where f p = if postId p == postId post
-                  then post else p
+    where f p = if postId p == pId then post else p
 
 
 --
