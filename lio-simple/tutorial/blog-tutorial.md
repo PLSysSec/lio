@@ -333,7 +333,7 @@ If we click on any of the links now, we'll get a 404 (not found) page. That's be
       render "show.html" post
 ```
 
-Here `haskell get "/:pId"` will match GET requests which have exactly one uncomsumed directory in the path and use its contents for the "pId" query parameter.  In our case, the query parameter "pId" will be set to anything that follows "/".  The first line of the controller looks up this query parameter.  Then, we use our previously-defined database function `getPostById` to lookup the post according to this the id.  Finally, we pass the post to the renderer, which uses the yet-to-be-defined "liofs/views/show.html" template.
+Here `get "/:pId"` will match GET requests which have exactly one uncomsumed directory in the path and use its contents for the "pId" query parameter.  In our case, the query parameter "pId" will be set to anything that follows "/".  The first line of the controller looks up this query parameter.  Then, we use our previously-defined database function `getPostById` to lookup the post according to this the id.  Finally, we pass the post to the renderer, which uses the yet-to-be-defined "liofs/views/show.html" template.
 
 Let's now add the view template in "liofs/views/show.html" that simply displays the post:
 
