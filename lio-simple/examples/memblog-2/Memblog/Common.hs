@@ -13,20 +13,31 @@ import LIO.Web.Simple
 import LIO.Web.Simple.DCLabel
 import Web.Simple.Templates
 import Control.Applicative
+import Control.Monad (liftM)
 import System.FilePath
 
 import LIO.Web.Simple.TCB (lioGetTemplateTCB)
 
 import GHC.Generics
 import Data.Aeson
+import Data.Maybe
+import Data.Map (Map)
+import qualified Data.Map as Map
+import Data.Foldable
+import Data.Traversable
 
 import LIO.Concurrent
 
-data AppSettings = AppSettings { db :: LMVar DCLabel [Post]}
+data AppSettings = AppSettings { 
+  db :: LMVar DCLabel (Map PostId (Labeled DCLabel Post))
+}
 
 newAppSettings :: DC AppSettings
 newAppSettings = do
-  mv <- newLMVar dcPublic [post0, post1]
+  lpost0 <- label (True %% True) post0
+  lpost1 <- label (True %% True) post1
+  mv <- newLMVar dcPublic $ Map.fromList 
+    [(postId post0, lpost0), (postId post1, lpost1)]
   return $ AppSettings { db = mv }
 
 
@@ -55,10 +66,25 @@ data Post = Post { postId          :: PostId
 deriving instance Generic Post
 instance ToJSON Post
 
+postPolicy :: Post -> DCLabel
+postPolicy post = let author = postAuthor post
+                  in  if postIsPublished post
+                        then True   %% True
+                        else author %% True
+
+labelPost :: Post -> DC (Labeled DCLabel Post)
+labelPost post = label (postPolicy post) post
+
 getAllPosts :: DCController AppSettings [Post]
 getAllPosts = do
   settings <- controllerState
-  liftLIO $ readLMVar $ db settings
+  lposts <- liftLIO $ readLMVar $ db settings
+  liftLIO $ foldlM f [] lposts
+   where f posts lpost = do mpost <- (Just `liftM` unlabel lpost)
+                                        `catch` handler
+                            return $ maybe posts (: posts) mpost
+         handler :: SomeException -> DC (Maybe Post)
+         handler _ = return Nothing
 
 getPostById :: PostId -> DCController AppSettings Post
 getPostById idNr = do
@@ -70,18 +96,21 @@ getPostById idNr = do
 insertPost :: Post -> DCController AppSettings PostId
 insertPost post = do
   settings  <- controllerState
-  posts     <- liftLIO $ takeLMVar $ db settings
-  let pId   = show $ length posts
-      post' = post { postId = pId }
-  liftLIO $ putLMVar (db settings) $ post' : posts
-  return pId
+  liftLIO $ do
+    lposts <- takeLMVar $ db settings
+    let pId = show $ Map.size lposts
+    lpost <- labelPost post { postId = pId }
+              `onException` putLMVar (db settings) lposts
+    putLMVar (db settings) $ Map.insert pId lpost lposts 
+    return pId
 
-updatePost :: PostId -> Post -> DCController AppSettings ()
-updatePost pId post = do
+updatePost :: Post -> DCController AppSettings ()
+updatePost post = do
   settings  <- controllerState
-  posts     <- liftLIO $ takeLMVar $ db settings
-  liftLIO $ putLMVar (db settings) $ map f posts
-    where f p = if postId p == pId then post else p
+  liftLIO $ do
+    lpost  <- labelPost post
+    lposts <- liftLIO $ takeLMVar $ db settings
+    putLMVar (db settings) $ Map.adjust (const lpost) (postId post) lposts
 
 
 --

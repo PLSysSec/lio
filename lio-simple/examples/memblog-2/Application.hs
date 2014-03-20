@@ -21,7 +21,8 @@ app runner = do
   runner $ controllerApp settings $ do
     get "/" $ do
       posts <- getAllPosts
-      render "index.html" $ object ["posts" .= posts ]
+      label <- liftLIO $ getLabel
+      render "index.html" $ object ["posts" .= posts, "label" .= show label ]
     get "/new" $ do
       render "new.html" ()
     get "/login" $ withUser $ \user ->
@@ -41,7 +42,7 @@ app runner = do
     post "/:pId" $ withUser $ \user -> do
       pId  <- queryParam' "pId"
       post <- formToPost user (Just pId)
-      updatePost pId post
+      updatePost post
       respond . redirectTo . S8.pack $ "/" ++ pId
 
 formToPost :: UserName -> Maybe PostId -> DCController AppSettings Post
@@ -53,12 +54,11 @@ formToPost user mpId = do
         let pub = isJust $ lookup "publish" params
         if S8.null title || S8.null body
           then fail "Invalid form"
-          else return $ Post { postId    = pId
-                             , postTitle = S8.unpack title
-                             , postBody  = S8.unpack body 
+          else return $ Post { postId          = pId
+                             , postTitle       = S8.unpack title
+                             , postBody        = S8.unpack body 
                              , postIsPublished = pub
-                             , postAuthor = user
-                             }
+                             , postAuthor      = user }
   case mpost of
     Nothing   -> redirectBack'
     Just post -> return post
@@ -79,8 +79,4 @@ withBasicAuth controller = do
     
 withUser :: (UserName -> DCController AppSettings ()) 
          -> DCController AppSettings ()
-withUser act = withBasicAuth $ do
-   mu <- requestHeader "X-User"
-   case mu of
-     Just u  -> act (S8.unpack u)
-     Nothing -> fail "withUser: expected X-User to be set"
+withUser act = withUserOrLogin $ \user -> act (S8.unpack user)
