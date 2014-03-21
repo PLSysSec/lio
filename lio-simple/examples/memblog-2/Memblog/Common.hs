@@ -24,7 +24,6 @@ import Data.Maybe
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Foldable
-import Data.Traversable
 
 import LIO.Concurrent
 
