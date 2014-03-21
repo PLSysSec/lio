@@ -1,11 +1,12 @@
-<h2>$postTitle$</h2>
-<h3>$postAuthor$</h3>
+<h2>$post.postTitle$</h2>
+<h3>$post.postAuthor$</h3>
 <p>
-  $postBody$
+  $post.postBody$
 </p>
 <hr />
-$if(postIsPublished)$
+$if(post.postIsPublished)$
   This post has been published.
-$else$
-  <a href="/$postId$/edit">Edit post.</a>
+$endif$
+$if(showEdit)$
+  <a href="/$post.postId$/edit">Edit post.</a>
 $endif$

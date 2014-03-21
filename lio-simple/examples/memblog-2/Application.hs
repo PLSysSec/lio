@@ -14,11 +14,11 @@ import Data.Aeson
 import qualified Data.ByteString.Char8 as S8
 import Data.Maybe
 
-app :: (SimpleApplication DC -> DC ()) -> DC ()
+app :: (SimpleDCApplication -> DC ()) -> DC ()
 app runner = do
   settings <- newAppSettings
 
-  runner $ controllerApp settings $ do
+  runner $ \currentPriv -> controllerApp settings $ do
     get "/" $ do
       posts <- getAllPosts
       label <- liftLIO $ getLabel
@@ -28,21 +28,23 @@ app runner = do
     get "/login" $ withUser $ \user ->
       render "login.html" $ object ["user" .= user]
     get "/:pId" $ do
-      pId  <- queryParam' "pId"
-      post <- getPostById pId
-      render "show.html" post
+      pId   <- queryParam' "pId"
+      post  <- getPostById pId
+      muser <- currentUser
+      let showEdit = Just (S8.pack $ postAuthor post) == muser
+      render "show.html" $ object [ "post" .= post, "showEdit" .= showEdit]
     get "/:pId/edit" $ do
       pId  <- queryParam' "pId"
       post <- getPostById pId
       render "edit.html" post
     post "/" $ withUser $ \user -> do
       post <- formToPost user Nothing
-      pId  <- insertPost post
+      pId  <- insertPost currentPriv post
       respond . redirectTo . S8.pack $ "/" ++ pId
     post "/:pId" $ withUser $ \user -> do
       pId  <- queryParam' "pId"
       post <- formToPost user (Just pId)
-      updatePost post
+      updatePost currentPriv post
       respond . redirectTo . S8.pack $ "/" ++ pId
 
 formToPost :: UserName -> Maybe PostId -> DCController AppSettings Post

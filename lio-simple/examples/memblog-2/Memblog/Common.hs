@@ -68,11 +68,11 @@ instance ToJSON Post
 postPolicy :: Post -> DCLabel
 postPolicy post = let author = postAuthor post
                   in  if postIsPublished post
-                        then True   %% True
-                        else author %% True
+                        then True   %% author
+                        else author %% author
 
-labelPost :: Post -> DC (Labeled DCLabel Post)
-labelPost post = label (postPolicy post) post
+labelPost :: DCPriv -> Post -> DC (Labeled DCLabel Post)
+labelPost priv post = labelP priv (postPolicy post) post
 
 getAllPosts :: DCController AppSettings [Post]
 getAllPosts = do
@@ -92,24 +92,30 @@ getPostById idNr = do
     [post] -> return post
     _      -> fail "No such post"
 
-insertPost :: Post -> DCController AppSettings PostId
-insertPost post = do
+insertPost :: DCPriv -> Post -> DCController AppSettings PostId
+insertPost priv post = do
   settings  <- controllerState
   liftLIO $ do
     lposts <- takeLMVar $ db settings
     let pId = show $ Map.size lposts
-    lpost <- labelPost post { postId = pId }
+    lpost <- labelPost priv post { postId = pId }
               `onException` putLMVar (db settings) lposts
     putLMVar (db settings) $ Map.insert pId lpost lposts 
     return pId
 
-updatePost :: Post -> DCController AppSettings ()
-updatePost post = do
+updatePost :: DCPriv -> Post -> DCController AppSettings ()
+updatePost priv post = do
   settings  <- controllerState
   liftLIO $ do
-    lpost  <- labelPost post
+    lpost  <- labelPost priv post
     lposts <- liftLIO $ takeLMVar $ db settings
+    guardUpdate (postId post) lposts
+      `onException` putLMVar (db settings) lposts
     putLMVar (db settings) $ Map.adjust (const lpost) (postId post) lposts
+  where guardUpdate pId lposts = do
+          case Map.lookup pId lposts of
+            Nothing    -> fail "updatePost: post does not exist"
+            Just lpost -> guardAllocP priv (labelOf lpost)
 
 
 --
