@@ -65,15 +65,16 @@ import Data.Maybe
 
     post "/" $ do
       (params, _) <- parseForm
-      let mpost = do
-            title <- lookup "title" params
-            body  <- lookup "body" params
+      let mpost :: Maybe Post
+          mpost = do
+            pTitle <- lookup "title" params
+            pBody  <- lookup "body" params
             let pub = isJust $ lookup "publish" params
-            if S8.null title || S8.null body
+            if S8.null pTitle || S8.null pBody
               then fail "Invalid form"
               else return $ Post { postId          = undefined
-                                 , postTitle       = S8.unpack title
-                                 , postBody        = S8.unpack body 
+                                 , postTitle       = S8.unpack pTitle
+                                 , postBody        = S8.unpack pBody 
                                  , postIsPublished = pub
                                  }
 ```
@@ -129,9 +130,9 @@ Note that in addition to populating the corresponding fields, the form action no
 
 ```haskell
     get "/:pId/edit" $ do
-      pId  <- queryParam' "pId"
-      post <- getPostById pId
-      render "edit.html" post
+      pId     <- queryParam' "pId"
+      curPost <- getPostById pId
+      render "edit.html" curPost
 ```
 
 Straight forward! It's like combining the `show` and `new` controllers. Now when you click on the second post's [edit link](http://localhost:3000/1/edit) you should the populated form:
@@ -144,33 +145,38 @@ Let's complete the feature by handling the POST request from the edit form.  Sin
 formToPost :: Maybe PostId -> DCController AppSettings Post
 formToPost mpId = do
   (params, _) <- parseForm
-  let mpost = do
-        title <- lookup "title" params
-        body  <- lookup "body" params
+  let mpost :: Maybe Post
+      mpost = do
+        pTitle <- lookup "title" params
+        pBody  <- lookup "body" params
         let pub = isJust $ lookup "publish" params
-        if S8.null title || S8.null body
+        if S8.null pTitle || S8.null pBody
           then fail "Invalid form"
           else return $ Post { postId          = pId
-                             , postTitle       = S8.unpack title
-                             , postBody        = S8.unpack body 
+                             , postTitle       = S8.unpack pTitle
+                             , postBody        = S8.unpack pBody 
                              , postIsPublished = pub }
   case mpost of
-    Nothing   -> redirectBack'
-    Just post -> return post
+    Nothing -> redirectBack'
+    Just p  -> return p
   where pId = fromMaybe undefined mpId
         redirectBack' =  do 
           redirectBack 
           return $ error "future version of simple won't need this type fix"
 ```
 
-The `redirectBack'` part is new and a bit ugly: it simply says redirect back if the post is not well-fromed, i.e., it is a `Nothing`, the last line is necessary to cast the type of `redirectBack` from returning `()` to returning `Post` -- it will never actually force that value.  In fact, if you get the latest version of _simple_ from our [git repository](https://github.com/scslab/simple) you can just use `redirectBack` directly.
+This function first parses the HTTP request to extract the "title", "body", and "published" fields. If the first two are missing or null then `mpost` value is `Nothing` and `formToPost` returns a response corresponding to a redirect to the referrer (`redirectBack`). Recall that if a response is returned then the`DCController` monad does not execute the remaining actions. Hence, `formToPost` performing redirect is akin to a failure---the redirect response percolates and is returned by the top-most controller.
+
+Note that if the fields are present and not null (the "publsh" field is present only when the checkbox is selected) then `formToPost` returns the `Post` value with these corresponding fields set. As before, the post id is set to `undefined` if this is a new post and we expect the database interface to "adjust" this field.
+
+> > **Aside:** The `redirectBack'` part is new and a bit ugly: it simply says redirect back if the post is not well-formed, i.e., it is a `Nothing`, the last line is necessary to cast the type of `redirectBack` from returning `()` to returning `Post` -- it will never actually force that value.  In fact, if you get the latest version of _simple_ from our [git repository](https://github.com/scslab/simple) you can just use `redirectBack` directly.
 
 The controller for creating a new post now becomes very simple:
 
 ```haskell
     post "/" $ do
-      post <- formToPost Nothing
-      pId  <- insertPost post
+      curPost <- formToPost Nothing
+      pId     <- insertPost curPost
       respond . redirectTo . S8.pack $ "/" ++ pId
 ```
 
@@ -178,9 +184,9 @@ And, our new controller for updating a post is also not any more complex:
 
 ```haskell
     post "/:pId" $ do
-      pId  <- queryParam' "pId"
-      post <- formToPost (Just pId)
-      updatePost post
+      pId     <- queryParam' "pId"
+      curPost <- formToPost (Just pId)
+      updatePost curPost
       respond . redirectTo . S8.pack $ "/" ++ pId
 ```
 
@@ -319,30 +325,38 @@ To this end, we first update our `formToPost` function to take an additional arg
 formToPost :: UserName -> Maybe PostId -> DCController AppSettings Post
 formToPost user mpId = do
   (params, _) <- parseForm
-  let mpost = do
-        title <- lookup "title" params
-        body  <- lookup "body" params
+  let mpost :: Maybe Post
+      mpost = do
+        pTitle <- lookup "title" params
+        pBody  <- lookup "body" params
         let pub = isJust $ lookup "publish" params
-        if S8.null title || S8.null body
+        if S8.null pTitle || S8.null pBody
           then fail "Invalid form"
           else return $ Post { postId          = pId
-                             , postTitle       = S8.unpack title
-                             , postBody        = S8.unpack body 
+                             , postTitle       = S8.unpack pTitle
+                             , postBody        = S8.unpack pBody 
                              , postIsPublished = pub
                              , postAuthor      = user }
+  case mpost of
+    Nothing -> redirectBack'
+    Just p  -> return p
+  where pId = fromMaybe undefined mpId
+        redirectBack' =  do 
+          redirectBack 
+          return $ error "future version of simple won't need this type fix"
 ```
 
 And update the two routes to force the login:
 
 ```haskell
     post "/" $ withUser $ \user -> do
-      post <- formToPost user Nothing
-      pId  <- insertPost post
+      curPost <- formToPost user Nothing
+      pId     <- insertPost curPost
       respond . redirectTo . S8.pack $ "/" ++ pId
     post "/:pId" $ withUser $ \user -> do
-      pId  <- queryParam' "pId"
-      post <- formToPost user (Just pId)
-      updatePost post
+      pId     <- queryParam' "pId"
+      curPost <- formToPost user (Just pId)
+      updatePost curPost
       respond . redirectTo . S8.pack $ "/" ++ pId
 ```
 
@@ -415,7 +429,7 @@ In LIO, policies are specified in the form of _labels_. A label is value of the 
 
 * **integrity:** that a piece of data labeled as such was created and can be modified by "bob"
 
-### Secrecy poliy: drafts are only readable by authors
+### Secrecy policy: drafts are only readable by authors
 
 Checkout the [DCLabels paper](http://www.scs.stanford.edu/~deian/pubs/stefan:2011:dclabels.pdf) if you're interested in learning more labels.  For now, let's define a function (in `Memblog/Common.hs`) that is used to generate a policy from a post:
 
@@ -431,9 +445,7 @@ The policy this function generates only expresses our first high-level security 
 
 Of course, just defining this policy function doesn't actually do anything: we need to associate such generated labels with posts.
 
-To this end, let's modify the type of our database type to associate
-labels with posts. While we're at it let's use a better data
-structure, namely a map (from post id's to labeled posts):
+To this end, let's modify the type of our database type to associate labels with posts. While we're at it let's use a better data structure, namely a map (from post id's to labeled posts):
 
 ```haskell
 ...
@@ -788,13 +800,13 @@ Lastly, we need to modify `Application.hs` to call our modified insert and updat
 
 ```haskell
     post "/" $ withUser $ \user -> do
-      post <- formToPost user Nothing
-      pId  <- insertPost currentPriv post
+      curPost <- formToPost user Nothing
+      pId     <- insertPost currentPriv curPost
       respond . redirectTo . S8.pack $ "/" ++ pId
     post "/:pId" $ withUser $ \user -> do
-      pId  <- queryParam' "pId"
-      post <- formToPost user (Just pId)
-      updatePost currentPriv post
+      pId     <- queryParam' "pId"
+      curPost <- formToPost user (Just pId)
+      updatePost currentPriv curPost
       respond . redirectTo . S8.pack $ "/" ++ pId
 ```
 
@@ -812,10 +824,7 @@ we are going to fail:
 
 <img src="data:image/png;base64,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vLS0tEOHDsf9PI899tgXX3zR+PaOHTs+++yzBw4cePbZZ6dNm1ZZWWndPm3aNK31pk2bnnnmmZ/97GeLFy8+vttFZMGCBeeff344HO7Wrduzzz57+PDhJ5544vLLLy8rK/v3u7A+d0j3ZLQ8Eas2kwmd1IG0rIOHy+0jR1ufY/so8m7U1vwDbWpxjiJJmjozI6tNJDNWXW46B4AW036UuEeJ9XG3btfWQSCmfbyJKabWYh0rSasnSTf+/DtHiHuu4BxaSffgEefYtg4f0abp3djgyDS9J7QOQspP+Sk/5T/68ntRbT/EOUdIxmP10cozTzspEDCOeFXd5O3jxo2bM+fJEzlImovqQYMG9ejRQylVXFyclZVVXV0tInv37l2wYMHMmTOzs7P79Olz9913P/DAA8dxu2Xu3LmXXHKJiJx11ll9+vQxDOPMM89s167dpk2bvhUZXF9f//e//91/y7Jly5q7sE5PTzutW359tDIZj2ktRiijvKwqkUi4OW3/211+wDsVFW1amW3fkjR1u6K29bWHxD2/tT7NYtoX5dYH2HdwmkltatGmNrXopP1T0z38vIMz5fPvnkSbpnWuoP1nwZIU99W9f7unGEnxToobnHQ79/NaFCg/5af8lP9I5bej2lpWRYv77MlEPFpfV/Ffl57ljEDX4p9k5pssZg1Jc1nN6n/96zN//eszdXW1jz/+hPcQb1k3bxTcggULiouLi4uLzz333E8++cR6mTffeLO4uLhfv34jR46sra254IIL+vbt269fv9/97nf2NZfToF9ZWXn11Vf37du3R48e69etb+o5PxbRiUTixhtvHDJkSElJyfTpd4uWyZMnr1+//vLLL+/bt29paanWEolEFi9e7Fattrb23nvvPeWUU0466SQR2bBhQ3FxcUZGhpUnQ4cOXbt2rXd72Lpdhg4tWbt2rYje8NmG4uLicEaGVVv7/lqLltra2qVLl44aNVp878aePXt27tx5arduvvl8vndZi28qvvubcH5jqW+p+N/xZn5rqX/wpgl4r9bUb80dW/HKK688/vjj99xzj/WDGffcc/fddztprX2F14ZhBIPBqy4eWF9bnohHTZ3UphihrEOHK5wSepMK3U+sNPic+O4TDAbbFOTFolXOYeMee6JNZTqHknc0idJam8rXiuXWy/Q9he/zr03nOdwb3dNZ0drU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FhUVlZaWvvnm0vfeW11YWJhMJocPH95wzLd/BVNn8KD62hrAW3W+KaDmrbnnA3lylHXL2vveVyr4o6652bEJIq+8P2uD3HOm7yr8t49+dGjcG+sfOK+9iHy45b5fyI5jOoRaeEXrrx2Hjr9n6Phf/2Zpt57f/d1V836y4dpgdlBE6vVRjs/SASUiARFRRubITjnzts3fUfvjzplBEdGJ8leXloay+/TLComEvsRPZdM/dgfS258VSZk2Xb3zvUeeWpzI6X7NtEtyAiyBAnwz1q5d169fX2tIk59hGMXFg1euXHnqqac2av8V78LJ3q1CixJrX6r8O2fuefze0vLydEPlhYzEitfWXHPh5k8/zjKTVUl7JZOi9ODuWdPtr6FQWsX3fxoIGKaTDC3kWs/8QMAwrflaWqyLLalPmPd+WNegf9q7MjF077yAtRDI0eSaoQJPPP74q6++2kI0BIPByZMnjxkzxjSTTeaadhp6g+JbWcTemsRZYlN7V/UqFosVFw8Wkaeffjo3NzeZTC5dunTSFZO8ZUSV96zat72IajB421uEzdklTItSuqKiQikVDAS0abZu3TozM9M6RVEpu5U0mAPWcPp5Ubt2U6ZMeeqppwoKCtavW7dyxQproZzMzMw2bdpYY+06duxouq30yltdXRr04h/dvOrGP22iNyKQ3ToU2L987quv7Khrf97EAec9NbnXVU+PuaLj9MtKTt7x/rw7/ryp3w+ePy+SLjL152f8fzPuH3l925n/deHZ4apdn9f0vqBvJxHZPG/R9h7n71q/9I4nNjfztK2b+zSkR5p9xeov7v/lo/qCYQNOKszZ89n6yoRZ1L2DiLT7bh/5f+vu/OPsq7uGDqrzb7rqlDVPPPx2RWzU9Tf3zAhW/vON9/fndj25Y+v8XF1Xtv7dV9dVx3uMtk8vel9+yZsznvzLn+acefbAwvTadSve3Vkvo6656Ev+VCfL3zhQl9tvov8XU7P7vYefXFyng4OHdNv9ybrddn279zklm69O4F/GNM3169dPmnS59U34zjvvLF++vGPHjhMmTMjMzBwyZPB99604cOBAmzZtGnw7KpU6itrbq1Jn9h4QveQHmffekRMOiogZi6otn3QJSbrRcBZq27SAqYKVk35kdune9ZSuDXZ8bDLXDEMu6hJ+eVu906ys6k1975poczktIhd2TjMC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" width="654" height="418">
 
-Of course as "mr-t" we can edit the post as we wish. In fact, as a
-final step let's modify the show controller and
-`liofs/views/show.html` template to show the edit link if the current
-user is the author of the post even for a published post.
+Of course as "mr-t" we can edit the post as we wish. In fact, as a final step let's modify the show controller and `liofs/views/show.html` template to show the edit link if the current user is the author of the post even for a published post.
 
 First, modify the controller in `Application.hs` to compare the current user (if any) to the post author:
 

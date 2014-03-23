@@ -34,7 +34,7 @@ app runner = do
       let showEdit = Just (S8.pack $ postAuthor post) == muser
       render "show.html" $ object [ "post" .= post, "showEdit" .= showEdit]
     get "/:pId/edit" $ do
-      pId  <- queryParam' "pId"
+      pId     <- queryParam' "pId"
       curPost <- getPostById pId
       render "edit.html" curPost
     post "/" $ withUser $ \user -> do
@@ -63,8 +63,8 @@ formToPost user mpId = do
                              , postIsPublished = pub
                              , postAuthor      = user }
   case mpost of
-    Nothing   -> redirectBack'
-    Just post -> return post
+    Nothing -> redirectBack'
+    Just p  -> return p
   where pId = fromMaybe undefined mpId
         redirectBack' =  do 
           redirectBack 
