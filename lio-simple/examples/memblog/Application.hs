@@ -23,22 +23,23 @@ app runner = do
     get "/new" $ do
       render "new.html" ()
     get "/:pId" $ do
-      pId  <- queryParam' "pId"
-      post <- getPostById pId
-      render "show.html" post
+      pId     <- queryParam' "pId"
+      curPost <- getPostById pId
+      render "show.html" curPost
     post "/" $ do
       (params, _) <- parseForm
-      let mpost = do
-            title <- lookup "title" params
-            body  <- lookup "body" params
-            if S8.null title || S8.null body
+      let mpost :: Maybe Post
+          mpost = do
+            pTitle <- lookup "title" params
+            pBody  <- lookup "body" params
+            if S8.null pTitle || S8.null pBody
               then fail "Invalid form"
               else return $ Post { postId    = undefined
-                                 , postTitle = S8.unpack title
-                                 , postBody  = S8.unpack body }
+                                 , postTitle = S8.unpack pTitle
+                                 , postBody  = S8.unpack pBody }
       case mpost of
-        Just post -> do pId <- insertPost post
-                        respond . redirectTo . S8.pack $ "/" ++ pId
-        _         -> redirectBack 
+        Just p -> do pId <- insertPost p
+                     respond . redirectTo . S8.pack $ "/" ++ pId
+        _      -> redirectBack 
 
 

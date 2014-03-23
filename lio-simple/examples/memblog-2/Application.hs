@@ -35,30 +35,31 @@ app runner = do
       render "show.html" $ object [ "post" .= post, "showEdit" .= showEdit]
     get "/:pId/edit" $ do
       pId  <- queryParam' "pId"
-      post <- getPostById pId
-      render "edit.html" post
+      curPost <- getPostById pId
+      render "edit.html" curPost
     post "/" $ withUser $ \user -> do
-      post <- formToPost user Nothing
-      pId  <- insertPost currentPriv post
+      curPost <- formToPost user Nothing
+      pId     <- insertPost currentPriv curPost
       respond . redirectTo . S8.pack $ "/" ++ pId
     post "/:pId" $ withUser $ \user -> do
-      pId  <- queryParam' "pId"
-      post <- formToPost user (Just pId)
-      updatePost currentPriv post
+      pId     <- queryParam' "pId"
+      curPost <- formToPost user (Just pId)
+      updatePost currentPriv curPost
       respond . redirectTo . S8.pack $ "/" ++ pId
 
 formToPost :: UserName -> Maybe PostId -> DCController AppSettings Post
 formToPost user mpId = do
   (params, _) <- parseForm
-  let mpost = do
-        title <- lookup "title" params
-        body  <- lookup "body" params
+  let mpost :: Maybe Post
+      mpost = do
+        pTitle <- lookup "title" params
+        pBody  <- lookup "body" params
         let pub = isJust $ lookup "publish" params
-        if S8.null title || S8.null body
+        if S8.null pTitle || S8.null pBody
           then fail "Invalid form"
           else return $ Post { postId          = pId
-                             , postTitle       = S8.unpack title
-                             , postBody        = S8.unpack body 
+                             , postTitle       = S8.unpack pTitle
+                             , postBody        = S8.unpack pBody 
                              , postIsPublished = pub
                              , postAuthor      = user }
   case mpost of
