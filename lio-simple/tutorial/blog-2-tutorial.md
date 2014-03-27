@@ -1,3 +1,7 @@
+<style>
+blockquote blockquote p { font-size: 10pt; }
+</style>
+
 In this tutorial we're going to build on the blog app from the [previous tutorial](https://www.learnbyhacking.org/posts/532694fa13c6142d4f000013) by adding some new features:
 
 * Ability to edit existing post.
