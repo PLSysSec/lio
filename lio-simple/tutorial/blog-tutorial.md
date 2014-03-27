@@ -432,7 +432,7 @@ Browse the source:
 
 ## Acknowledgements
 
-I am very grateful to [Benjamin C.  Pierce](http://www.cis.upenn.edu/~bcpierce/), [Emilio Jesus Gallego Arias](https://cis.upenn.edu/~emilioga/) [Leonidas Lampropoulos](http://www.cis.upenn.edu/~llamp/), and Antal Spector-Zabusky for very useful discussions, comments, and encouragement to work on this.
+I am very grateful to [Benjamin C.  Pierce](http://www.cis.upenn.edu/~bcpierce/), [Emilio Jesus Gallego Arias](https://cis.upenn.edu/~emilioga/), [Leonidas Lampropoulos](http://www.cis.upenn.edu/~llamp/), and Antal Spector-Zabusky for very useful discussions, comments, and encouragement to work on this.
 
 This tutorial is based on Amit Levy's [Getting Started Tutorial](http://simple.cx/tutorial.html) (thanks Amit!) and thus also licensed under a [Creative Commons Attribution-Share Alike 4.0 License.](https://creativecommons.org/licenses/by-sa/4.0/)
 
