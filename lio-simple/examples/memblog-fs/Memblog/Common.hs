@@ -8,6 +8,7 @@ module Memblog.Common where
 
 import Prelude hiding (readFile, writeFile, appendFile, catch)
 import LIO
+import LIO.Error
 import LIO.DCLabel
 
 import LIO.Web.Simple
@@ -63,7 +64,7 @@ instance ToJSON Post
 getAllPosts :: DCController AppSettings [Post]
 getAllPosts = do
   settings <- controllerState
-  liftLIO $ readLMVar $ db settings
+  liftLIO . withContext "getAllPosts" $ readLMVar $ db settings
 
 getPostById :: PostId -> DCController AppSettings Post
 getPostById idNr = do
@@ -75,13 +76,14 @@ getPostById idNr = do
 insertPost :: Post -> DCController AppSettings PostId
 insertPost post = do
   settings  <- controllerState
-  posts     <- liftLIO $ takeLMVar $ db settings
-  let pId    = show $ length posts
-      posts' = post { postId = pId } : posts
-  liftLIO $ writeFile (Just dcPublic) "db" (S8.pack $ show posts') 
-              `catch` (\(_ :: SomeException) -> return ())
-  liftLIO $ putLMVar (db settings) $ posts'
-  return pId
+  liftLIO . withContext "insertPost" $ do
+    posts     <- takeLMVar $ db settings
+    let pId    = show $ length posts
+        posts' = post { postId = pId } : posts
+    writeFile (Just dcPublic) "db" (S8.pack $ show posts') 
+       `catch` (\(_ :: SomeException) -> return ())
+    putLMVar (db settings) $ posts'
+    return pId
 
 
 --

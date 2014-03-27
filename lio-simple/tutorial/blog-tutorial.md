@@ -210,13 +210,17 @@ controllerState :: DCController AppSettings AppSettings
 This is great! It means we can get at our mutable database to add/remove/modify posts. So, let's define a function in `Common.hs` that gets all the current posts:
 
 ```haskell
+...
+import LIO.Error
+...
+
 getAllPosts :: DCController AppSettings [Post]
 getAllPosts = do
   settings <- controllerState
-  liftLIO $ readLMVar $ db settings
+  liftLIO . withContext "getAllPosts" $ readLMVar $ db settings
 ```
 
-This function simply gets the app settings and reads the contents of the mutable DB, the `LMVar`, to get the list of posts.
+This function simply gets the app settings and reads the contents of the mutable DB, the `LMVar`, to get the list of posts.  Here, we also imported `LIO.Error` to use `withContext`. This way if the `readLMVar` throws an exception, LIO will give you a "stack-trace" in the error message saying where the exception was thrown (`getAllPosts`, in this case).
 
 On top of this, we can now add a function for finding a post by its id:
 
@@ -228,17 +232,19 @@ getPostById idNr = do
     [post] -> return post
     _      -> fail "No such post"
 ```
+
 Finally, let's modify `Common.hs` to add a function for adding a new post to the database.
 
 ```haskell
 insertPost :: Post -> DCController AppSettings PostId
 insertPost post = do
-  settings  <- controllerState
-  posts     <- liftLIO $ takeLMVar $ db settings
-  let pId   = show $ length posts
-      post' = post { postId = pId }
-  liftLIO $ putLMVar (db settings) $ post' : posts
-  return pId
+  settings <- controllerState
+  liftLIO . withContext "getPostById" $ do
+    posts <- takeLMVar $ db settings
+    let pId   = show $ length posts
+        post' = post { postId = pId }
+    putLMVar (db settings) $ post' : posts
+    return pId
 ```
 
 This function is a bit more complicated.  First, it effectively takes a lock on the database (with `takeLMVar`).  Second, it "modifies" the supplied `post` by setting its `postId` to the length of the post list.  Then, it adds this post to the head of the list by writing it to the `LMVar` and releasing the lock (with `putLMVar`).  Finally it returns the id of this new post.
@@ -499,13 +505,14 @@ Then, let's modify `insertPost` to store the latest version of the DB to the fil
 insertPost :: Post -> DCController AppSettings PostId
 insertPost post = do
   settings  <- controllerState
-  posts     <- liftLIO $ takeLMVar $ db settings
-  let pId    = show $ length posts
-      posts' = post { postId = pId } : posts
-  liftLIO $ writeFile (Just dcPublic) "db" (S8.pack $ show posts') 
-              `catch` (\(_ :: SomeException) -> return ())
-  liftLIO $ putLMVar (db settings) $ posts'
-  return pId
+  liftLIO . withContext "insertPost" $ do
+    posts     <- takeLMVar $ db settings
+    let pId    = show $ length posts
+        posts' = post { postId = pId } : posts
+    writeFile (Just dcPublic) "db" (S8.pack $ show posts') 
+       `catch` (\(_ :: SomeException) -> return ())
+    putLMVar (db settings) $ posts'
+    return pId
 ```
 
 You probably don't want to do this for a real app, but for this toy app it gets us the persistence that we want without relying on trusted `IO` code!
