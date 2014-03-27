@@ -7,6 +7,7 @@ module Memblog.Common where
 
 import Prelude hiding (readFile, writeFile, appendFile, catch)
 import LIO
+import LIO.Error
 import LIO.DCLabel
 
 import LIO.Web.Simple
@@ -72,13 +73,14 @@ postPolicy post = let author = postAuthor post
                         else author %% author
 
 labelPost :: DCPriv -> Post -> DC (Labeled DCLabel Post)
-labelPost priv post = labelP priv (postPolicy post) post
+labelPost priv post = withContext "labelPost" $ labelP priv (postPolicy post) post
 
 getAllPosts :: DCController AppSettings [Post]
 getAllPosts = do
   settings <- controllerState
-  lposts <- liftLIO $ readLMVar $ db settings
-  liftLIO $ foldlM f [] lposts
+  liftLIO . withContext "getAllPosts" $ do
+    lposts <- readLMVar $ db settings
+    foldlM f [] lposts
    where f posts lpost = do mpost <- (Just `liftM` unlabel lpost)
                                         `catch` handler
                             return $ maybe posts (: posts) mpost
@@ -95,7 +97,7 @@ getPostById idNr = do
 insertPost :: DCPriv -> Post -> DCController AppSettings PostId
 insertPost priv post = do
   settings  <- controllerState
-  liftLIO $ do
+  liftLIO . withContext "insertPost" $ do
     lposts <- takeLMVar $ db settings
     let pId = show $ Map.size lposts
     lpost <- labelPost priv post { postId = pId }
@@ -106,7 +108,7 @@ insertPost priv post = do
 updatePost :: DCPriv -> Post -> DCController AppSettings ()
 updatePost priv post = do
   settings  <- controllerState
-  liftLIO $ do
+  liftLIO . withContext "updatePost" $ do
     lpost  <- labelPost priv post
     lposts <- liftLIO $ takeLMVar $ db settings
     guardUpdate (postId post) lposts

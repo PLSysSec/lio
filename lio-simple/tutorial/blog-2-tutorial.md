@@ -202,9 +202,10 @@ Well, we haven't yet defined it (you may want to define it as `undefined` if you
 updatePost :: Post -> DCController AppSettings ()
 updatePost post = do
   settings  <- controllerState
-  posts     <- liftLIO $ takeLMVar $ db settings
-  liftLIO $ putLMVar (db settings) $ map f posts
-    where f p = if postId p == postId post then post else p
+  liftLIO . withContext "updatePost" $ do
+    posts <- takeLMVar $ db settings
+    putLMVar (db settings) $ map f posts
+  where f p = if postId p == postId post then post else p
 ```
 
 This function is pretty straight forward. First, it gets the controller state and extracts the in-memory database (with `db`).  Then, it extracts the posts and takes a lock on the database (with `takeLMVar`).  With `map` we update the `posts` list by simply replacing the element that has the same id as the post supplied to `updatePost`, leaving all other elements intact.  Finally, we use this updated list as the database and release the lock (with `putLMVar`).
@@ -479,7 +480,7 @@ With this in mind, let's define a helper function for actually associating label
 
 ```haskell
 labelPost :: Post -> DC (Labeled DCLabel Post)
-labelPost post = label (postPolicy post) post
+labelPost post = withContext "labelPost" $ label (postPolicy post) post
 ```
 
 This function simply applies the policy function to create a label and then associates this label with a post, returning a labeled value. It such labeled posts that we want to place in the database.
@@ -509,8 +510,9 @@ import Control.Monad (liftM)
 getAllPosts :: DCController AppSettings [Post]
 getAllPosts = do
   settings <- controllerState
-  lposts <- liftLIO $ readLMVar $ db settings
-  liftLIO $ foldlM f [] lposts
+  liftLIO . withContext "getAllPosts" $ do
+    lposts <- readLMVar $ db settings
+    foldlM f [] lposts
    where f posts lpost = do post <- unlabel lpost
                             return $ post : posts
 ```
@@ -529,8 +531,9 @@ import Control.Monad (liftM)
 getAllPosts :: DCController AppSettings [Post]
 getAllPosts = do
   settings <- controllerState
-  lposts <- liftLIO $ readLMVar $ db settings
-  liftLIO $ foldlM f [] lposts
+  liftLIO . withContext "getAllPosts" $ do
+    lposts <- readLMVar $ db settings
+    foldlM f [] lposts
    where f posts lpost = do mpost <- (Just `liftM` unlabel lpost)
                                         `catch` handler
                             return $ maybe posts (: posts) mpost
@@ -555,7 +558,7 @@ First, let's modify `insertPost`:
 insertPost :: Post -> DCController AppSettings PostId
 insertPost post = do
   settings  <- controllerState
-  liftLIO $ do
+  liftLIO . withContext "insertPost" $ do
     lposts <- takeLMVar $ db settings
     let pId = show $ Map.size lposts
     lpost <- labelPost post { postId = pId }
@@ -572,9 +575,9 @@ While we have  `Memblog/Common.hs` open let's also update `updatePost`:
 updatePost :: Post -> DCController AppSettings ()
 updatePost post = do
   settings  <- controllerState
-  liftLIO $ do
+  liftLIO . withContext "updatePost" $ do
     lpost  <- labelPost post
-    lposts <- liftLIO $ takeLMVar $ db settings
+    lposts <- takeLMVar $ db settings
     putLMVar (db settings) $ Map.adjust (const lpost) (postId post) lposts
 ```
 
@@ -682,9 +685,9 @@ Since we're using labeled values instead of references when we perform an update
 updatePost :: Post -> DCController AppSettings ()
 updatePost post = do
   settings  <- controllerState
-  liftLIO $ do
+  liftLIO . withContext "updatePost" $ do
     lpost  <- labelPost post
-    lposts <- liftLIO $ takeLMVar $ db settings
+    lposts <- takeLMVar $ db settings
     guardUpdate (postId post) lposts
       `onException` putLMVar (db settings) lposts
     putLMVar (db settings) $ Map.adjust (const lpost) (postId post) lposts
@@ -771,7 +774,7 @@ labelPost priv post = labelP priv (postPolicy post) post
 insertPost :: DCPriv -> Post -> DCController AppSettings PostId
 insertPost priv post = do
   settings  <- controllerState
-  liftLIO $ do
+  liftLIO . withContext "insertPost" $ do
     lposts <- takeLMVar $ db settings
     let pId = show $ Map.size lposts
     lpost <- labelPost priv post { postId = pId }          -- <= use priv here
@@ -782,9 +785,9 @@ insertPost priv post = do
 updatePost :: DCPriv -> Post -> DCController AppSettings ()
 updatePost priv post = do
   settings  <- controllerState
-  liftLIO $ do
+  liftLIO . withContext "updatePost" $ do
     lpost  <- labelPost priv post                          -- <= use priv here
-    lposts <- liftLIO $ takeLMVar $ db settings
+    lposts <- takeLMVar $ db settings
     guardUpdate (postId post) lposts
       `onException` putLMVar (db settings) lposts
     putLMVar (db settings) $ Map.adjust (const lpost) (postId post) lposts
