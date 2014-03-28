@@ -110,7 +110,7 @@ updatePost priv post = do
   settings  <- controllerState
   liftLIO . withContext "updatePost" $ do
     lpost  <- labelPost priv post
-    lposts <- liftLIO $ takeLMVar $ db settings
+    lposts <- takeLMVar $ db settings
     guardUpdate (postId post) lposts
       `onException` putLMVar (db settings) lposts
     putLMVar (db settings) $ Map.adjust (const lpost) (postId post) lposts
