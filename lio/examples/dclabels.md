@@ -341,10 +341,11 @@ example = do
   -- Create "DB"
   aliceRef <- newLIORef ("Alice" %% True) "Alice likes Carla"
   bobRef   <- newLIORef ("Bob"   %% True) "Bob likes Alice"
+  abRef    <- newLIORef ("Alice" \/ "Bob" \/ "Carla" %% True) "Hey guys!"
 
   -- Handle requests from Alice and Bob
-  aliceRespR <- handleReq "Alice" $ readAllAct [bobRef, aliceRef]
-  bobRespR   <- handleReq "Bob"   $ readAllAct [bobRef, aliceRef]
+  aliceRespR <- handleReq "Alice" $ readAllAct [bobRef, aliceRef, abRef]
+  bobRespR   <- handleReq "Bob"   $ readAllAct [bobRef, aliceRef, abRef]
   
   -- Wait for respones:
   aliceResp <- lWait aliceRespR
@@ -372,7 +373,7 @@ readAllAct db = do
 * Modify `readAllAct` to address the exception. The result of executing this program should be:
 
 ```haskell
-[("Alice","Alice likes Carla"),("Bob","Bob likes Alice")]
+[("Alice","Alice likes Carla;Hey guys!"),("Bob","Bob likes Alice;Hey guys!")]
 ```
 
 -----
@@ -412,6 +413,3 @@ example = do
             in (cFromList $ map (\p -> dFromList [p]) ps) == cFromList' ps
   where check nr a = unless a  $  fail $ show nr ++ ": bad implementation"
 ```
-
-
-
