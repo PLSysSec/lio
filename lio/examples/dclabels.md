@@ -10,12 +10,15 @@ Throughout we are going to execute an `example` action that you will be asked to
 :name=main
 :noexec
 
-import Prelude hiding (readFile, writeFile, catch)
+import Prelude hiding (catch)
+import Data.Monoid
+import Data.List (intercalate)
+import Control.Monad (unless, forM)
+
 import LIO
 import LIO.LIORef
 import LIO.DCLabel
-import Data.Monoid
-import Control.Monad (unless)
+import LIO.Concurrent
 
 import LIO.Run
 import LIO.TCB (ioTCB)
@@ -299,7 +302,6 @@ Though the exception throw by LIO contains label information, you may want to us
 
 #### Example 9
 
-
 ```active-haskell
 :requires=mint
 
@@ -323,6 +325,58 @@ example = do
 
 > > *Note:* Privileges are monoids; you can use `mempty` for the empty/no privilege and `mappend` to combine them.
 
+-----
+
+### Clearance
+
+Thus far, we've seen that LIO permissively let's us read arbitrary data (from e.g., labeled references), but raises the current label and in turn restricts us from writing this data arbitrarily. But sometimes---especially when considering malicious code---we may want to be more strict and simply disallow a piece of code from even accessing certain data. For example, suppose we're building a web server and want to make sure that the server returns a (meaningful) response if the request handler only read data that the current user is allowed to see. One approach is to check the current label before returning the response. This may be okay in some cases, but depending on the scenario it may also allow for *external timing* leaks, where user Alice uses a stopwatch to measure the amount of time it takes to get a response: if the request handler read Bob's data and delays producing a response according to some secret then Alice will learn something about Bob (even though the current label may, for example, be `"Alice" /\ "Bob" %% True` and our server replaced the response with a 400-level error message).
+
+Clearance serves an upper bound on the current label (thus limiting reads) and is also checked when we create or write to objects (limiting writes to anything below).
+
+```active-haskell
+:requires=mint
+
+example :: DC [(String, String)]
+example = do
+  -- Create "DB"
+  aliceRef <- newLIORef ("Alice" %% True) "Alice likes Carla"
+  bobRef   <- newLIORef ("Bob"   %% True) "Bob likes Alice"
+
+  -- Handle requests from Alice and Bob
+  aliceRespR <- handleReq "Alice" $ readAllAct [bobRef, aliceRef]
+  bobRespR   <- handleReq "Bob"   $ readAllAct [bobRef, aliceRef]
+  
+  -- Wait for respones:
+  aliceResp <- lWait aliceRespR
+  bobResp   <- lWait bobRespR
+  return [aliceResp, bobResp]
+
+-- Given a username and action that produces a response
+-- return a labeled result that to which the response will be written
+handleReq :: String -> DC String -> DC (LabeledResult DCLabel (String, String))
+handleReq user act = do
+  clr <- getClearance
+  lFork clr $ do 
+    resp <- act
+    return (user, resp)
+
+-- Given a "DB" read and concatnate all entries
+readAllAct :: [LIORef DCLabel String] -> DC String
+readAllAct db = do
+  messages <- forM db readLIORef
+  return $ intercalate ";" messages
+```
+
+* Modify `handleReq` to ensure that `act` cannot access the data the other than that of the "current user"; at this point the program should throw an exception.
+
+* Modify `readAllAct` to address the exception. The result of executing this program should be:
+
+```haskell
+[("Alice","Alice likes Carla"),("Bob","Bob likes Alice")]
+```
+
+-----
+
 ### More on creating labels
 
 Before we used some function form the `LIO.DCLabel` module to create privileges and label components (`CNF`s). For example, in `mint` we used `dFromList` and `cFromList`. The former converts a list of principals into a disjunction, i.e., `dFromList [p1, p2, ...] == p1 \/ p2 \/ ...`, while the latter converts a list of disjunctions into a conjunction, i.e., `cFromList [d1, d2, ...] == d1 /\ d2 /\ ...`.  Define functions that compute the disjunction and conjunction of any formula: 
@@ -342,6 +396,7 @@ example = do
             in toCNF (dFromList ps) == dFromList' ps
   where check nr a = unless a  $  fail $ show nr ++ ": bad implementation"
 ```
+
 #### Example 11
 
 ```active-haskell
