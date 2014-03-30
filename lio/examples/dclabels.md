@@ -2,7 +2,7 @@
 blockquote blockquote p { font-size: 10pt; }
 </style>
 
-In this post we're going to work through some exercises to internalize LIO+DCLabel concepts: current label, LIORefs, privileges, and clearance.
+In this post we're going to work through some exercises to internalize LIO+DCLabel concepts, including current label, LIORefs, privileges, and clearance.
 
 Throughout we are going to execute an `example` action that you will be asked to complete. Our `main` action, defined below, simply executes the `example` action with an initial current label and clearance (`initialLabels`).
 
