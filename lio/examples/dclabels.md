@@ -191,7 +191,36 @@ example = do
      writeLIORef ref2  v1
 ```
 
-* What is the `canFlowTo` check that doesn't hold?
+When you execute this code you're going to get an error of the form:
+
+```haskell
+LabelError { lerrContext      = ["writeLIORef"]
+           , lerrFailure      = "guardAllocP"
+           , lerrCurLabel     = "Alice" /\ "Bob" %% ("Alice" \/ "Bob")
+           , lerrCurClearance = False %% True
+           , lerrPrivs        = []
+           , lerrLabels       = ["Bob" %% ("Alice" \/ "Bob")] }
+```
+
+What does do all these fields mean mean?
+
+* `lerrContext` gives us a "stack-trace". If we wrap an LIO action `act` by `withContext "act"` then LIO will keep track of this when it throw an exception, so we can more easily figure out where the exception was thrown.
+
+* `lerrFailure` gives us the name of the actual function that failed (since the context may contain multiple names).
+
+* `lerrCurLabel` and `lerrCurClearance` respectively contain the current label and clearance at the point of failure.
+
+* `lerrPrivs` tells us what privileges were exercised.
+
+* `lerrLabels` gives us a list of labels involved.
+
+This particular exception tells us that the `guardAllocP` function used by `writeLIORef` failed.  If we look at `guardAllocP` (with no empty privileges) we can find out that the function throws an exception when the current label does not flow to the label of the object. In this case,
+
+```haskell
+"Alice" /\ "Bob" %% ("Alice" \/ "Bob") `canFlowTo` "Bob" %% ("Alice" \/ "Bob")
+```
+
+With this in mind:
 
 * Modify `l1` by adding to the secrecy component a single disjunct/conjunct that will prevent the exception from being thrown. Intuitively, why does this work?
 
@@ -368,7 +397,7 @@ readAllAct db = do
   return $ intercalate ";" messages
 ```
 
-* Modify `handleReq` to ensure that `act` cannot access the data the other than that of the "current user"; at this point the program should throw an exception.
+* Modify `handleReq` to ensure that `act` cannot access the data the other than that of the "current user"; at this point the program should throw an exception. You may want to look at [LIO.Core](http://hackage.haskell.org/package/lio-0.11.4.1/docs/LIO-Core.html#g:4)'s clearance-manipulation functions.
 
 * Modify `readAllAct` to address the exception. The result of executing this program should be:
 
