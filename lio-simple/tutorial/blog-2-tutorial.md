@@ -161,19 +161,14 @@ formToPost mpId = do
                              , postBody        = S8.unpack pBody 
                              , postIsPublished = pub }
   case mpost of
-    Nothing -> redirectBack'
+    Nothing -> redirectBack
     Just p  -> return p
   where pId = fromMaybe undefined mpId
-        redirectBack' =  do 
-          redirectBack 
-          return $ error "future version of simple won't need this type fix"
 ```
 
 This function first parses the HTTP request to extract the "title", "body", and "published" fields. If the first two are missing or null then `mpost` value is `Nothing` and `formToPost` returns a response corresponding to a redirect to the referrer (`redirectBack`). Recall that if a response is returned then the`DCController` monad does not execute the remaining actions. Hence, `formToPost` performing redirect is akin to a failure---the redirect response percolates and is returned by the top-most controller.
 
 Note that if the fields are present and not null (the "publsh" field is present only when the checkbox is selected) then `formToPost` returns the `Post` value with these corresponding fields set. As before, the post id is set to `undefined` if this is a new post and we expect the database interface to "adjust" this field.
-
-> > **Aside:** The `redirectBack'` part is new and a bit ugly: it simply says redirect back if the post is not well-formed, i.e., it is a `Nothing`, the last line is necessary to cast the type of `redirectBack` from returning `()` to returning `Post` -- it will never actually force that value.  In fact, if you get the latest version of _simple_ from our [git repository](https://github.com/scslab/simple) you can just use `redirectBack` directly.
 
 The controller for creating a new post now becomes very simple:
 
