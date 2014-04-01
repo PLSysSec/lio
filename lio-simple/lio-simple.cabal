@@ -1,5 +1,5 @@
 name:                lio-simple
-version:             0.0.2.0
+version:             0.0.2.1
 synopsis:            LIO support for the Simple web framework
 description:
 
@@ -39,7 +39,6 @@ library
       base < 6
     , bytestring
     , conduit
-    , directory
     , filepath
     , lio                >= 0.11.4
     , simple             >= 0.8.0
@@ -50,7 +49,6 @@ library
     , base64-bytestring
     , simple-templates
     , text
-    , unix
 
   ghc-options: -Wall -fno-warn-unused-do-bind -fno-warn-orphans
 
@@ -74,7 +72,6 @@ executable lio-simple
     , filepath
     , simple-templates >= 0.7.0
     , text
-    , unordered-containers
   default-language: Haskell2010
 
 
