@@ -74,11 +74,11 @@ requestLogin = responseLBS status400 [("X-Login", "True")] ""
 -- | Execute action with the current user's name. Otherwise, request
 -- that the user authenticate.
 withUserOrLogin :: Monad m 
-                => (S8.ByteString -> ControllerT m r a)
-                -> ControllerT m r a
+                => (S8.ByteString -> ControllerT r m a)
+                -> ControllerT r m a
 withUserOrLogin act = currentUser >>= \muser ->
   maybe (respond requestLogin) act muser
 
 -- | Get the current user.
-currentUser :: Monad m => ControllerT m r (Maybe S8.ByteString)
+currentUser :: Monad m => ControllerT r m (Maybe S8.ByteString)
 currentUser = requestHeader "X-User"

@@ -16,6 +16,6 @@ module LIO.Web.Simple.DCLabel (
 import safe LIO.DCLabel
 import safe LIO.Web.Simple
 
-type DCController = LIOController DCLabel
+type DCController a      = LIOController DCLabel a
 type SimpleDCApplication = SimpleLIOApplication CNF DCLabel
 type SimpleDCMiddleware  = SimpleLIOMiddleware CNF DCLabel

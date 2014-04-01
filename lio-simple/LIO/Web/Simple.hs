@@ -49,7 +49,7 @@ import safe qualified Data.ByteString.Lazy.Char8 as L8
 
 
 -- | Controller with 'LIO' as the underlying monad.
-type LIOController l = ControllerT (LIO l)
+type LIOController l s = ControllerT s (LIO l)
 
 -- | Parses a HTML form from the request body. It returns a list of 'Param's as
 -- well as a list of 'File's, which are pairs mapping the name of a /file/ form
@@ -78,6 +78,6 @@ body = do
   req <- request
   liftLIO . ioTCB $ L8.fromChunks `fmap` (requestBody req $$ CL.consume)
 
-instance Label l => MonadLIO l (ControllerT (LIO l) r) where
+instance Label l => MonadLIO l (ControllerT r (LIO l)) where
   liftLIO act = ControllerT $ \st -> 
       liftLIO act >>= \r -> return (Right r, st)
