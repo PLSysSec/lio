@@ -1,10 +1,27 @@
 name:                lio-simple
-version:             0.0.1.0
+version:             0.0.1.1
 synopsis:            LIO support for the Simple web framework
 description:
 
-  LIO support for the Simple web framework.
-  See the 'lio' and 'simple' packages for more information.
+  \lio-simple\ adds LIO support for the \Simple\ \"framework-less\"
+  web framework.  \Simple\ is minimalist, providing a lightweight base
+  - the most basic \Simple\ app is little more than a WAI
+  `Application` with some routing logic. Everything else (e.g.
+  authentication, controllers, persistence, caching etc\') is provided
+  in composable units, so you can include only the ones you need in
+  your app, and easily replace with your own components.
+  LIO is an information flow control library that lets you enforce
+  various security policies, including mandatory and discretionary
+  access control.
+  .
+  To get started, create an app skeleton with the `lio-simple` utility:
+  .
+  @
+    $ cabal install lio-simple
+    $ lio-simple my_app_name
+    $ cd my_app_name
+    $ cabal run
+  @
 
 homepage:            http://simple.cx
 license:             LGPL-3
@@ -24,14 +41,14 @@ library
     , conduit
     , directory
     , filepath
-    , wai >= 2.1
+    , lio                >= 0.11.4
+    , simple             >= 0.8.0
+    , wai                >= 2.1
     , wai-extra
     , warp
     , http-types
     , base64-bytestring
-    , simple
     , simple-templates
-    , lio
     , text
     , unix
 
