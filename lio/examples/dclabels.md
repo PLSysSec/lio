@@ -33,30 +33,22 @@ fillIn msg = error $ "Missing: " ++ msg
 
 ### Current label and DC labels
 
-First, we're going to look at how the current label with DC labels interacts with reads and writes without privileges.  Since reference are conceptually the simplest objects we can read and write to, our examples will revolve around them.
+We're going to look at how the current label with DC labels interacts with reads and writes without privileges.  Since reference are conceptually the simplest objects we can read and write to, our examples will revolve around them.
 
-Hence, we're going to define a helper wrapper that creates two references and executes an action with these references curried.
+First, however, we are going to define the initial LIO state that we'll use in the next several examples:
+
 
 ```active-haskell
 :requires=main
-:name=withRefs
+:name=highIntegrityInit
 :noexec
-
-withRefs :: DCLabel  -- Label of first  ref
-         -> DCLabel  -- Label of second ref
-         -> (LIORef DCLabel Int -> LIORef DCLabel Int -> DC a)
-         -> DC a
-withRefs l1 l2 act = do
-  ref1 <- newLIORef l1 3
-  ref2 <- newLIORef l2 4
-  act ref1 ref2
 
 initialLabelState ::  LIOState DCLabel
 initialLabelState = LIOState { lioLabel     = True  %% False
                              , lioClearance = False %% True }
 ```
 
-Here, we use an initial current label and clearance corresponding to the DC labels bottom (`True %% False`) and top (`False %% True`) lattice elements, respectively.
+The initial current label and clearance correspond to the DC labels bottom (`True %% False`) and top (`False %% True`) lattice elements, respectively.
 
 > > **Note:** In general you want to use `dcPublic` as the initial current label, since a high integrity current label (the `False`) allows code to create labeled objects of "high" integrity without using privileges.
 
@@ -69,7 +61,7 @@ Complete the next two examples by computing the join by hand. In these examples,
 #### Example 1
 
 ```active-haskell
-:requires=withRefs
+:requires=highIntegrityInit
 
 example :: DC Bool
 example = do
@@ -78,13 +70,17 @@ example = do
       l2 =  "Alice" /\ "Dave" %% True
             -- data sensitive to both Alice and Dave
 
-  withRefs l1 l2 $ \ref1 ref2 -> do
-     readLIORef ref1
-     lcur <- getLabel
-     unless (lcur == l1) $ fail "Unexpected current label"
-     readLIORef ref2
-     lcur' <- getLabel
-     unless (lcur' == l1 `lub` l2) $ fail "Unexpected current label"
+  -- create refs:
+  ref1 <- newLIORef l1 3
+  ref2 <- newLIORef l2 4
+  --
+
+  readLIORef ref1
+  lcur <- getLabel
+  unless (lcur == l1) $ fail "Unexpected current label"
+  readLIORef ref2
+  lcur' <- getLabel
+  unless (lcur' == l1 `lub` l2) $ fail "Unexpected current label"
 
   l3 <- getLabel
   return $ l3 == fillIn "label that preserves privacy of ref1 and ref2"
@@ -93,7 +89,7 @@ example = do
 #### Example 2
 
 ```active-haskell
-:requires=withRefs
+:requires=highIntegrityInit
 
 example :: DC Bool
 example = do
@@ -102,9 +98,13 @@ example = do
       l2 =  "Carla" \/  "Dave" %% True
             -- data sensitive to either Carla or Dave
 
-  withRefs l1 l2 $ \ref1 ref2 -> do
-     readLIORef ref1
-     readLIORef ref2
+  -- create refs:
+  ref1 <- newLIORef l1 3
+  ref2 <- newLIORef l2 4
+  --
+
+  readLIORef ref1
+  readLIORef ref2
 
   l3 <- getLabel
   return $ l3 == fillIn "label that preserves privacy of ref1 and ref2"
@@ -117,7 +117,7 @@ Compute the integrity components of the joins:
 #### Example 3
 
 ```active-haskell
-:requires=withRefs
+:requires=highIntegrityInit
 
 example :: DC Bool
 example = do
@@ -126,9 +126,13 @@ example = do
       l2 =  True %% "Carla"
             -- data created by Carla
 
-  withRefs l1 l2 $ \ref1 ref2 -> do
-     readLIORef ref1
-     readLIORef ref2
+  -- create refs:
+  ref1 <- newLIORef l1 3
+  ref2 <- newLIORef l2 4
+  --
+
+  readLIORef ref1
+  readLIORef ref2
 
   l3 <- getLabel
   return $ l3 == fillIn "label that reflects untrustworhty l1 and l2 data has been incorporated in the context"
@@ -137,7 +141,7 @@ example = do
 #### Example 4
 
 ```active-haskell
-:requires=withRefs
+:requires=highIntegrityInit
 
 example :: DC Bool
 example = do
@@ -148,9 +152,13 @@ example = do
             -- data sensitive to either Carla or Dave, and
             -- endorsed by both Alice and Bob
 
-  withRefs l1 l2 $ \ref1 ref2 -> do
-     readLIORef ref1
-     readLIORef ref2
+  -- create refs:
+  ref1 <- newLIORef l1 3
+  ref2 <- newLIORef l2 4
+  --
+
+  readLIORef ref1
+  readLIORef ref2
 
   l3 <- getLabel
   return $ l3 == fillIn "label that reflects untrustworhty l1 and l2 data has been incorporated in the context"
@@ -177,18 +185,22 @@ In the above examples, this always held true because our initial current label w
 #### Example 5
 
 ```active-haskell
-:requires=withRefs
+:requires=highIntegrityInit
 
 example :: DC ()
 example = do
   let l1 =  "Alice" %% "Alice" \/ "Bob"
       l2 =  "Bob"   %% "Alice" \/ "Bob"
 
-  withRefs l1 l2 $ \ref1 ref2 -> do
-     v1 <- readLIORef ref1
-     writeLIORef ref1 $ v1 + 1
-     readLIORef ref2
-     writeLIORef ref2  v1
+  -- create refs:
+  ref1 <- newLIORef l1 3
+  ref2 <- newLIORef l2 4
+  --
+
+  v1 <- readLIORef ref1
+  writeLIORef ref1 $ v1 + 1
+  readLIORef ref2
+  writeLIORef ref2  v1
 ```
 
 When you execute this code you're going to get an error of the form:
@@ -231,19 +243,25 @@ With this in mind:
 #### Example 6
 
 ```active-haskell
-:requires=withRefs
+:requires=highIntegrityInit
 
 example :: DC ()
 example = do
   let l1 =  "Alice" /\ "Bob"  %% "Alice"
       l2 =  "Alice" /\ "Bob"  %% "Bob"
 
-  withRefs l1 l2 $ \ref1 ref2 -> do
-     v1 <- readLIORef ref1
-     writeLIORef ref1 $ v1 + 1
-     readLIORef ref2
-     writeLIORef ref2  v1
+  -- create refs:
+  ref1 <- newLIORef l1 3
+  ref2 <- newLIORef l2 4
+  --
+
+  v1 <- readLIORef ref1
+  writeLIORef ref1 $ v1 + 1
+  readLIORef ref2
+  writeLIORef ref2  v1
 ```
+
+Now,
 
 * What is the `canFlowTo` check that doesn't hold?
 
@@ -324,6 +342,8 @@ example = do
   writeLIORef ref2  v1
 ```
 
+Now,
+
 * Modify only the write(s) to use privileges. Intuitively, why does this work?
 
 * Is any information leaked by using privileges?
@@ -351,6 +371,9 @@ example = do
   writeLIORefP      noPrivs ref2  v1
   getLabel
 ```
+
+Now,
+
 * Modify the example to use the least privilege for each operation.
 
 * Modify the example to use the least privilege for each operation, while ensuring the end current label is the public label.
