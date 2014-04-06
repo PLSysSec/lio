@@ -2,9 +2,9 @@
 blockquote blockquote p { font-size: 10pt; }
 </style>
 
-In this post we're going to work through some exercises to internalize LIO+DCLabel concepts, including current label, LIORefs, privileges, and clearance.
+In this post we're going to work through some exercises to internalize [LIO](http://hackage.haskell.org/package/lio) and [DCLabel](http://hackage.haskell.org/package/lio-0.11.4.1/docs/LIO-DCLabel.html) concepts, including current label, LIORefs, privileges, and clearance.
 
-Throughout we are going to execute an `example` action that you will be asked to complete. Our `main` action, defined below, simply executes the `example` action with an initial current label and clearance (`initialLabels`).
+Throughout we are going to execute an `example` action that you will be asked to complete. Our `main` action, defined below, simply executes the `example` action with an initial current label and clearance of `initialLabels`.
 
 ```active-haskell
 :name=main
@@ -31,12 +31,7 @@ fillIn :: String -> a
 fillIn msg = error $ "Missing: " ++ msg
 ```
 
-### Current label and DC labels
-
-We're going to look at how the current label with DC labels interacts with reads and writes without privileges.  Since reference are conceptually the simplest objects we can read and write to, our examples will revolve around them.
-
-First, however, we are going to define the initial LIO state that we'll use in the next several examples:
-
+The initial LIO state that we will use in the next several examples is:
 
 ```active-haskell
 :requires=main
@@ -48,15 +43,23 @@ initialLabelState = LIOState { lioLabel     = True  %% False
                              , lioClearance = False %% True }
 ```
 
-The initial current label and clearance correspond to the DC labels bottom (`True %% False`) and top (`False %% True`) lattice elements, respectively.
+`initialLabelState` sets the current label to the DC label `True %% False`. For this label, the secrecy component is `True`, which implies that the current information secrecy is public. The integrity part is `False`, which we use in the examples to ease the creation of high integrity objects without involving privileges. (See note below)
 
-> > **Note:** In general you want to use `dcPublic` as the initial current label, since a high integrity current label (the `False`) allows code to create labeled objects of "high" integrity without using privileges.
+The clearance label is set to `False %% True`, which should be understood as having no clearance privileges.
 
-When we combine data from two differently-labeled entities, the label of the data is computed with the  _join_, or _least upper bound_ (lub). This label captures the secrecy of both sources: to read data labeled as such you need the consent of the principals in both both labels. Dually, the integrity component captures the fact that the data is a combination of the two sources and thus data labeled as such is less trustworthy than both sources.
+DC labels form a lattice, with the assignments above corresponding respectively to the bottom and top elements.
 
-In LIO, the current label protects everything in scope. Hence, when we read from a labeled entity and thus incorporate data originally-protected by this entity's label, we must to raise the current label to ensure that the current label can also protect this new data. Moreover, we must reflect in the current label the fact that data of certain integrity was incorporated and thus may influence the rest of the computation. We raise the label to the join of the current label and the entity label.
+> > **Note:** In general, you want to use `dcPublic = True %% True` as the initial current label. A high label with a high integrity component (the `False` here) will allow the creation of "high" integrity labeled objects without using any privileges. This is convenient for the next simple examples until we introduce privileges, but such a label will likely be not safe in real world environments.
 
-Complete the next two examples by computing the join by hand. In these examples, we first incorporate data from `ref1` into the current context and then from `ref2`. In both cases the current label is raised to the least restricting label that still protects the data we're incorporating into the context.
+### Current label and DC labels
+
+We're going to look at how the current label evolves when doing reads and writes to labeled data without privileges.  We will use labeled references [`LIORef`](http://hackage.haskell.org/package/lio-0.11.4.1/docs/LIO-LIORef.html#t:LIORef) to that purpose.
+
+When we combine data from two differently-labeled entities `ref1` and `ref2`, the resulting label will be computed using the _join_, or _least upper bound_ (lub) operation. The new label will capture the secrecy of both entities: to read the combined data, you need the consent of the principals in both `ref1` and `ref2` labels. Dually, the integrity component captures the fact that the data is a combination of the two sources and thus data labeled as such is less trustworthy than data coming from each individual source.
+
+In LIO, the current label protects everything in scope. Hence, when we read from a labeled entity, data originally-protected by this entity's label is brought into scope: we must to raise the current label to capture the increased secrecy requirements. Moreover, the current label must take into account that data of certain integrity was incorporated and thus may influence the rest of the computation. Thus, the current label is updated or _raised_ to its join with the entity label.
+
+Now, you will compute a few label joins by hand. In the following examples, we bring into scope data from `ref1` and `ref2`. When doing this, LIO raises the current label to the least restricting label that jointly protects `ref1` and `ref2`. Your job is to write down the label computed by LIO:
 
 #### Example 1
 
@@ -112,7 +115,7 @@ example = do
 
 -----
 
-Compute the integrity components of the joins:
+Now, compute the integrity component of the current label:
  
 #### Example 3
 
@@ -166,7 +169,7 @@ example = do
 
 -----
 
-When creating a reference with `newLIORef` the label of the reference must be above the current label and below the current clearance. The implementation is something like this:
+When creating a reference with `newLIORef`, it takes into account the current label and clearance. The label of the new reference must be above the current label and below the current clearance. The implementation is something like this:
 
 ```haskell
 newLIORef :: DCLabel -> a -> LIORef DCLabel a
@@ -177,9 +180,9 @@ newLIORef l a = do
   ... -- actually create reference
 ```
 
-The same check is used by `writeLIORef` when writing to a reference.
+The same check is performed in `writeLIORef` when writing to a reference.
 
-In the above examples, this always held true because our initial current label was the bottom element and we created the references before reading any sensitive data. Once we read sensitive data we should not be able to arbitrarily write to less-sensitive entities. Similarly, once we read data that is less trustworthy than our current context then we should not be able to affect more trustworthy entities. The next two examples consider these two scenarios.
+In the above examples, the `canFlowTo` condition always held true because our initial current label was the bottom element and we created the references before reading any sensitive data. Once we read sensitive data we should not be able to arbitrarily write to less-sensitive entities. Similarly, once we read data that is less trustworthy than our current context then we should not be able to affect more trustworthy entities. The next two examples illustrate these two scenarios.
 
 
 #### Example 5
@@ -203,7 +206,7 @@ example = do
   writeLIORef ref2  v1
 ```
 
-When you execute this code you're going to get an error of the form:
+When you execute this code you will get an error of the form:
 
 ```haskell
 LabelError { lerrContext      = ["writeLIORef"]
@@ -214,7 +217,7 @@ LabelError { lerrContext      = ["writeLIORef"]
            , lerrLabels       = ["Bob" %% ("Alice" \/ "Bob")] }
 ```
 
-What does do all these fields mean mean?
+What do all these fields mean?
 
 * `lerrContext` gives us a "stack-trace". If we wrap an LIO action `act` by `withContext "act"` then LIO will keep track of this when it throws an exception, so we can more easily figure out where the exception was thrown.
 
@@ -226,13 +229,13 @@ What does do all these fields mean mean?
 
 * `lerrLabels` gives us a list of labels involved.
 
-This particular exception tells us that the `guardAllocP` function used by `writeLIORef` failed.  If we look at `guardAllocP` (with empty privileges) we can find out that the function throws an exception when the current label does not flow to the label of the object. In this case,
+The above exception tells us that the `guardAllocP` function used by `writeLIORef` failed.  If we look at `guardAllocP` (with empty privileges) we can find out that the function throws an exception when the current label can not flow to the label of the object. In this case,
 
 ```haskell
 "Alice" /\ "Bob" %% ("Alice" \/ "Bob") `canFlowTo` "Bob" %% ("Alice" \/ "Bob")
 ```
 
-Intuitively the second `writeLIORef` fails because we read data that is sensitive to both Alice and Bob (and thus the secrecy component of the current label is `"Alice" /\ "Bob"`) and are subsequently trying to write to a reference that only preserves the privacy of Bob (and thus potentially leaking the Alice's data).
+Intuitively, the second `writeLIORef` fails because we have read data  needing both Alice and Bob privileges (secrecy component of `"Alice" /\ "Bob"`) and we are subsequently trying to write to a reference that only requires privileges for Bob. Would that check not fail, we could leak Alice's data.
 
 With this in mind:
 
