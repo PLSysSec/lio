@@ -276,11 +276,13 @@ Now,
 
 ### Privileges
 
-In examples 5 and 6 we modified the labels of the source/destination references to allow certain writes after reads. In a real application we may not be able to do this. Moreover, by changing the label of a resource we may be permitting reads/writes that should otherwise not be allowed. Instead, let's use privileges to explicitly declassify and endorse data.
+In examples 5 and 6, we repaired the `LabelError` exceptions by modifying the labels of the references itself to become more permissive. In a real application, we may not want to do this, by changing the label of a resource we may be permitting reads/writes that should otherwise not be allowed. Instead, in this section we will use privileges to explicitly declassify and endorse data while keeping our resources appropriately labeled.
 
-Privileges are used to bypass restrictions by effectively removing/ignoring a principal (really, a disjunct) from the secrecy component of a label and adding a principal (really, a disjunct) to the integrity component. For example, this is done when we compare the current label with the label of a reference (`writeLIORefP`) to check if we can write to the reference.  To be flexible, it's also used when we raise raise the current label (e..g, with `readLIORefP`); in this case we use privileges to avoid "over-tainting". (Of course, in some cases you may want to taint the context!)
+Privileges are used to bypass secrecy and integrity restrictions. For the secrecy part, a privilege effectively removes/ignores a principal (really, a disjunct). For instance, if we got privileges for `Alice`, we can make the label `Alice /\ Bob %% True` flow to `Bob %% True`, this can be seen as `Alice` making the information public from her point of view. For the integrity part, a privilege adds a principal (really, a disjunct) to the integrity component. For instance, if we have privileges for `Alice`, we can make the label `True %% Bob` flow to `True %% Alice /\ Bob`, meaning that `Alice` endorses now the given information.
 
-In the examples below we're going to use the public label as the initial current label and top as the clearance (the default state), and use a minting function that will create a privilege from a principal.
+Privileges are used in `writeLIORefP` to check if we can write to the reference. To be flexible, they are also used when raising the current label (e..g, with `readLIORefP`); in this case, we use privileges to avoid "over-tainting". (Of course, in some cases you may want to taint the context!)
+
+We will run the examples below with the public label as the initial current label. The clearance will be different than from the previous cases, we will use the top element which basically means no clearance (the default state). We also define a minting function `mint` for creating a privilege from a list of principals. Note that `mint` uses `ioTCB` which is usually unavailable to regular `LIO` code, otherwise such code could create arbitrary privileges bypassing the security restrictions.
 
 ```active-haskell
 :requires=main
@@ -297,13 +299,13 @@ mint ps = ioTCB . privInit $ cFromList $ map (\p -> dFromList [p]) ps
 
 Here `dFromList` is used to convert each principal to a singleton disjunctive clause; `cFromList` turns these into a conjunctive clause, i.e., a CNF formula (which is also a label component). Recall that a disjunctive clause in a privilege corresponds to a delegated privilege (not used here) and the conjunction of such clauses means that the privilege can be used to "speak on behalf" of multiple principals.
 
-> > **Security note:** In actual code you should never expose something like `mint` to untrusted code!
+> > **Security reminder:** In actual code you should never expose something like `mint` to untrusted code!
 
 
 
 #### Example 7
 
-Complete the example below by filling in the first argument to `canFlowToPM` with the principals needed for the flow to hold. 
+Complete the example below by filling in the first argument to `canFlowToPM` with the minimum list of principals needed for the flow to hold.
 
 ```active-haskell
 :requires=mint
