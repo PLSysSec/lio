@@ -21,7 +21,6 @@ import LIO.Web.Simple.TCB (lioGetTemplateTCB)
 
 import GHC.Generics
 import Data.Aeson
-import Data.Maybe
 import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Foldable
@@ -81,11 +80,11 @@ getAllPosts = do
   liftLIO . withContext "getAllPosts" $ do
     lposts <- readLMVar $ db settings
     foldlM f [] lposts
-   where f posts lpost = do mpost <- (Just `liftM` unlabel lpost)
-                                        `catch` handler
-                            return $ maybe posts (: posts) mpost
-         handler :: SomeException -> DC (Maybe Post)
-         handler _ = return Nothing
+   where f posts lpost = do handle (handler posts) $ do
+                              post <- unlabel lpost
+                              return $ post : posts
+         handler :: [Post] -> LabelError DCLabel -> DC [Post]
+         handler ps _ = return ps
 
 getPostById :: PostId -> DCController AppSettings Post
 getPostById idNr = do
@@ -110,6 +109,7 @@ updatePost priv post = do
   settings  <- controllerState
   liftLIO . withContext "updatePost" $ do
     lpost  <- labelPost priv post
+               `onException` putLMVar (db settings) lposts
     lposts <- takeLMVar $ db settings
     guardUpdate (postId post) lposts
       `onException` putLMVar (db settings) lposts

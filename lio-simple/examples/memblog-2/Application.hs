@@ -70,16 +70,6 @@ formToPost user mpId = do
           redirectBack 
           return $ error "future version of simple won't need this type fix"
 
-withBasicAuth :: DCController AppSettings () -> DCController AppSettings ()
-withBasicAuth controller = do
-  s <- controllerState
-  fromApp $ basicAuth "memblog-2" (\_ _ -> return True) $ 
-    controllerApp s controller
-    -- Since our controller state is really just an LMVar we can
-    -- call the run function without having to restore state
-    -- If the app gets more complicated: use an LIORef to store the
-    -- end state and read the LIORef after the fromApp
-    
 withUser :: (UserName -> DCController AppSettings ()) 
          -> DCController AppSettings ()
 withUser act = withUserOrLogin $ \user -> act (S8.unpack user)
