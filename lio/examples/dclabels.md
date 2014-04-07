@@ -2,7 +2,7 @@
 blockquote blockquote p { font-size: 10pt; }
 </style>
 
-In this post we're going to work through some exercises to internalize [LIO](http://hackage.haskell.org/package/lio) and [DCLabel](http://hackage.haskell.org/package/lio-0.11.4.1/docs/LIO-DCLabel.html) concepts, including current label, LIORefs, privileges, and clearance.
+In this post we're going to work through some exercises to internalize [LIO](http://hackage.haskell.org/package/lio) and [DCLabel](http://hackage.haskell.org/package/lio-0.11.4.1/docs/LIO-DCLabel.html) concepts, including current label, LIORefs and privileges.
 
 Throughout we are going to execute an `example` action that you will be asked to complete. Our `main` action, defined below, simply executes the `example` action with an initial current label and clearance of `initialLabels`.
 

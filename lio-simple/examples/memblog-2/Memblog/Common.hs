@@ -33,8 +33,8 @@ data AppSettings = AppSettings {
 
 newAppSettings :: DC AppSettings
 newAppSettings = do
-  lpost0 <- label (True %% True) post0
-  lpost1 <- label (True %% True) post1
+  lpost0 <- label (postPolicy post0 `lub` dcPublic) post0
+  lpost1 <- label (postPolicy post1 `lub` dcPublic) post1
   mv <- newLMVar dcPublic $ Map.fromList 
     [(postId post0, lpost0), (postId post1, lpost1)]
   return $ AppSettings { db = mv }
@@ -109,7 +109,6 @@ updatePost priv post = do
   settings  <- controllerState
   liftLIO . withContext "updatePost" $ do
     lpost  <- labelPost priv post
-               `onException` putLMVar (db settings) lposts
     lposts <- takeLMVar $ db settings
     guardUpdate (postId post) lposts
       `onException` putLMVar (db settings) lposts
