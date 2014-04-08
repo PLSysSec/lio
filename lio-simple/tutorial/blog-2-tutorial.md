@@ -478,7 +478,7 @@ labelPost :: Post -> DC (Labeled DCLabel Post)
 labelPost post = withContext "labelPost" $ label (postPolicy post) post
 ```
 
-This function simply applies the policy function to create a label and then associates this label with a post, returning a labeled value. Its such labeled posts that we want to place in the database.
+This function simply applies the policy function to create a label and then associates this label with a post, returning a labeled value. It's such labeled posts that we want to place in the database.
 
 In fact, since the above modification to `AppSettings` broke our app, we now have a number of places that we need to go and adjust the code to handle labeled posts.
 
@@ -800,7 +800,7 @@ Here, we had to modify all the middleware to account for the fact that apps take
 
 1. We're now using `runP` instead of `run` and passing it the initial privilege `mempty` (effectively no privilege).
 
-2. We added a new middleware `setUserPrivsTCB` to the pipeline which _mints_ a new privilege (with `ioTCB . privInit`) corresponding to the current user and executes the current app with this privilege.  We use `mappend` to concatenate privileges, but in this app this will always simply be the privilege corresponding to the current user, if any.  Note that this middleware uses some trusted code. As used, we can reason about its safely by simply noting that it gets executed before the `app` code (defined in `Application.hs`). For now this does not matter too much, but this is a useful design privilege and at some point we may wish to incorporate some actual untrusted code in the `app`.
+2. We added a new middleware `setUserPrivsTCB` to the pipeline which _mints_ a new privilege (with `ioTCB . privInit`) corresponding to the current user and executes the current app with this privilege.  We use `mappend` to concatenate privileges, but in this app this will always simply be the privilege corresponding to the current user, if any.  Note that this middleware uses some trusted code. As used, we can reason about its safely by simply noting that it gets executed before the `app` code (defined in `Application.hs`). For now this does not matter too much, but this is a useful design pattern -- separating out trusted and untrusted code -- and at some point we may wish to incorporate some actual untrusted code in the `app`.
 
 Okay, so now our app takes a privilege and our runner exposes the current user's privileges to controllers in `Application.hs`, but we must also modify the database interface to take privileges if we're going to create labeled posts with the authority of the current user.
 
@@ -839,7 +839,7 @@ updatePost priv post = do
 
 The overall changes are straight forward: we want to make sure that we use the privilege when we label a post so `labelPost` calls `labelP` -- which is like `label` but takes a privilege -- with the supplied privilege. Similarly, when we want to assert that the current user can modify an existing labeled post we give `guardAllocP` -- which is like `guardAlloc`, but takes a privilege -- the supplied privilege. If the privilege corresponds to the author of the post the check performed by `guardAllocP` will succeed.
 
-Lastly, we need to modify `Application.hs` to call our modified insert and update function with the current privileges:
+Lastly, we need to modify `Application.hs` to call our modified insert and update functions with the current privileges:
 
 ```haskell
     post "/" $ withUser $ \user -> do
@@ -880,7 +880,11 @@ First, modify the controller in `Application.hs` to compare the current user (if
       render "show.html" $ object [ "post" .= post, "showEdit" .= showEdit]
 ```
 
-and then modify the template accordingly:
+Here, we're using `currentUser` from `LIO.Web.Simple.Auth`, which return a `Maybe ByteString`; if the user is logged in the `muser` value is a `Just` value. Hence, we can compare against the post author (wrapped by `Just`) -- if the user is not logged in or is a different user then the "Edit post" link is not shown.
+
+> > Note that we could also have used `withUser` from before, which would additionally force the user to log in (if they haven't), but chose the `currentUser` approach to highlight an alternative approach; in certain cases it is useful to see if the user is logged in without forcing them to do so.
+
+Finally, let's modify the edit template accordingly:
 
 ```html
 <h2>$post.postTitle$</h2>
