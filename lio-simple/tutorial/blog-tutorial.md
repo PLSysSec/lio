@@ -115,7 +115,7 @@ The default generated application isn't very interesting, displaying only a boil
 
 ### Data model for posts
 
-First, we're going to modify modify `Memblog/Common.hs` to add a new data type 'Post' representing a blog post:
+We're going to put all the code related to the data model in `Memblog/Common.hs`; in a real application you would likely have have a `Memblog/Models/Posts.hs` file, but for this tutorial we just want to separate the database interface code from the application logic (controller code) that will be in `Application.hs`.  So, let's modify `Memblog/Common.hs` to add a new data type 'Post' representing a blog post:
 
 ```haskell
 -- | Post Id's are stringified Ints
