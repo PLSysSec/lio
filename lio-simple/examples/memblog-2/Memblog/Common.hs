@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -26,6 +27,7 @@ import qualified Data.Map as Map
 import Data.Foldable
 
 import LIO.Concurrent
+import LIO.TCB (ioTCB)
 
 data AppSettings = AppSettings { 
   db :: LMVar DCLabel (Map PostId (Labeled DCLabel Post))
@@ -144,3 +146,24 @@ post1 = Post {
   , postIsPublished = False
   , postAuthor = "cicero"
   }
+
+--
+-- Debug helpers
+--
+
+
+-- | Get the current label and clearance as a JSON value
+debugGetCtx :: DCController AppSettings Value
+debugGetCtx = liftLIO $ do
+  l <- getLabel
+  c <- getClearance
+  return $ object [ "label"     .= show l
+                  , "clearance" .= show c ]
+
+-- | Print the current label and clearance
+debugPrintCtx :: DCController AppSettings ()
+debugPrintCtx = liftLIO $ do
+  l <- getLabel
+  c <- getClearance
+  ioTCB . putStrLn $ "Current label = " ++ show l
+  ioTCB . putStrLn $ "Current clearance = " ++ show c

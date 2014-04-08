@@ -895,6 +895,52 @@ Now, a published post looks something like this:
 
 There is lots of room to make this app actually usable (from the UI perspective) and less ugly, but for now that is all!  (Maybe just try out the other attacks I mentioned to verify that LIO prevents them!)
 
+## Debugging
+
+If you're extending this app it may be useful to inspect the current label and clearance at various points. You can use `getLabel` and `getClearance` to get at this information, but may need some wrapper code to either return it as part of the response or print it to the terminal. So, let's add some helper functions to do this. Let's add these functions to `Memblog/Common.hs`:
+
+```haskell
+{-# LANGUAGE OverloadedStrings #-}
+...
+import LIO.TCB (ioTCB)
+...
+
+-- | Get the current label and clearance as a JSON value
+debugGetCtx :: DCController AppSettings Value
+debugGetCtx = liftLIO $ do
+  l <- getLabel
+  c <- getClearance
+  return $ object [ "label"     .= show l
+                  , "clearance" .= show c ]
+
+-- | Print the current label and clearance
+debugPrintCtx :: DCController AppSettings ()
+debugPrintCtx = liftLIO $ do
+  l <- getLabel
+  c <- getClearance
+  ioTCB . putStrLn $ "Current label = " ++ show l
+  ioTCB . putStrLn $ "Current clearance = " ++ show c
+```
+
+Above we needed some trusted code (namely, `ioTCB`) to print `stdout`.  Now, we can use `debugPrintCtx` to print the context information at any point in the controller. Similarly, we can use `debugGetCtx` to get a JSON object containing this information and pass it to a template. As an example, let's modify the index page to use this instead of `getLabel` directly. 
+
+First, let's update the controller in `Application.hs`:
+
+```haskell
+    get "/" $ do
+      posts <- getAllPosts
+      ctx <- debugGetCtx
+      render "index.html" $ object ["posts" .= posts, "ctx" .= ctx ]
+```
+
+Finally, let's update the `index.html` template:
+
+```html
+...
+<div> Current label = $ctx.label$ </div>
+<div> Current clearance = $ctx.clearance$ </div>
+```
+
 ## Conclusion
 
 This tutorial showed you how to build a secure web using _lio-simple_.  The process was not easy, but this was in part because I wanted to show you how to use LIO in a non-trivial way (and use quite a few of the features!).  In fact, you just built a somewhat simplified and app-specific version of [Hails](http://www.scs.stanford.edu/~deian/pubs/giffin:2012:hails.pdf).  Of course you can just use [hails](http://hackage.haskell.org/package/hails) if you want to build secure web apps and would rather not repeat the process, but maybe you'll want to build a variant of Hails at some point...

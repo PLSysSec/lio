@@ -21,8 +21,8 @@ app runner = do
   runner $ \currentPriv -> controllerApp settings $ do
     get "/" $ do
       posts <- getAllPosts
-      label <- liftLIO $ getLabel
-      render "index.html" $ object ["posts" .= posts, "label" .= show label ]
+      ctx <- debugGetCtx
+      render "index.html" $ object ["posts" .= posts, "ctx" .= ctx ]
     get "/new" $ do
       render "new.html" ()
     get "/login" $ withUser $ \user ->
