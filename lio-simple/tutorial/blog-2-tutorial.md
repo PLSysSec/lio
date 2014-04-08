@@ -752,7 +752,7 @@ app runner = do
   settings <- newAppSettings
 
   runner $ \currentPriv -> controllerApp settings $ do
-...
+  ...
 ```
 
 Here, we're using the type alias `SimpleDCApplication` which is the same as `DCPriv -> SimpleApplication DC`, but makes it a bit easier to write when we consider middleware, for which there is corresponding type alias. In fact, let's modify our `Main.hs` function to handle apps that take privileges in addition to the request:
@@ -770,30 +770,26 @@ import LIO.Web.Simple.TCB (runP)
 
 main :: IO ()
 main = do
-    -- Run app
-    env <- getEnvironment
-    let port = maybe 3000 read $ lookup "PORT" env
-    evalDC $ app $ runP port logStdout mempty . authMiddleware
+    ...
+    evalDC $ app $ runP port logStdout mempty . authMiddleware   -- Use priv
                                               . setClearanceMiddleware
-                                              . setUserPrivsTCB
+                                              . setUserPrivsTCB  -- New middleware
 
 authMiddleware :: SimpleDCMiddleware
 authMiddleware app priv = basicAuth "memblog-2" (\_ _ -> return True) (app priv)
 
 setClearanceMiddleware :: SimpleDCMiddleware
 setClearanceMiddleware app priv req = do
-  case lookup "X-User" $ requestHeaders req of
-    Just user -> setClearance $ principalBS user %% cTrue
-    _         -> setClearance dcPublic
-  app priv req
+  ...
+  app priv req                               -- Now, use priv when executing app
 
 setUserPrivsTCB :: SimpleDCMiddleware
 setUserPrivsTCB app priv req = do
   case lookup "X-User" $ requestHeaders req of
-    Nothing   -> app priv req
+    Nothing   -> app priv req                                -- No user, run with empty priv
     Just user -> do
-       upriv <- ioTCB . privInit $ toCNF $ principalBS user
-       app (priv `mappend` upriv) req
+       upriv <- ioTCB . privInit $ toCNF $ principalBS user  -- Mint priv
+       app (priv `mappend` upriv) req                        -- Run app with user privs
 ```
 
 Here, we had to modify all the middleware to account for the fact that apps take privileges, but the port was straight forward. There are only two things worth noting: 
@@ -813,28 +809,20 @@ labelPost priv post = labelP priv (postPolicy post) post
 
 insertPost :: DCPriv -> Post -> DCController AppSettings PostId
 insertPost priv post = do
-  settings  <- controllerState
-  liftLIO . withContext "insertPost" $ do
-    lposts <- takeLMVar $ db settings
-    let pId = show $ Map.size lposts
-    lpost <- labelPost priv post { postId = pId }          -- <= use priv here
+    ...
+    lpost <- labelPost priv post { postId = pId }          -- Use priv
               `onException` putLMVar (db settings) lposts
-    putLMVar (db settings) $ Map.insert pId lpost lposts 
-    return pId
+    ...
 
 updatePost :: DCPriv -> Post -> DCController AppSettings ()
 updatePost priv post = do
-  settings  <- controllerState
-  liftLIO . withContext "updatePost" $ do
-    lpost  <- labelPost priv post                          -- <= use priv here
-    lposts <- takeLMVar $ db settings
-    guardUpdate (postId post) lposts
-      `onException` putLMVar (db settings) lposts
-    putLMVar (db settings) $ Map.adjust (const lpost) (postId post) lposts
+    ...
+    lpost  <- labelPost priv post                          -- Use priv
+    ...
   where guardUpdate pId lposts = do
           case Map.lookup pId lposts of
-            Nothing    -> fail "updatePost: post does not exist"
-            Just lpost -> guardAllocP priv (labelOf lpost) -- <= use priv here
+            Nothing    -> ...
+            Just lpost -> guardAllocP priv (labelOf lpost) -- Use priv
 ```
 
 The overall changes are straight forward: we want to make sure that we use the privilege when we label a post so `labelPost` calls `labelP` -- which is like `label` but takes a privilege -- with the supplied privilege. Similarly, when we want to assert that the current user can modify an existing labeled post we give `guardAllocP` -- which is like `guardAlloc`, but takes a privilege -- the supplied privilege. If the privilege corresponds to the author of the post the check performed by `guardAllocP` will succeed.
@@ -928,3 +916,11 @@ Browse the source:
 I am very grateful to [Benjamin C. Pierce](http://www.cis.upenn.edu/~bcpierce/), [Emilio Jesus Gallego Arias](https://cis.upenn.edu/~emilioga/), [Leonidas Lampropoulos](http://www.cis.upenn.edu/~llamp/) and Antal Spector-Zabusky for very useful discussions, comments, and encouragement to work on this.
 
 This tutorial is licensed under a [Creative Commons Attribution-Share Alike 4.0 License.](https://creativecommons.org/licenses/by-sa/4.0/)
+
+## Contact
+
+* Bug tracker: <https://github.com/scslab/lio/issues>
+
+* IRC: #lio, #hails, or #scs on [FreeNode](http://irc.freenode.net)
+
+* Twitter: [@deiandelmars](https://twitter.com/deiandelmars)

@@ -424,6 +424,8 @@ Browse the source:
 
 * [memblog](https://github.com/scslab/lio/tree/master/lio-simple/examples/memblog)
 
+* [memblog-fs](https://github.com/scslab/lio/tree/master/lio-simple/examples/memblog-fs): memblog that stores DB to file (very dumb approach)
+
 * [blog](https://github.com/scslab/lio/tree/master/lio-simple/examples/blog): memblog-like app, but writes posts to files
 
 * Slides: [Intro to Haskell with LIO](http://www.scs.stanford.edu/~deian/lio-tutorial/day1-slides.html) 
@@ -436,6 +438,13 @@ I am very grateful to [Benjamin C.  Pierce](http://www.cis.upenn.edu/~bcpierce/)
 
 This tutorial is based on Amit Levy's [Getting Started Tutorial](http://simple.cx/tutorial.html) (thanks Amit!) and thus also licensed under a [Creative Commons Attribution-Share Alike 4.0 License.](https://creativecommons.org/licenses/by-sa/4.0/)
 
+## Contact
+
+* Bug tracker: <https://github.com/scslab/lio/issues>
+
+* IRC: #lio, #hails, or #scs on [FreeNode](http://irc.freenode.net)
+
+* Twitter: [@deiandelmars](https://twitter.com/deiandelmars)
 
 ## Appendix: using lio-fs
 
@@ -517,6 +526,3 @@ insertPost post = do
 
 You probably don't want to do this for a real app, but for this toy app it gets us the persistence that we want without relying on trusted `IO` code!
 
-### Source
-
-* [memblog-fs](https://github.com/scslab/lio/tree/master/lio-simple/examples/memblog-fs): memblog that stores DB to file (very dumb approach)
