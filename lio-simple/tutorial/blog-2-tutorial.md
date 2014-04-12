@@ -941,6 +941,28 @@ Finally, let's update the `index.html` template:
 <div> Current clearance = $ctx.clearance$ </div>
 ```
 
+#### Log out
+
+In addition to being able to print out the current label and clearance, we sometimes want to test the app under a different user (or no user). While we can do this by opening another browser or (Firefox with a different profile), this can get annoying pretty fast. Since we're just toying around, our app uses HTTP basic authentication. (In a real app you would change the `authMiddleware` in `Main.hs` to e.g., use [Mozilla's Persona](https://r.duckduckgo.com/l/?kh=-1&uddg=https://login.persona.org/).) And, HTTP basic authentication doesn't really have a notion of "logging out" (ah, the evolution of the web...), but we can use some of the suggestions from [StackOverflow](https://stackoverflow.com/questions/449788/http-authentication-logout-via-php).
+
+First, if you just want to change the current user, you can just prefix any of the app URLs with the new user's name: pointing your browser to <http://mr-t@localhost:3000/> will now change the current user to "mr-t". (This only works because we're using the `basicAuth` middleware; if we used a real authentication system the prefix is meaningless.)
+
+But what if we want to actually log out and not run under a different user? In order to do this you have to actually remove the HTTP authentication header sent by your browser. You can do this by using the Firefox Web Developer extension (`Miscellaneous -> Clear Private Data -> HTTP Authentication`) or defining a new route in `Applicatoin.hs`:
+
+```haskell
+    get "/logout" $ do
+      muser <- currentUser
+      respond $ case muser of
+                  Nothing -> redirectTo "/"
+                  Just _  -> requestLogin
+```
+
+This route simply replies with a `401` response if you are logged in, which in your browser brings up the login dialog we saw with the `/login` route. Now if you click "Cancel" you'll get an `Authorization Required` page, which means you've logged out successfully: just point your browser to <http://localhost:3000> to see the current label and clearance.
+
+The ugliness of this hack is immeasurable, but it's effectively what you would have to do with every other web framework while in development mode working with HTTP authentication. 
+
+> > If you want to be a bit less disgusted take a look at the [Hails authentication middleware](http://hackage.haskell.org/package/hails-0.11.0.0/docs/Hails-HttpServer-Auth.html) ; maybe in a later post I will show you how to implement one of these with `lio-simple`.
+
 ## Conclusion
 
 This tutorial showed you how to build a secure web using _lio-simple_.  The process was not easy, but this was in part because I wanted to show you how to use LIO in a non-trivial way (and use quite a few of the features!).  In fact, you just built a somewhat simplified and app-specific version of [Hails](http://www.scs.stanford.edu/~deian/pubs/giffin:2012:hails.pdf).  Of course you can just use [hails](http://hackage.haskell.org/package/hails) if you want to build secure web apps and would rather not repeat the process, but maybe you'll want to build a variant of Hails at some point...

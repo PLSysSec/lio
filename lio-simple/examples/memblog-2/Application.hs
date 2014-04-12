@@ -27,6 +27,11 @@ app runner = do
       render "new.html" ()
     get "/login" $ withUser $ \user ->
       render "login.html" $ object ["user" .= user]
+    get "/logout" $ do
+      muser <- currentUser
+      respond $ case muser of
+                  Nothing -> redirectTo "/"
+                  Just _  -> requestLogin
     get "/:pId" $ do
       pId   <- queryParam' "pId"
       post  <- getPostById pId
