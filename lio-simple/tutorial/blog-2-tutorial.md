@@ -963,6 +963,12 @@ The ugliness of this hack is immeasurable, but it's effectively what you would h
 
 > > If you want to be a bit less disgusted take a look at the [Hails authentication middleware](http://hackage.haskell.org/package/hails-0.11.0.0/docs/Hails-HttpServer-Auth.html) ; maybe in a later post I will show you how to implement one of these with `lio-simple`.
 
+#### Template failures (why is my page blank?)
+
+The `simple-templates` library is work in progress, so if your template is ill formed you'll get back a blank page as opposed to a template compilation error. Unfortunately this can happen if you don't have the right number of `$`'s in your variables (or too many of them) so it's a bit subtle. The only thing you can really do right now is checkout the source in the browser and debug it `printf`-style.
+
+> > Amit and I are working to make `simple-templates` better, but we'll also add support for other tempesting systems (e.g., [hashtash](http://hackage.haskell.org/package/hastache)) soon.
+
 ## Conclusion
 
 This tutorial showed you how to build a secure web using _lio-simple_.  The process was not easy, but this was in part because I wanted to show you how to use LIO in a non-trivial way (and use quite a few of the features!).  In fact, you just built a somewhat simplified and app-specific version of [Hails](http://www.scs.stanford.edu/~deian/pubs/giffin:2012:hails.pdf).  Of course you can just use [hails](http://hackage.haskell.org/package/hails) if you want to build secure web apps and would rather not repeat the process, but maybe you'll want to build a variant of Hails at some point...
