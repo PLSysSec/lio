@@ -148,7 +148,7 @@ example = do
 
 example :: DC Bool
 example = do
-  let l1 =  "Alice" /\ "Bob"  %% True
+  let l1 =  "Alice" /\ "Bob"  %% "Alice"
             -- data sensitive to both Alice and Bob, and
             -- created by Alice
       l2 =  "Carla" \/  "Dave" %% "Alice" /\ "Bob"
