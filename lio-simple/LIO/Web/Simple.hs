@@ -79,5 +79,5 @@ body = do
   liftLIO . ioTCB $ L8.fromChunks `fmap` (requestBody req $$ CL.consume)
 
 instance Label l => MonadLIO l (ControllerT r (LIO l)) where
-  liftLIO act = ControllerT $ \st -> 
+  liftLIO act = ControllerT $ \st _ ->
       liftLIO act >>= \r -> return (Right r, st)
