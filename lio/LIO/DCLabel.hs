@@ -111,6 +111,7 @@ module LIO.DCLabel (
   ) where
 
 import safe Control.Applicative
+import safe Control.Monad
 import safe Data.Bits
 import safe qualified Data.ByteString as S
 import Data.Hashable
@@ -213,9 +214,10 @@ instance Read Disjunction where
           single = dSingleton <$> readPrec
           clause = parens $ prec minPrec $ do
             let next = do Symbol "\\/" <- lexP
-                          liftA2 (:) readPrec next
-                       <++ pure []
-            dFromList <$> liftA2 (:) readPrec next
+                          next'
+                       <++ return []
+                next' = ((:) <$> readPrec) `ap` next
+            dFromList <$> next'
 
 instance Monoid Disjunction where
   mempty = dFalse
@@ -270,9 +272,10 @@ instance Read CNF where
           single = cSingleton <$> readPrec
           formula = parens $ prec 7 $ do
             let next = do Symbol "/\\" <- lexP
-                          liftA2 (:) readPrec next
-                       <++ pure []
-            cFromList <$> liftA2 (:) readPrec next
+                          next'
+                       <++ return []
+                next' = ((:) <$> readPrec) `ap` next
+            cFromList <$> next'
 
 instance Monoid CNF where
   mempty = cTrue

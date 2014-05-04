@@ -21,6 +21,9 @@ module LIO.Exception (
   , onException, finally, bracket, evaluate
   ) where
 
+import safe Prelude ((.), ($), (==), undefined, flip)
+import safe Data.Maybe
+import safe Data.Either
 import safe Control.Exception (Exception(..), SomeException(..))
 import safe qualified Control.Exception as IO
 import safe Control.Monad

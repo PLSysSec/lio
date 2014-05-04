@@ -12,6 +12,7 @@
 module LIO.Run (LIOState(..), runLIO, tryLIO, evalLIO, privInit) where
 
 import safe Control.Exception
+import safe qualified Control.Exception as IO
 import safe Data.IORef
 
 import safe LIO.Label
@@ -26,7 +27,7 @@ import LIO.TCB
 runLIO :: LIO l a -> LIOState l -> IO (a, LIOState l)
 runLIO (LIOTCB m) s0 = do
   sp <- newIORef s0
-  a <- m sp `catch` \e -> return $ throw $ makeCatchable e
+  a <- m sp `IO.catch` \e -> return $ throw $ makeCatchable e
   s1 <- readIORef sp
   return (a, s1)
 
