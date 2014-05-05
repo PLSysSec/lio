@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -161,7 +162,7 @@ debugGetCtx = liftLIO $ do
                   , "clearance" .= show c ]
 
 -- | Print the current label and clearance
-debugPrintCtx :: DCController AppSettings ()
+debugPrintCtx :: MonadLIO DCLabel m => m ()
 debugPrintCtx = liftLIO $ do
   l <- getLabel
   c <- getClearance

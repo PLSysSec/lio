@@ -468,8 +468,10 @@ Now, each post in the database is wrapped as a `Labeled` value, which keeps trac
 label   :: DCLabel -> a -> DC (Labeled DCLabel a)
 unlabel :: DLabeled DCLabel a -> DC a
 ```
-
 One thing the `LIO` monad does (when compared with `IO`) is keep track of a _current label_, which is conceptually the label on _everything_ in scope. (You can get the current label with `getLabel`.) Hence, when you `label` a value with a label, you are effectively saying that the value will be protected by this new label (as opposed to the current label). Thus when `unlabel`ing a labeled value you will now be able to inspect the boxed value, but the current label has been "raised" (and thus restricts where you can write and thus leak this data).
+
+> > **Debugging Note:** When you're building applications with `lio-simple`, you may find it useful to inspect the current label (and clearance). The `getLabel` (respectively `getClearance`) function can be used to get this information. In turn you can print it to the console or return it as part of the response. See the _Debugging_ section at the end of this tutorial for a way to do this.
+
 
 With this in mind, let's define a helper function for actually associating labels with posts:
 
@@ -900,6 +902,7 @@ There is lots of room to make this app actually usable (from the UI perspective)
 If you're extending this app it may be useful to inspect the current label and clearance at various points. You can use `getLabel` and `getClearance` to get at this information, but may need some wrapper code to either return it as part of the response or print it to the terminal. So, let's add some helper functions to do this. Let's add these functions to `Memblog/Common.hs`:
 
 ```haskell
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 ...
 import LIO.TCB (ioTCB)
@@ -914,7 +917,9 @@ debugGetCtx = liftLIO $ do
                   , "clearance" .= show c ]
 
 -- | Print the current label and clearance
-debugPrintCtx :: DCController AppSettings ()
+-- This function can be used both in a DC and DCController action to
+-- print the current label and clearance.
+debugPrintCtx :: MonadLIO DCLabel m => m ()
 debugPrintCtx = liftLIO $ do
   l <- getLabel
   c <- getClearance
