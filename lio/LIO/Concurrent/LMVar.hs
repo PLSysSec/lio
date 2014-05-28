@@ -84,8 +84,7 @@ newLMVar l a = guardIOTCB (withContext "newLMVar" $ guardAlloc l) $
   LObjTCB l `fmap` newMVar a
 
 -- | Same as 'newLMVar' except it takes a set of privileges which are
--- accounted for in comparing the label of the MVar to the current label
--- and clearance.
+-- accounted for in comparing the label of the MVar to the current label.
 newLMVarP :: PrivDesc l p => Priv p -> l -> a -> LIO l (LMVar l a)
 newLMVarP p l a = guardIOTCB (withContext "newLMVarP" $ guardAllocP p l) $
   LObjTCB l `fmap` newMVar a
@@ -204,12 +203,8 @@ swapLMVarP = blessPTCB "swapLMVarP" swapMVar
 -- clearance -- the current label is raised to the join of the 'LMVar'
 -- label and the current label.
 isEmptyLMVar :: Label l => LMVar l a -> LIO l Bool
-isEmptyLMVar (LObjTCB l m) =
-  guardIOTCB (withContext "isEmptyLMVar" $ taint l) $
-    isEmptyMVar m
+isEmptyLMVar = blessReadOnlyTCB "isEmptyLMVar" isEmptyMVar
 
 -- | Same as 'isEmptyLMVar', but uses privileges when raising current label.
 isEmptyLMVarP :: PrivDesc l p => Priv p -> LMVar l a -> LIO l Bool
-isEmptyLMVarP p (LObjTCB l m) =
-  guardIOTCB (withContext "isEmptyLMVarP" $ taintP p l) $
-    isEmptyMVar m
+isEmptyLMVarP = blessReadOnlyPTCB "isEmptyLMVarP" isEmptyMVar

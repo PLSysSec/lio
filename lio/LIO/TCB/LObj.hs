@@ -28,7 +28,13 @@
 --
 -- Then application-specific trusted code can wrap a specific label
 -- around each 'Handle' using the 'LObjTCB' constructor.
-module LIO.TCB.LObj (LObj(..), blessTCB, blessPTCB, GuardIO(..)) where
+module LIO.TCB.LObj (
+    LObj(..)
+  , blessTCB, blessPTCB
+  , blessWriteOnlyTCB, blessWriteOnlyPTCB
+  , blessReadOnlyTCB, blessReadOnlyPTCB
+  , GuardIO(..)
+  ) where
 
 import safe Data.Typeable
 
@@ -116,3 +122,31 @@ blessPTCB :: (GuardIO l io lio, PrivDesc l p) =>
 {-# INLINE blessPTCB #-}
 blessPTCB name io p (LObjTCB l a) =
   guardIOTCB (withContext name $ guardWriteP p l) (io a)
+
+-- | Similar to 'blessTCB', but enforces the weaker restriction that the
+-- action is write-only. When in doubt use 'blessTCB'.
+blessWriteOnlyTCB :: (GuardIO l io lio, Label l) =>
+                     String -> (a -> io) -> (LObj l a) -> lio
+{-# INLINE blessWriteOnlyTCB #-}
+blessWriteOnlyTCB name io (LObjTCB l a) =
+  guardIOTCB (withContext name $ guardAlloc l) (io a)
+
+blessWriteOnlyPTCB :: (GuardIO l io lio, PrivDesc l p) =>
+                      String -> (a -> io) -> Priv p -> (LObj l a) -> lio
+{-# INLINE blessWriteOnlyPTCB #-}
+blessWriteOnlyPTCB name io p (LObjTCB l a) =
+  guardIOTCB (withContext name $ guardAllocP p l) (io a)
+
+-- | Similar to 'blessTCB', but enforces the weaker restriction that
+-- the action is read-only. When in doubt use 'blessTCB'.
+blessReadOnlyTCB :: (GuardIO l io lio, Label l) =>
+                    String -> (a -> io) -> (LObj l a) -> lio
+{-# INLINE blessReadOnlyTCB #-}
+blessReadOnlyTCB name io (LObjTCB l a) =
+  guardIOTCB (withContext name $ taint l) (io a)
+
+blessReadOnlyPTCB :: (GuardIO l io lio, PrivDesc l p) =>
+                     String -> (a -> io) -> Priv p -> (LObj l a) -> lio
+{-# INLINE blessReadOnlyPTCB #-}
+blessReadOnlyPTCB name io p (LObjTCB l a) =
+  guardIOTCB (withContext name $ taintP p l) (io a)
