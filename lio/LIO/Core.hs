@@ -316,8 +316,13 @@ taintP p newl = do
 --
 -- > guardWrite l = guardAlloc l >> taint l
 --
--- This guarantees that @l@ ``canFlowTo`` the current label (and
--- clearance), and that the current label ``canFlowTo`` @l@.
+-- The 'guardAlloc' ensures that we can write(-only) to the object
+-- labeled @l@, i.e., the current label ``canFlowTo`` @l@ (and @l@
+-- ``canFlowTo`` the current clearance). If this check succeeds then
+-- we raise the current label with 'taint' to reflect the fact that
+-- this is a also a read effect. Note that if the write-only guard
+-- succeeds, the 'taint' will always suceed (we're simply raising the
+-- current label to a label that is below the clearance).
 --
 guardWrite :: Label l => l -> LIO l ()
 guardWrite newl = withContext "guardWrite" $ do

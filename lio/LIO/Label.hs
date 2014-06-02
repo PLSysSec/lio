@@ -221,10 +221,6 @@ class (Label l, SpeaksFor p) => PrivDesc l p where
     -- Less formally, @downgradeP p l@ returns a label representing
     -- the furthest you can downgrade data labeled @l@ given
     -- privileges described by @p@.
-    --
-    -- Yet another way to view this function is that @downgradeP p l@
-    -- returns the greatest lower bound (under 'canFlowTo') of the set
-    -- of all labels @l'@ such that @'canFlowToP' p l' l@.
     downgradeP :: p     -- ^ Privilege description
                   -> l  -- ^ Label to downgrade
                   -> l  -- ^ Lowest label equivelent to input
