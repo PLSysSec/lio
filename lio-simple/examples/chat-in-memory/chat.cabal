@@ -15,14 +15,14 @@ executable chat
     , aeson
     , directory
     , filepath
+    , lio-simple
     , http-types
     , transformers
-    , simple >= 0.7.0
+    , simple
     , wai
     , wai-extra
     , warp
     , lio
-    , lio-simple
     , conduit
     , simple-templates
     , text

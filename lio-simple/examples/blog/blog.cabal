@@ -15,16 +15,16 @@ executable blog
     , aeson
     , directory
     , filepath
+    , lio-simple
     , http-types
     , transformers
-    , simple >= 0.7.0
+    , simple
     , wai
     , wai-extra
     , warp
     , unix
     , lio
     , lio-fs
-    , lio-simple
     , conduit
     , simple-templates
     , text

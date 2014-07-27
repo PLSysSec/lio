@@ -10,10 +10,10 @@ executable memblog
   main-is: Main.hs
   ghc-options: -threaded -O2
   build-depends:
-    base
-    , simple >= 0.8.0
-    , lio
+      base
     , lio-simple
+    , simple
+    , lio
     , wai-extra
     , warp
     , lio-fs
