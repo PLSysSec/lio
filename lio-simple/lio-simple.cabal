@@ -41,8 +41,8 @@ library
     , conduit
     , filepath
     , lio                >= 0.11.4
-    , simple             == 0.8.1.*
-    , wai                >= 2.1
+    , simple             == 0.9.*
+    , wai                >= 2.0 && < 3.0
     , wai-extra
     , warp
     , http-types
