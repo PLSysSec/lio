@@ -251,7 +251,7 @@ writeFileP p ml file' contents = liftLIO $ withContext "writeFileP" $ do
            labelError  "Supplied label does not flow to label of file" [lopt, l]
          _ -> return ()
        -- Make sure we can write to the file:
-       guardWriteP p l
+       guardAllocP p l
        ioTCB $ S8.writeFile objPath contents
      else case ml of
            Nothing -> throwLIO FSObjNeedLabel
