@@ -60,6 +60,9 @@ module LIO.FS.Simple (
   , getDirectoryContents, getDirectoryContentsP
   , createDirectory, createDirectoryP
   , removeDirectory, removeDirectoryP
+  -- * Labeled file/directory operations
+  , lReadFile, lReadFileP
+  , lGetDirectoryContents, lGetDirectoryContentsP
   -- * Filesystem errors
   , FSError(..)
   -- * Misc helpers
@@ -112,6 +115,30 @@ getDirectoryContentsP p dir = liftLIO $ withContext "getDirectoryContentsP" $ do
   path <- taintObjPathP p dir
   ioTCB $ IO.getDirectoryContents path
 
+-- | Same as 'getDirectoryContentsP', but returns a labeled list of
+-- the directory contents, thus only taining the context up to the
+-- containing directory.
+lGetDirectoryContentsP :: (MonadLIO l m, PrivDesc l p)
+                       => Priv p         -- ^ Privilege
+                       -> FilePath       -- ^ Directory
+                       -> m (Labeled l [FilePath])
+lGetDirectoryContentsP p dir = liftLIO $
+  withContext "lGetDirectoryContentsP" $ do
+    path <- cleanUpPath dir
+    -- Taint up to containing dir, get label of directory
+    l <- labelOfFileP p path
+    -- Check that the label is bounded by the current label and clearance:
+    guardAllocP p l
+    -- Read the directory content
+    ls <- ioTCB $ IO.getDirectoryContents path
+    labelP p l ls
+
+-- | Same as 'getDirectoryContents', but returns a labeled list of
+-- the directory contents, thus only taining the context up to the
+-- containing directory.
+lGetDirectoryContents :: MonadLIO l m => FilePath -> m (Labeled l [FilePath])
+lGetDirectoryContents = lGetDirectoryContentsP noPrivs
+
 -- | Create a directory at the supplied path with the given label.  The
 -- given label must be bounded by the the current label and clearance, as
 -- checked by 'guardAlloc'.  The current label (after traversing the
@@ -146,12 +173,12 @@ createDirectoryP p l file' = liftLIO $ withContext "createDirectoryP" $ do
   createDirectoryTCB l $ path </> fileName
 
 
--- | Same as 'readFile' but uses privilege in opening the file.
-readFileP :: (MonadLIO l m, PrivDesc l p)
-          => Priv p     -- ^ Privileges
-          -> FilePath   -- ^ File to open
-          -> m S8.ByteString
-readFileP p file' = liftLIO $ withContext "readFileP" $ do
+-- | Same as 'lReadFile' but uses privilege traversing directories.
+lReadFileP :: (MonadLIO l m, PrivDesc l p)
+           => Priv p     -- ^ Privileges
+           -> FilePath   -- ^ File to open
+           -> m (Labeled l S8.ByteString)
+lReadFileP p file' = liftLIO $ withContext "lReadFileP" $ do
   file <- cleanUpPath file'
   let containingDir = takeDirectory file
       fileName      = takeFileName  file
@@ -161,12 +188,33 @@ readFileP p file' = liftLIO $ withContext "readFileP" $ do
   let objPath = path </> fileName
   -- Check if file exists:
   exists <- ioTCB $ IO.doesFileExist objPath
-  when (exists) $ do
-    -- Get label of file:
-    l <- ioTCB $ getPathLabelTCB objPath
-    -- Make sure we can read from the file
-    taintP p l
-  ioTCB $ S8.readFile objPath
+  if exists
+    then do
+      -- Get label of file:
+      l <- ioTCB $ getPathLabelTCB objPath
+      -- Make sure that the file label is not above the clearance
+      guardAllocP p l
+      -- Read file:
+      bs <- ioTCB $ S8.readFile objPath
+      labelP p l bs
+    else do void . ioTCB $ S8.readFile objPath
+            throwLIO (userError "BUG: file should not exist")
+
+-- | Reads a file and returns the contents of the file as a labeled
+-- strict ByteString.  The current label is raised to reflect all the
+-- traversed directories. This differs from 'readFile' in not
+-- automatically raising the current label to the label of the file.
+lReadFile :: MonadLIO l m => FilePath -> m (Labeled l S8.ByteString)
+lReadFile = lReadFileP noPrivs
+
+-- | Same as 'readFile' but uses privilege in opening the file.
+readFileP :: (MonadLIO l m, PrivDesc l p)
+           => Priv p     -- ^ Privileges
+           -> FilePath   -- ^ File to open
+           -> m S8.ByteString
+readFileP priv name = do
+  lf <- lReadFileP priv name
+  liftLIO $ unlabelP priv lf
 
 -- | Reads a file and returns the contents of the file as a strict
 -- ByteString.  The current label is raised to reflect all the
