@@ -390,7 +390,7 @@ removeFileOrDirP ctx isDir p file' = do
     then do -- Get label of file:
             l <- ioTCB $ getPathLabelTCB objPath
             -- Make sure we can write to the file:
-            guardWriteP p l
+            guardAllocP p l
             ioTCB $ remove objPath
     else throwLIO $ IO.mkIOError IO.doesNotExistErrorType
                                  ctx Nothing (Just objPath)
