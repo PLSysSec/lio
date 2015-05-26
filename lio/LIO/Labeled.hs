@@ -52,8 +52,8 @@ import LIO.TCB
 -- clearance is @ccurrent@, then the label @l@ specified must satisfy
 -- @lcurrent ``canFlowTo`` l && l ``canFlowTo`` ccurrent@. Otherwise
 -- an exception is thrown (see 'guardAlloc').
-label :: Label l => l -> a -> LIO l (Labeled l a)
-label l a = do
+label :: (MonadLIO l m, Label l) => l -> a -> m (Labeled l a)
+label l a = liftLIO $ do
   withContext "label" $ guardAlloc l
   return $ LabeledTCB l a
 
@@ -65,8 +65,8 @@ label l a = do
 -- not used to bypass the clearance.  You must use 'setClearanceP' to
 -- raise the clearance first if you wish to create a 'Labeled' value
 -- at a higher label than the current clearance.
-labelP :: PrivDesc l p => Priv p -> l -> a -> LIO l (Labeled l a)
-labelP p l a = do
+labelP :: (MonadLIO l m, PrivDesc l p) => Priv p -> l -> a -> m (Labeled l a)
+labelP p l a = liftLIO $ do
   withContext "labelP" $ guardAllocP p l
   return $ LabeledTCB l a
 
@@ -89,8 +89,8 @@ labelP p l a = do
 -- above the current clearance, then @unlabel@ throws an exception of
 -- type 'LabelError'.  You can use 'labelOf' to check beforehand
 -- whether 'unlabel' will succeed.
-unlabel :: Label l => Labeled l a -> LIO l a
-unlabel (LabeledTCB l v) = withContext "unlabel" (taint l) >> return v
+unlabel :: (MonadLIO l m, Label l) => Labeled l a -> m a
+unlabel (LabeledTCB l v) = liftLIO $ withContext "unlabel" (taint l) >> return v
 
 -- | Extracts the contents of a 'Labeled' value just like 'unlabel',
 -- but takes a privilege argument to minimize the amount the current
@@ -99,8 +99,8 @@ unlabel (LabeledTCB l v) = withContext "unlabel" (taint l) >> return v
 -- not change the current clarance and still throws a 'LabelError' if
 -- the privileges supplied are insufficient to save the current label
 -- from needing to exceed the current clearance.
-unlabelP :: PrivDesc l p => Priv p -> Labeled l a -> LIO l a
-unlabelP p (LabeledTCB l v) = withContext "unlabelP" (taintP p l) >> return v
+unlabelP :: (MonadLIO l m, PrivDesc l p) => Priv p -> Labeled l a -> m a
+unlabelP p (LabeledTCB l v) = liftLIO $ withContext "unlabelP" (taintP p l) >> return v
 
 --
 -- Relabel values
@@ -115,9 +115,9 @@ unlabelP p (LabeledTCB l v) = withContext "unlabelP" (taintP p l) >> return v
 --   2. The old label and new label must be equal (modulo privileges),
 --   as enforced by 'canFlowToP'.
 --
-relabelLabeledP :: PrivDesc l p
-                => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
-relabelLabeledP p newl (LabeledTCB oldl v) = do
+relabelLabeledP :: (MonadLIO l m, PrivDesc l p)
+                => Priv p -> l -> Labeled l a -> m (Labeled l a)
+relabelLabeledP p newl (LabeledTCB oldl v) = liftLIO $ do
   clr <- getClearance
   unless (canFlowTo newl clr     &&
           canFlowToP p newl oldl &&
@@ -131,8 +131,8 @@ relabelLabeledP p newl (LabeledTCB oldl v) = do
 -- the current thread's clearance. If the supplied label is not
 -- bounded then @taintLabeled@ will throw an exception (see
 -- 'guardAlloc').
-taintLabeled :: Label l => l -> Labeled l a -> LIO l (Labeled l a)
-taintLabeled l (LabeledTCB lold v) = do
+taintLabeled :: (MonadLIO l m, Label l) => l -> Labeled l a -> m (Labeled l a)
+taintLabeled l (LabeledTCB lold v) = liftLIO $ do
   let lnew = lold `lub` l
   withContext "taintLabeled" $ guardAlloc lnew
   return $ LabeledTCB lnew v
@@ -141,9 +141,9 @@ taintLabeled l (LabeledTCB lold v) = do
 -- current label to the supplied label. In other words, this function
 -- can be used to lower the label of the labeled value by leveraging
 -- the supplied privileges.
-taintLabeledP :: PrivDesc l p
-              => Priv p -> l -> Labeled l a -> LIO l (Labeled l a)
-taintLabeledP p l (LabeledTCB lold v) = do
+taintLabeledP :: (MonadLIO l m, PrivDesc l p)
+              => Priv p -> l -> Labeled l a -> m (Labeled l a)
+taintLabeledP p l (LabeledTCB lold v) = liftLIO $ do
   let lnew = lold `lub` l
   withContext "taintLabeledP" $ guardAllocP p lnew
   return $ LabeledTCB lnew v
@@ -176,8 +176,8 @@ the above issues.
 -- value.  Because of laziness, the actual computation on the value of
 -- type @a@ will be deferred until a thread with a higher label
 -- actually 'unlabel's the result.
-lFmap :: Label l => Labeled l a -> (a -> b) -> LIO l (Labeled l b)
-lFmap (LabeledTCB lold v) f = do
+lFmap :: (MonadLIO l m, Label l) => Labeled l a -> (a -> b) -> m (Labeled l b)
+lFmap (LabeledTCB lold v) f = liftLIO $ do
   l <- getLabel
   -- Result label is joined with current label
   let lnew = lold `lub` l
@@ -189,8 +189,8 @@ lFmap (LabeledTCB lold v) f = do
 -- labeld value. The label of the returned value is the 'lub' of the
 -- thread's current label, the label of the supplied function, and the
 -- label of the supplied value.
-lAp :: Label l => Labeled l (a -> b) -> Labeled l a -> LIO l (Labeled l b)
-lAp (LabeledTCB lf f) (LabeledTCB la a) = do
+lAp :: (MonadLIO l m, Label l) => Labeled l (a -> b) -> Labeled l a -> m (Labeled l b)
+lAp (LabeledTCB lf f) (LabeledTCB la a) = liftLIO $ do
   l <- getLabel
   let lnew = l `lub` lf `lub` la
   withContext "lAp" $ label lnew $ f a

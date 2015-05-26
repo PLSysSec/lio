@@ -80,6 +80,7 @@ Library
     LIO.Label
     -- * Core library
     LIO.Core
+    LIO.Monad
     LIO.Error
     LIO.Exception
     -- * Labeled values

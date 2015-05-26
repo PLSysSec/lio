@@ -26,6 +26,7 @@ import safe Data.Typeable
 
 import safe LIO.Exception
 import safe LIO.Label
+import safe LIO.Monad
 import LIO.TCB
 
 -- | Class of error messages that can be annotated with context.
@@ -93,10 +94,11 @@ instance Label l => Exception (LabelError l) where
   fromException = lerrFromException
 
 -- | Throw a label-error exception.
-labelError :: (Label l) => String -- ^ Function that failed.
-                        -> [l]    -- ^ Labels involved in error.
-                        -> LIO l a
-labelError fl ls = do
+labelError :: (MonadLIO l m, Label l)
+    => String -- ^ Function that failed.
+    -> [l]    -- ^ Labels involved in error.
+    -> m a
+labelError fl ls = liftLIO $ do
   st <- getLIOStateTCB
   throwLIO LabelError {
       lerrContext = []
@@ -108,11 +110,12 @@ labelError fl ls = do
     }
 
 -- | Throw a label-error exception.
-labelErrorP :: (Label l, PrivDesc l p) => String  -- ^ Function that failed.
-                                       -> Priv p  -- ^ Privileges involved.
-                                       -> [l]     -- ^ Labels involved.
-                                       -> LIO l a
-labelErrorP fl p ls = do
+labelErrorP :: (MonadLIO l m, Label l, PrivDesc l p)
+    => String  -- ^ Function that failed.
+    -> Priv p  -- ^ Privileges involved.
+    -> [l]     -- ^ Labels involved.
+    -> m a
+labelErrorP fl p ls = liftLIO $ do
   st <- getLIOStateTCB
   throwLIO LabelError {
       lerrContext = []
