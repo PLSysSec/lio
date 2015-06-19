@@ -3,7 +3,18 @@
              FlexibleContexts #-}
 
 {- | 'MonadLIO' generalizations for "LIO.LIORef". -}
-module LIO.LIORef.Trans where
+module LIO.LIORef.Trans (
+    newLIORef
+  , newLIORefP
+  , readLIORef
+  , readLIORefP
+  , writeLIORef
+  , writeLIORefP
+  , modifyLIORef
+  , modifyLIORefP
+  , atomicModifyLIORef
+  , atomicModifyLIORefP
+  ) where
 
 import safe LIO.Core
 import safe LIO.Label

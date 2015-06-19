@@ -3,7 +3,10 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
 {- | 'MonadLIO' generalizations for "LIO.Error". -}
-module LIO.Error.Trans where
+module LIO.Error.Trans (
+    labelError
+  , labelErrorP
+  ) where
 
 import safe LIO.Label
 import safe LIO.Monad

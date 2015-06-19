@@ -1,7 +1,17 @@
 {-# LANGUAGE Trustworthy #-}
 
 {- | 'MonadLIO' generalizations for "LIO.Labeled". -}
-module LIO.Labeled.Trans where
+module LIO.Labeled.Trans (
+    label
+  , labelP
+  , unlabel
+  , unlabelP
+  , relabelLabeledP
+  , taintLabeled
+  , taintLabeledP
+  , lFmap
+  , lAp
+  ) where
 
 import safe LIO.Label
 import safe LIO.Core

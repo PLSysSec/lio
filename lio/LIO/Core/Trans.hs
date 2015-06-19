@@ -4,7 +4,20 @@
 {-# LANGUAGE FlexibleInstances #-}
 
 {- | 'MonadLIO' generalizations for "LIO.Core". -}
-module LIO.Core.Trans where
+module LIO.Core.Trans (
+    getLabel
+  , setLabel
+  , setLabelP
+  , getClearance
+  , setClearance
+  , setClearanceP
+  , guardAlloc
+  , guardAllocP
+  , taint
+  , taintP
+  , guardWrite
+  , guardWriteP
+  ) where
 
 import safe LIO.Label
 import safe LIO.Monad
