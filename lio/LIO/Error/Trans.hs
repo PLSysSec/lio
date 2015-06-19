@@ -5,28 +5,17 @@
 {- | 'MonadLIO' generalizations for "LIO.Error". -}
 module LIO.Error.Trans where
 
-import safe LIO.Exception
 import safe LIO.Label
 import safe LIO.Monad
-import LIO.TCB
 
-import safe LIO.Error
+import safe qualified LIO.Error as E
 
 -- | See 'LIO.Error.labelError'.
 labelError :: (MonadLIO l m, Label l)
     => String -- ^ Function that failed.
     -> [l]    -- ^ Labels involved in error.
     -> m a
-labelError fl ls = liftLIO $ do
-  st <- getLIOStateTCB
-  throwLIO LabelError {
-      lerrContext = []
-    , lerrFailure = fl
-    , lerrCurLabel = lioLabel st
-    , lerrCurClearance = lioClearance st
-    , lerrPrivs = []
-    , lerrLabels = ls
-    }
+labelError fl = liftLIO . E.labelError fl
 
 -- | See 'LIO.Error.labelErrorP'.
 labelErrorP :: (MonadLIO l m, Label l, PrivDesc l p)
@@ -34,13 +23,4 @@ labelErrorP :: (MonadLIO l m, Label l, PrivDesc l p)
     -> Priv p  -- ^ Privileges involved.
     -> [l]     -- ^ Labels involved.
     -> m a
-labelErrorP fl p ls = liftLIO $ do
-  st <- getLIOStateTCB
-  throwLIO LabelError {
-      lerrContext = []
-    , lerrFailure = fl
-    , lerrCurLabel = lioLabel st
-    , lerrCurClearance = lioClearance st
-    , lerrPrivs = [GenericPrivDesc $ privDesc p]
-    , lerrLabels = ls
-    }
+labelErrorP fl p = liftLIO . E.labelErrorP fl p
