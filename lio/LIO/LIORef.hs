@@ -50,18 +50,18 @@ type LIORef l a = LObj l (IORef a)
 -- | Create a new reference with a particularlabel.  The label
 -- specified must be between the thread's current label and clearance,
 -- as enforced by 'guardAlloc'.
-newLIORef :: (MonadLIO l m, Label l)
+newLIORef :: Label l
           => l                  -- ^ Label of reference
           -> a                  -- ^ Initial value
-          -> m (LIORef l a) -- ^ Mutable reference
-newLIORef l a = liftLIO . guardIOTCB (withContext "newLIORef" $ guardAlloc l) $
+          -> LIO l (LIORef l a) -- ^ Mutable reference
+newLIORef l a = guardIOTCB (withContext "newLIORef" $ guardAlloc l) $
   LObjTCB l `fmap` newIORef a
 
 -- | Same as 'newLIORef' except @newLIORefP@ takes privileges which
 -- make the comparison to the current label more permissive, as
 -- enforced by 'guardAllocP'.
-newLIORefP :: (MonadLIO l m, PrivDesc l p) => Priv p -> l -> a -> m (LIORef l a)
-newLIORefP p l a = liftLIO . guardIOTCB (withContext "newLIORefP" $ guardAllocP p l) $
+newLIORefP :: PrivDesc l p => Priv p -> l -> a -> LIO l (LIORef l a)
+newLIORefP p l a = guardIOTCB (withContext "newLIORefP" $ guardAllocP p l) $
   LObjTCB l `fmap` newIORef a
 
 --
@@ -74,14 +74,14 @@ newLIORefP p l a = liftLIO . guardIOTCB (withContext "newLIORefP" $ guardAllocP 
 -- the current label and the reference label.  To avoid failures
 -- (introduced by the 'taint' guard) use 'labelOf' to check that a
 -- read will succeed.
-readLIORef :: (MonadLIO l m, Label l) => LIORef l a -> m a
-readLIORef = liftLIO . blessReadOnlyTCB "readLIORef" readIORef
+readLIORef :: Label l => LIORef l a -> LIO l a
+readLIORef = blessReadOnlyTCB "readLIORef" readIORef
 
 -- | Same as 'readLIORef', except @readLIORefP@ takes a privilege
 -- object which is used when the current label is raised (using
 -- 'taintP' instead of 'taint').
-readLIORefP :: (MonadLIO l m, PrivDesc l p) => Priv p -> LIORef l a -> m a
-readLIORefP priv = liftLIO . blessReadOnlyPTCB "readLIORefP" readIORef priv
+readLIORefP :: PrivDesc l p => Priv p -> LIORef l a -> LIO l a
+readLIORefP = blessReadOnlyPTCB "readLIORefP" readIORef
 
 --
 -- Write 'LIORef's
@@ -91,14 +91,14 @@ readLIORefP priv = liftLIO . blessReadOnlyPTCB "readLIORefP" readIORef priv
 -- the current label can-flow-to the label of the reference, and the
 -- label of the reference can-flow-to the current clearance. Otherwise,
 -- an exception is raised by the underlying 'guardAlloc' guard.
-writeLIORef :: (MonadLIO l m, Label l) => LIORef l a -> a -> m ()
-writeLIORef ref = liftLIO . blessWriteOnlyTCB "writeLIORef" writeIORef ref
+writeLIORef :: Label l => LIORef l a -> a -> LIO l ()
+writeLIORef = blessWriteOnlyTCB "writeLIORef" writeIORef
 
 -- | Same as 'writeLIORef' except @writeLIORefP@ takes a set of
 -- privileges which are accounted for in comparing the label of the
 -- reference to the current label.
-writeLIORefP :: (MonadLIO l m, PrivDesc l p) => Priv p -> LIORef l a -> a -> m ()
-writeLIORefP priv ref = liftLIO . blessWriteOnlyPTCB "writeLIORefP" writeIORef priv ref
+writeLIORefP :: PrivDesc l p => Priv p -> LIORef l a -> a -> LIO l ()
+writeLIORefP = blessWriteOnlyPTCB "writeLIORefP" writeIORef
 
 --
 -- Modify 'LIORef's
@@ -112,17 +112,17 @@ writeLIORefP priv ref = liftLIO . blessWriteOnlyPTCB "writeLIORefP" writeIORef p
 -- For that reason, there is no need to raise the current label.  The
 -- `LIORef`'s label must still lie between the current label and
 -- clearance, however (as enforced by 'guardAlloc').
-modifyLIORef :: (MonadLIO l m, Label l)
-             => LIORef l a             -- ^ Labeled reference
+modifyLIORef :: Label l
+             =>  LIORef l a            -- ^ Labeled reference
              -> (a -> a)               -- ^ Modifier
-             -> m ()
-modifyLIORef ref = liftLIO . blessWriteOnlyTCB "modifyLIORef" modifyIORef ref
+             -> LIO l ()
+modifyLIORef = blessWriteOnlyTCB "modifyLIORef" modifyIORef
 
 -- | Like 'modifyLIORef', but takes a privilege argument and guards
 -- execution with 'guardAllocP' instead of 'guardAlloc'.
-modifyLIORefP :: (MonadLIO l m, PrivDesc l p)
-              =>  Priv p -> LIORef l a -> (a -> a) -> m ()
-modifyLIORefP priv ref = liftLIO . blessWriteOnlyPTCB "modifyLIORefP" modifyIORef priv ref
+modifyLIORefP :: PrivDesc l p
+              =>  Priv p -> LIORef l a -> (a -> a) -> LIO l ()
+modifyLIORefP = blessWriteOnlyPTCB "modifyLIORefP" modifyIORef
 
 -- | Atomically modifies the contents of an 'LIORef'. It is required
 -- that the label of the reference be above the current label, but
@@ -133,11 +133,12 @@ modifyLIORefP priv ref = liftLIO . blessWriteOnlyPTCB "modifyLIORefP" modifyIORe
 -- labels). These checks and label raise are done by 'guardWrite',
 -- which will raise a 'LabelError' exception if any of the IFC
 -- conditions cannot be satisfied.
-atomicModifyLIORef :: (MonadLIO l m, Label l) => LIORef l a -> (a -> (a, b)) -> m b
-atomicModifyLIORef ref = liftLIO . blessTCB "atomicModifyIORef" atomicModifyIORef ref
+atomicModifyLIORef :: Label l => LIORef l a -> (a -> (a, b)) -> LIO l b
+atomicModifyLIORef = blessTCB "atomicModifyIORef" atomicModifyIORef
 
 -- | Same as 'atomicModifyLIORef' except @atomicModifyLIORefP@ takes a
 -- set of privileges and uses 'guardWriteP' instead of 'guardWrite'.
-atomicModifyLIORefP :: (MonadLIO l m, PrivDesc l p)
-                    => Priv p -> LIORef l a -> (a -> (a, b)) -> m b
-atomicModifyLIORefP priv ref = liftLIO . blessPTCB "atomicModifyLIORefP" atomicModifyIORef priv ref
+atomicModifyLIORefP :: PrivDesc l p
+                    => Priv p -> LIORef l a -> (a -> (a, b)) -> LIO l b
+atomicModifyLIORefP = blessPTCB "atomicModifyLIORefP" atomicModifyIORef
+

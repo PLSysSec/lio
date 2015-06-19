@@ -91,7 +91,7 @@ import safe Data.IORef
 import safe LIO.Error
 import safe LIO.Exception
 import safe LIO.Label
-import safe LIO.Monad
+import safe LIO.Monad(MonadLIO(..))
 import safe LIO.Run
 import LIO.TCB
 
@@ -101,14 +101,14 @@ import LIO.TCB
 --
 
 -- | Returns the value of the thread's current label.
-getLabel :: (MonadLIO l m, Label l) => m l
-getLabel = lioLabel `liftM` liftLIO getLIOStateTCB
+getLabel :: Label l => LIO l l
+getLabel = lioLabel `liftM` getLIOStateTCB
 
 
 -- | Raises the current label to the provided label, which must be
 -- between the current label and clearance. See 'taint'.
-setLabel :: (MonadLIO l m, Label l) => l -> m ()
-setLabel l = liftLIO . withContext "setLabel" $ do
+setLabel :: Label l => l -> LIO l ()
+setLabel l = withContext "setLabel" $ do
   guardAlloc l
   modifyLIOStateTCB $ \s -> s { lioLabel = l }
 
@@ -118,21 +118,21 @@ setLabel l = liftLIO . withContext "setLabel" $ do
 -- newLabel && 'canFlowTo' newLabel clearance@.  (Note the privilege
 -- argument affects the label check, not the clearance check; call
 -- 'setClearanceP' first to raise the clearance.)
-setLabelP :: (MonadLIO l m, PrivDesc l p) => Priv p -> l -> m ()
-setLabelP p l = liftLIO . withContext "setLabelP" $ do
+setLabelP :: PrivDesc l p => Priv p -> l -> LIO l ()
+setLabelP p l = withContext "setLabelP" $ do
   guardAllocP p l
   modifyLIOStateTCB $ \s -> s { lioLabel = l }
 
 -- | Returns the thread's current clearance.
-getClearance :: (MonadLIO l m, Label l) => m l
-getClearance = lioClearance `liftM` liftLIO getLIOStateTCB
+getClearance :: Label l => LIO l l
+getClearance = lioClearance `liftM` getLIOStateTCB
 
 -- | Lowers the current clearance.  The new clerance must be between
 -- the current label and previous current clerance.  One cannot raise
 -- the current label or create object with labels higher than the
 -- current clearance.
-setClearance :: (MonadLIO l m, Label l) => l -> m ()
-setClearance cnew = liftLIO $ do
+setClearance :: Label l => l -> LIO l ()
+setClearance cnew = do
   LIOState { lioLabel = l, lioClearance = c } <- getLIOStateTCB
   unless (canFlowTo l cnew && canFlowTo cnew c) $
     labelError "setClearance" [cnew]
@@ -150,8 +150,8 @@ setClearance cnew = liftLIO $ do
 -- 'guardAllocP') do not use privileges when comparing labels with the
 -- current clearance, code must always raise the current clearance, to
 -- read/write data above the current clearance.
-setClearanceP :: (MonadLIO l m, PrivDesc l p) => Priv p -> l -> m ()
-setClearanceP p cnew = liftLIO $ do
+setClearanceP :: PrivDesc l p => Priv p -> l -> LIO l ()
+setClearanceP p cnew = do
   LIOState { lioLabel = l, lioClearance = c } <- getLIOStateTCB
   unless (canFlowTo l cnew && canFlowToP p cnew c) $
     labelErrorP "setClearanceP" p [cnew]
@@ -264,8 +264,8 @@ current label less.
 -- Similarly use this guard in any code that writes to an
 -- object labeled @l@ for which the write has no observable
 -- side-effects.
-guardAlloc :: (MonadLIO l m, Label l) => l -> m ()
-guardAlloc newl = liftLIO $ do
+guardAlloc :: Label l => l -> LIO l ()
+guardAlloc newl = do
   LIOState { lioLabel = l, lioClearance = c } <- getLIOStateTCB
   unless (canFlowTo l newl && canFlowTo newl c) $
     labelError "guardAllocP" [newl]
@@ -275,8 +275,8 @@ guardAlloc newl = liftLIO $ do
 -- the current label can flow to the target label; @guardAllocP@ still
 -- always throws an exception when the target label is higher than the
 -- current clearance.
-guardAllocP :: (MonadLIO l m, PrivDesc l p) => Priv p -> l -> m ()
-guardAllocP p newl = liftLIO $ do
+guardAllocP :: PrivDesc l p => Priv p -> l -> LIO l ()
+guardAllocP p newl = do
   LIOState { lioLabel = l, lioClearance = c } <- getLIOStateTCB
   unless (canFlowToP p l newl && canFlowTo newl c) $
     labelErrorP "guardAllocP" p [newl]
@@ -289,8 +289,8 @@ guardAllocP p newl = liftLIO $ do
 -- @l@.  This will raise the current label to a value @l'@ such that
 -- @l ``canFlowTo`` l'@, or throw a 'LabelError' exception if @l'@
 -- would have to be higher than the current clearance.
-taint :: (MonadLIO l m, Label l) => l -> m ()
-taint newl = liftLIO $ do
+taint :: Label l => l -> LIO l ()
+taint newl = do
   LIOState { lioLabel = l, lioClearance = c } <- getLIOStateTCB
   let l' = l `lub` newl
   unless (l' `canFlowTo` c) $ labelError "taint" [newl]
@@ -301,8 +301,8 @@ taint newl = liftLIO $ do
 -- required.  Note that @taintP@ will never lower the current label.
 -- It simply uses privileges to avoid raising the label as high as
 -- 'taint' would raise it.
-taintP :: (MonadLIO l m, PrivDesc l p) => Priv p -> l -> m ()
-taintP p newl = liftLIO $ do
+taintP :: PrivDesc l p => Priv p -> l -> LIO l ()
+taintP p newl = do
   LIOState { lioLabel = l, lioClearance = c } <- getLIOStateTCB
   let l' = l `lub` downgradeP p newl
   unless (l' `canFlowTo` c) $ labelErrorP "taintP" p [newl]
@@ -325,14 +325,14 @@ taintP p newl = liftLIO $ do
 -- succeeds, the 'taint' will always suceed (we're simply raising the
 -- current label to a label that is below the clearance).
 --
-guardWrite :: (MonadLIO l m, Label l) => l -> m ()
-guardWrite newl = liftLIO . withContext "guardWrite" $ do
+guardWrite :: Label l => l -> LIO l ()
+guardWrite newl = withContext "guardWrite" $ do
   guardAlloc newl
   taint newl
 
 -- | Like 'guardWrite', but takes a privilege argument to be more
 -- permissive.
-guardWriteP :: (MonadLIO l m, PrivDesc l p) => Priv p -> l -> m ()
-guardWriteP p newl = liftLIO . withContext "guardWriteP" $ do
+guardWriteP :: PrivDesc l p => Priv p -> l -> LIO l ()
+guardWriteP p newl = withContext "guardWriteP" $ do
   guardAllocP p newl
   taintP p newl
