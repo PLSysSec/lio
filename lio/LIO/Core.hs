@@ -91,6 +91,7 @@ import safe Data.IORef
 import safe LIO.Error
 import safe LIO.Exception
 import safe LIO.Label
+import safe LIO.Monad(MonadLIO(..))
 import safe LIO.Run
 import LIO.TCB
 
@@ -335,16 +336,3 @@ guardWriteP :: PrivDesc l p => Priv p -> l -> LIO l ()
 guardWriteP p newl = withContext "guardWriteP" $ do
   guardAllocP p newl
   taintP p newl
-
---
--- Monad base
---
-
--- | Synonym for monad in which 'LIO' is the base monad.
-class (Label l, Monad m) => MonadLIO l m | m -> l where
-  -- | Lift an 'LIO' computation.
-  liftLIO :: LIO l a -> m a
-
-instance Label l => MonadLIO l (LIO l) where
-  liftLIO = id
-
