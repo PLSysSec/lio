@@ -80,13 +80,17 @@ Library
     LIO.Label
     -- * Core library
     LIO.Core
+    LIO.Core.Trans
     LIO.Monad
     LIO.Error
+    LIO.Error.Trans
     LIO.Exception
     -- * Labeled values
     LIO.Labeled
+    LIO.Labeled.Trans
     -- * Labeled IORefs
     LIO.LIORef
+    LIO.LIORef.Trans
     -- * LIO privileges
     LIO.Delegate
     -- * Concurrency
