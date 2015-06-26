@@ -96,6 +96,7 @@ Library
     -- * Concurrency
     LIO.Concurrent
     LIO.Concurrent.LMVar
+    LIO.Concurrent.LMVar.Trans
     LIO.Concurrent.LChan
     -- * DCLabels
     LIO.DCLabel
