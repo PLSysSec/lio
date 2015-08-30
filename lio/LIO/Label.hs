@@ -46,7 +46,7 @@ objects the thread will be allowed to modify.  Hence, after a thread
 with current label @lcur@ observes data labeled @l1@, it must hold
 that @l1 ``canFlowTo`` lcur@.  If the thread is later permitted to
 modify an object labeled @l2@, it must hold that @lcur ``canFlowTo``
-l2@.  By transitifity of the ``canFlowTo`` relation, it holds that @l1
+l2@.  By transitivity of the ``canFlowTo`` relation, it holds that @l1
 ``canFlowTo`` l2@.
 
 -}
