@@ -41,7 +41,7 @@ throwing an exception, reading data often just increases the current
 label to ensure that @l_r ``canFlowTo`` l_cur@.  This is acomplished
 using a function such as 'taint'.
 
-The second purpose of the current label is to prevent inforation leaks
+The second purpose of the current label is to prevent information leaks
 into public channels. Specifically, it is only permissible to modify
 or write to data labeled @l_w@ when @l_cur``canFlowTo`` l_w@. Thus,
 the following attempt to leak the @val@ after reading it from a secret
