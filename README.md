@@ -27,30 +27,42 @@ to be written.
 Most code should import module `LIO` and whichever label format the
 application is using (e.g., `LIO.DCLabel`). All untrusted code
 should have type `LIO`, which trusted code can safely execute with
-`evalLIO`. See `LIO` for a description of the core library API.
+`evalLIO`. See [Hackage](http://hackage.haskell.org/package/lio) for a
+description of the core library API.
 
 The papers that describes the core of LIO, including motivation and
 formal modeling/proofs, are available here:
 
+*  Deian Stefan.
+   _Principled and Practical Web Application Security._
+   _Ph.D. Thesis, Stanford University. December, 2015._
+   [PDF](http://www.deian.org/pubs/stefan:2015:phdthesis.pdf)
+
+*  Stefan Heule, Deian Stefan, Edward Z. Yang, John C. Mitchell, and Alejandro Russo.
+   _IFC Inside: Retrofitting Languages with Dynamic Information Flow Control._
+   _In Proceedings of Conference on Principles of Security and Trust (POST), Springer. April, 2015._
+   [PDF](http://www.deian.org/pubs/heule:2015:ifc-inside.pdf)
+
 *  Deian Stefan, Alejandro Russo, Pablo Buiras, Amit Levy, John C. Mitchell, David Mazieres.
    _Addressing Covert Termination and Timing Channels in Concurrent Information Flow Systems._
    _In Proceedings of The 17th ACM SIGPLAN International Conference on Functional Programming (ICFP), ACM, 2012._
-   [PDF](http://www.deian.net/pubs/stefan:2012:addressing.pdf)
-   
-*  Deian Stefan, Alejandro Russo, John C. Mitchell, David Mazieres.
+   [PDF](http://www.deian.org/pubs/stefan:2012:addressing.pdf)
+
+*  Deian Stefan, Alejandro Russo, David Mazieres, and John C. Mitchell.
+   _Flexible Dynamic Information Flow Control in the Presence of Exceptions._
+   _Journal of Functional Programming, Cambridge University Press. 2012. Under revision._
+   [PDF](http://www.deian.org/pubs/stefan:2012:flexible.pdf)
+
+
+*  Deian Stefan, Alejandro Russo, John C. Mitchell, and David Mazieres.
    _Flexible Dynamic Information Flow Control in Haskell._
    _In Proceedings of Haskell Symposium , ACM SIGPLAN . September 2011._
-   [PDF](http://www.deian.net/pubs/stefan:2011:flexible.pdf)
-   
-*  Deian Stefan, Alejandro Russo, John C. Mitchell, David Mazieres.
-   _Flexible Dynamic Information Flow Control in the Presence of Exceptions._
-   In _Arxiv preprint arXiv:1207.1457.  2012._
-   [PDF](http://arxiv.org/abs/1207.1457v1)
-   
-*  Deian Stefan, Alejandro Russo, David Mazieres, John C. Mitchell.
+   [PDF](http://www.deian.org/pubs/stefan:2011:flexible.pdf)
+
+*  Deian Stefan, Alejandro Russo, David Mazieres, and John C. Mitchell.
    _Disjunction Category Labels._
    _In Proceedings of 16th Nordic Conference on Security IT Systems, NordSec , Springer LNCS. October 2011._
-   [PDF](http://www.deian.net/pubs/stefan:2011:dclabels.pdf)
+   [PDF](http://www.deian.org/pubs/stefan:2011:dclabels.pdf)
 
 
 Structure of repository

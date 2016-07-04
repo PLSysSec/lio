@@ -18,7 +18,7 @@ module LIO.Label (
   , NoPrivs(..), noPrivs
   ) where
 
-import safe Data.Monoid
+import safe Data.Monoid ()
 import safe Data.Typeable
 
 import LIO.TCB

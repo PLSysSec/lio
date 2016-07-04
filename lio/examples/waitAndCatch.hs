@@ -2,19 +2,18 @@
 
 module Main (main) where
 
-import Prelude hiding (catch)
+import Prelude
 import LIO
 import LIO.TCB (ioTCB)
 import LIO.DCLabel
 import LIO.Concurrent
-import Control.Exception (SomeException)
 
 
-l,m,h :: DCLabel
+l,m :: DCLabel
 l = "A" \/ "B" %% True
 m = "M" %% True
-h = "A" /\ "B" %% True
 
+main :: IO ()
 main =  do
   lr <- evalDC $ do
     lb <- label m (6 :: Int)

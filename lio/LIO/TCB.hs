@@ -34,11 +34,11 @@ module LIO.TCB (
   , LabeledResult(..), LResStatus(..)
   ) where
 
-import safe Control.Applicative
+import safe Control.Applicative ()
 import safe Control.Exception (Exception(..), SomeException(..))
 import safe qualified Control.Concurrent as IO
 import safe Control.Monad
-import safe Data.Monoid
+import safe Data.Monoid ()
 import safe Data.IORef
 import safe Data.Typeable
 

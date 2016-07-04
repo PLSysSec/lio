@@ -24,6 +24,7 @@ l2 = "Djon" %% "Alice"
 p :: DCPriv
 p = PrivTCB  $ "Alice" /\ "Carla"
 
+main :: IO ()
 main = do
   putStrLn $ "Label 1: " ++ show l1
   putStrLn $ "Label 2: " ++ show l2

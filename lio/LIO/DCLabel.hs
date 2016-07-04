@@ -1,4 +1,4 @@
-{-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE Safe #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -110,13 +110,12 @@ module LIO.DCLabel (
   , cTrue, cFalse, cToSet, cFromList
   ) where
 
-import safe Control.Applicative
 import safe Control.Monad
 import safe Data.Bits
 import safe qualified Data.ByteString as S
 import Data.Hashable
 import safe Data.List
-import safe Data.Monoid
+import safe Data.Monoid ()
 import safe Data.Set (Set)
 import safe qualified Data.Set as Set
 import safe Data.String

@@ -9,15 +9,18 @@ import Control.Monad
 
 import LIO.TCB (ioTCB)
 
+main :: IO ()
 main = evalDC $ do
-  log <- newLChan ("Logger" %% True)
+  logger <- newLChan ("Logger" %% True)
   forkLIO $ forever $ do
-    msg  <- readLChan log
+    msg  <- readLChan logger
     lcur <- getLabel
     ioTCB $ putStrLn $ show lcur ++ " > " ++ msg
   forkLIO $ do
-    writeLChan log "in them alternate threads"
+    writeLChan logger "in them alternate threads"
   forkLIO $ do
     taint ("Alice" %% True)
-    writeLChan log "i has failed"
-  forM_ [1..10] $ \i -> writeLChan log $ "yo "++ show  i
+    writeLChan logger "i has failed"
+  forM_ oneToTen $ \i -> writeLChan logger $ "yo "++ show  i
+    where oneToTen :: [Int]
+          oneToTen = [1..10]
