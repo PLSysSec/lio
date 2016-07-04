@@ -1,5 +1,4 @@
 import LIO
-import LIO.Delegate
 import LIO.DCLabel
 
 import LIO.TCB
@@ -18,6 +17,7 @@ alice = PrivTCB . toCNF $ "Alice"
 bob   = PrivTCB . toCNF $ "Bob"
 clark = PrivTCB . toCNF $ "Clark"
 
+main :: IO ()
 main = putStrLn . show $ 
   [ callGate addGate alice 1 2 -- Just 3
   , callGate addGate bob   3 4 -- Just 7

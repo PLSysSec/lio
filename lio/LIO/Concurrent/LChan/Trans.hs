@@ -12,10 +12,7 @@ module LIO.Concurrent.LChan.Trans (
   , dupLChanP
   ) where
 
-import safe Control.Concurrent.Chan
-
 import safe LIO.Core
-import safe LIO.Error
 import safe LIO.Label
 
 import safe qualified LIO.Concurrent.LChan as C
