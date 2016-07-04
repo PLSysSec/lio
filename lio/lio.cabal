@@ -5,7 +5,7 @@ Build-type:     Simple
 License:        GPL
 License-File:   LICENSE
 Author:         Hails team
-Maintainer:     Hails team <hails at scs dot stanford dot edu>
+Maintainer:     Deian Stefan <deian at cs dot ucsd dot edu>
 Synopsis:       Labeled IO Information Flow Control Library
 Category:       Security
 Description:
@@ -60,7 +60,7 @@ Extra-source-files:
 
 Source-repository head
   Type:     git
-  Location: git://github.com/scslab/lio.git
+  Location: git://github.com/PLSysSec/lio.git
 
 Library
   Build-Depends:
