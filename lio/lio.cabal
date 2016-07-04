@@ -5,7 +5,7 @@ Build-type:     Simple
 License:        GPL
 License-File:   LICENSE
 Author:         Hails team
-Maintainer:	Hails team <hails at scs dot stanford dot edu>
+Maintainer:     Hails team <hails at scs dot stanford dot edu>
 Synopsis:       Labeled IO Information Flow Control Library
 Category:       Security
 Description:
@@ -96,7 +96,9 @@ Library
     -- * Concurrency
     LIO.Concurrent
     LIO.Concurrent.LMVar
+    LIO.Concurrent.LMVar.Trans
     LIO.Concurrent.LChan
+    LIO.Concurrent.LChan.Trans
     -- * DCLabels
     LIO.DCLabel
     -- * Privileged internals
