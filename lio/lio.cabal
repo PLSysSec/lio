@@ -8,6 +8,8 @@ Author:         Hails team
 Maintainer:     Deian Stefan <deian at cs dot ucsd dot edu>
 Synopsis:       Labeled IO Information Flow Control Library
 Category:       Security
+Homepage:       https://github.com/plsyssec/lio
+Bug-Reports:    https://github.com/plsyssec/lio/issues
 Description:
 
   The /Labeled IO/ (LIO) library is an information flow control (IFC)
@@ -60,7 +62,7 @@ Extra-source-files:
 
 Source-repository head
   Type:     git
-  Location: git://github.com/PLSysSec/lio.git
+  Location: https://github.com/PLSysSec/lio.git
 
 Library
   Build-Depends:
