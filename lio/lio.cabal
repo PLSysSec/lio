@@ -1,8 +1,8 @@
 Name:           lio
-Version:        0.11.6.0
+Version:        0.11.6.1
 Cabal-Version:  >= 1.8
 Build-type:     Simple
-License:        GPL
+License:        MIT
 License-File:   LICENSE
 Author:         Hails team
 Maintainer:     Deian Stefan <deian at cs dot ucsd dot edu>
