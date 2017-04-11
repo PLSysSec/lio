@@ -1,0 +1,35 @@
+name:                lio-http-server
+version:             0.0.0.1
+synopsis:            Simple HTTP server running in the LIO monad.
+description:         Simple, but general HTTP server implementation that works
+                     in monads other than IO, designed with security in mind.
+homepage:            https://github.com/plsyssec/lio
+license:             MIT
+license-file:        LICENSE
+author:              Deian Stefan
+maintainer:          deian@cs.ucsd.edu
+copyright:           2017 Deian Stefan
+category:            Web, Security
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+
+library
+  hs-source-dirs:      src
+  exposed-modules:     LIO.HTTP.Server
+  build-depends:       base        >= 4.7 && < 6,
+                       bytestring  >= 0.10,
+                       http-types  >= 0.9.1,
+                       lio         >= 0.11.6.0,
+                       text        >= 1.2.2.1,
+                       wai         >= 3.2.1.1,
+                       warp        >= 3.2.11.1
+  default-language:    Haskell2010
+  GHC-options: -Wall -fno-warn-orphans
+
+extra-source-files
+  examples/HellowWorld.hs
+
+source-repository head
+  type:     git
+  location: https://github.com/plsyssec/lio
