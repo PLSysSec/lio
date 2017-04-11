@@ -41,13 +41,11 @@ module LIO.HTTP.Server (
   ) where
 import Network.HTTP.Types
 import Data.Text (Text)
-import Control.Monad (liftM)
 import LIO.DCLabel
 import LIO.TCB (ioTCB)
 import Network.Wai.Handler.Warp (Port, HostPreference)
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Wai
-import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Lazy as Lazy
 
 
