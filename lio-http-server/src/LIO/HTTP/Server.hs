@@ -37,10 +37,11 @@ module LIO.HTTP.Server (
   Port, HostPreference,
   module Network.HTTP.Types,
   -- * DC Label specific
-  DCApplication, DCMiddleware
+  DCRequest, DCApplication, DCMiddleware
   ) where
 import Network.HTTP.Types
 import Data.Text (Text)
+import qualified Data.Text as Text
 import LIO.DCLabel
 import LIO.TCB (ioTCB)
 import Network.Wai.Handler.Warp (Port, HostPreference)
@@ -58,7 +59,8 @@ class Monad m => WebMonad m where
   reqMethod      :: Request m -> Method            
   -- | HTTP version.
   reqHttpVersion :: Request m -> HttpVersion
-  -- | Path info, i.e., the URL pieces after the scheme, host, port, not including the query string.
+  -- | Path info, i.e., the URL pieces after the scheme, host, port, not
+  -- including the query string. Trailing slashes are ignored.
   reqPathInfo    :: Request m -> [Text]
   -- | Parsed query string.
   reqQueryString :: Request m -> Query
@@ -69,6 +71,21 @@ class Monad m => WebMonad m where
   -- | Function for running the application on specified port and host info.
   server         :: Port -> HostPreference -> Application m -> IO ()
 
+instance WebMonad m => Show (Request m) where
+  show req = "Request {" ++
+    "reqMethod = " ++ method ++
+    ",reqHttpVersion = " ++ httpVersion ++
+    ",reqPathInfo = " ++ pathInfo ++
+    ",reqQueryString = " ++ queryString ++
+    ",reqHeaders = " ++ headers ++
+    ",reqBody = <NOT READ>}"
+    where
+        method      = show $ reqMethod req
+        httpVersion = show $ reqHttpVersion req
+        pathInfo    = show $ reqPathInfo req
+        queryString = show $ reqQueryString req
+        headers     = show $ reqHeaders req
+        
 -- | This data type encapsulates HTTP responses. For now, we only support lazy
 -- ByteString bodies. In the future this data type may be extended to
 -- efficiently support streams and file serving.
@@ -76,7 +93,7 @@ data Response = Response {
    rspStatus  :: Status          -- ^ HTTP response status.
  , rspHeaders :: [Header]        -- ^ HTTP response headers.
  , rspBody    :: Lazy.ByteString -- ^ HTTP response body
- }
+ } deriving (Eq, Show)
 
 -- | An application is a function that takes an HTTP request and produces an
 -- HTTP response, potentially performing side-effects.
@@ -105,6 +122,9 @@ instance WebMonad DC where
                    Wai.setServerName "lio-http-server" $ Wai.defaultSettings
     in Wai.runSettings settings $ toWaiApplication app
 
+-- | Type alias for DCApplication requets
+type DCRequest = Request DC
+
 -- | Type alias for DC-labeled applications
 type DCApplication = Application DC
 
@@ -114,9 +134,13 @@ type DCMiddleware = Middleware DC
 -- | Internal function for converting a DCApplication to a Wai Application
 toWaiApplication :: DCApplication -> Wai.Application
 toWaiApplication dcApp wReq wRespond = do
-  resp <- evalDC $ dcApp $ fromWaiRequest wReq
+  resp <- evalDC $ dcApp $ req
   wRespond $ toWaiResponse resp
-    where fromWaiRequest :: Wai.Request -> Request DC
-          fromWaiRequest = RequestTCB
+    where req :: Request DC
+          req = let pI0 = Wai.pathInfo wReq
+                    pI1 = if (not . null $ pI0) && (last pI0 == Text.empty)
+                            then init pI0
+                            else pI0
+                in RequestTCB $ wReq { Wai.pathInfo = pI1 }
           toWaiResponse :: Response -> Wai.Response
           toWaiResponse (Response status headers body) = Wai.responseLBS status headers body
