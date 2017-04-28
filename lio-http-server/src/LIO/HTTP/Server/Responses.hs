@@ -1,7 +1,7 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- | Taken from Simple 
+-- Taken from Simple 
 -- | This module defines some convenience functions for creating responses.
 module LIO.HTTP.Server.Responses
   ( ok, okHtml, okJson, okXml
@@ -13,8 +13,7 @@ module LIO.HTTP.Server.Responses
 
 import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteString.Lazy.Char8 as L8
-import Network.HTTP.Types
--- import Network.Wai
+
 import LIO.HTTP.Server
 
 
