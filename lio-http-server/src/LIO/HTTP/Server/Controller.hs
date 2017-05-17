@@ -1,44 +1,60 @@
-{-# LANGUAGE GADTs #-}
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 
-{- | 'Controller' provides a convenient syntax for writting 'Application'
-  code as a Monadic action with access to an HTTP request as well as app
-  specific data (e.g., a database connection pool, app configuration, etc.)
-  This module also defines some helper functions that leverage this feature.
-  For example, 'redirectBack' reads the underlying request to extract the
-  referer and returns a redirect response:
+{- | 'Controller' provides a convenient syntax for writting
+   'Application' code as a Monadic action with access to an HTTP
+   request as well as app specific data (e.g., a database connection
+   pool, app configuration, etc.). The convenience comes from the
+   helper functions that this module exports.  For example,
+   'redirectBack' reads the underlying request to extract the referer
+   and returns a redirect response:
 
   @
     myController = do
       ...
-      if badLogin then
-        redirectBack
-        else
-          ...
+      if badLogin
+        then 'redirectBack'
+        else 'respond' $ 'okHtml' "w00t!"
   @
 -}
-module LIO.HTTP.Server.Controller where
+module LIO.HTTP.Server.Controller (
+  -- * Request relate accessors
+  request,
+  requestHeader,
+  queryParams, Parseable(..),
+  -- * Response related accessors
+  respond,
+  redirectBack,
+  redirectBackOr,
+  -- * App-specific state accessors
+  getAppState, putAppState,
+  -- * Internal controller monad
+  fromApp, toApp,
+  Controller(..),
+  ControllerStatus(..),
+  -- * DC Label specific type alias
+  DCController
+  ) where
 
+import LIO.DCLabel
 import LIO.HTTP.Server
 import LIO.HTTP.Server.Responses
 
-import           Control.Monad hiding (guard)
-import           Control.Monad.Reader.Class
-import           Control.Monad.State.Class
-import           Control.Monad.Trans.Class
-import           Control.Applicative ()
-import qualified Data.ByteString  as Strict
+import Control.Applicative ()
+import Control.Monad
+import Control.Monad.Reader.Class
+import Control.Monad.State.Class
+import Control.Monad.Trans.Class
+import Data.Maybe
+import Data.Text (Text)
+import Text.Read (readMaybe)
+import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Char8 as Char8
-import           Data.Maybe
-import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
-import LIO.DCLabel
 
 
 -- | This encodes the controller state. When 'Done', the controller will
@@ -121,14 +137,16 @@ getAppState = get
 putAppState :: Monad m => s -> Controller s m ()
 putAppState = put
 
--- | Convert an application to a controller.
+-- | Convert an application to a controller. Internally, this uses
+-- 'respond' to produce the response.
 fromApp :: Monad m => Application m -> Controller s m ()
 fromApp app = do
   req <- request
   resp <- lift $ app req
   respond resp
 
--- | Convert the controller into an 'Application'
+-- | Convert the controller into an 'Application'. This can be used to
+-- directly run the controller with 'server', for example.
 toApp :: WebMonad m => Controller s m () -> s -> Application m
 toApp ctrl s0 req = do
   (cs, _) <- runController ctrl s0 req
@@ -158,18 +176,21 @@ queryParams varName = do
                                 then mparam >>= parseBS
                                 else Nothing
 
--- | The class of types into which query parameters and path parts may be
--- converted.
+-- | The class of types into which query parameters and path parts may
+-- be converted. We provide definitions for both parse functions in
+-- terms of the other, so only one definition is necessary.
 class Parseable a where
+  -- | Try parsing 'Strict.ByteString' as @a@.
   parseBS   :: Strict.ByteString -> Maybe a
   parseBS bs  = case Text.decodeUtf8' bs of
                   Left _  -> Nothing        
                   Right t -> parseText t
+  -- | Try parsing 'Text' as @a@.
   parseText :: Text -> Maybe a
   parseText = parseBS . Text.encodeUtf8
 
 instance Parseable Strict.ByteString where
-  parseBS = Just
+  parseBS   = Just
   parseText = Just . Text.encodeUtf8
 instance Parseable String where
   parseBS   = Just . Char8.unpack
@@ -179,15 +200,9 @@ instance Parseable Text where
                   Left _  -> Nothing        
                   Right t -> Just t
   parseText = Just
-
--- readParamValue :: (Monad m, Read a)
---                => S8.ByteString -> Text -> ControllerT s m a
--- readParamValue varName =
---   maybe (err $ "cannot read parameter: " ++ show varName) return .
---     readMay . T.unpack
---   where readMay s = case [x | (x,rst) <- reads s, ("", "") <- lex rst] of
---                       [x] -> Just x
---                       _ -> Nothing
+instance Read a => Parseable a where
+  parseBS   = readMaybe . Char8.unpack
+  parseText = readMaybe . Text.unpack
 
 -- | Returns the value of the given request header or 'Nothing' if it is not
 -- present in the HTTP request.
@@ -196,7 +211,7 @@ requestHeader :: WebMonad m
 requestHeader name = request >>= return . lookup name . reqHeaders
 
 -- | Redirect back to the referer. If the referer header is not present
--- redirect to root (i.e., @\/@).
+-- 'redirectTo' root (i.e., @\/@).
 redirectBack :: WebMonad m => Controller s m ()
 redirectBack = redirectBackOr (redirectTo "/")
 
