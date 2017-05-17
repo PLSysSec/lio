@@ -37,7 +37,7 @@ module LIO.HTTP.Server (
   Port, HostPreference,
   module Network.HTTP.Types,
   -- * DC Label specific
-  DCApplication, DCMiddleware
+  DCRequest, DCApplication, DCMiddleware
   ) where
 import Network.HTTP.Types
 import Data.Text (Text)
@@ -69,6 +69,21 @@ class Monad m => WebMonad m where
   -- | Function for running the application on specified port and host info.
   server         :: Port -> HostPreference -> Application m -> IO ()
 
+instance WebMonad m => Show (Request m) where
+  show req = "Request {" ++
+    "reqMethod = " ++ method ++
+    ",reqHttpVersion = " ++ httpVersion ++
+    ",reqPathInfo = " ++ pathInfo ++
+    ",reqQueryString = " ++ queryString ++
+    ",reqHeaders = " ++ headers ++
+    ",reqBody = <NOT READ>}"
+    where
+        method      = show $ reqMethod req
+        httpVersion = show $ reqHttpVersion req
+        pathInfo    = show $ reqPathInfo req
+        queryString = show $ reqQueryString req
+        headers     = show $ reqHeaders req
+        
 -- | This data type encapsulates HTTP responses. For now, we only support lazy
 -- ByteString bodies. In the future this data type may be extended to
 -- efficiently support streams and file serving.
@@ -76,7 +91,7 @@ data Response = Response {
    rspStatus  :: Status          -- ^ HTTP response status.
  , rspHeaders :: [Header]        -- ^ HTTP response headers.
  , rspBody    :: Lazy.ByteString -- ^ HTTP response body
- }
+ } deriving (Eq, Show)
 
 -- | An application is a function that takes an HTTP request and produces an
 -- HTTP response, potentially performing side-effects.
@@ -104,6 +119,9 @@ instance WebMonad DC where
     let settings = Wai.setHost hostPref $ Wai.setPort port $ 
                    Wai.setServerName "lio-http-server" $ Wai.defaultSettings
     in Wai.runSettings settings $ toWaiApplication app
+
+-- | Type alias for DCApplication requets
+type DCRequest = Request DC
 
 -- | Type alias for DC-labeled applications
 type DCApplication = Application DC

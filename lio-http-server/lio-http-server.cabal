@@ -16,7 +16,9 @@ cabal-version:       >=1.10
 
 library
   hs-source-dirs:      src
-  exposed-modules:     LIO.HTTP.Server
+  exposed-modules:     LIO.HTTP.Server,
+                       LIO.HTTP.Server.Responses,
+                       LIO.HTTP.Server.Controller
   build-depends:       base         >= 4.7 && < 6,
                        bytestring   >= 0.10,
                        containers   >= 0.5.7.1,
