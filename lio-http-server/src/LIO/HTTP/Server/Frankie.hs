@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module LIO.HTTP.Server.Frankie (
+module LIO.HTTP.Server.Frankie {-(
   -- * Top-level interface
   FrankieConfig(..), runFrankieConfig,
   host, port,
@@ -19,7 +19,7 @@ module LIO.HTTP.Server.Frankie (
   -- * Re-export LIO server
   module LIO.HTTP.Server,
   module LIO.HTTP.Server.Controller
-) where
+) -}where
 import Prelude hiding (head)
 import LIO.HTTP.Server
 import LIO.HTTP.Server.Controller
@@ -73,12 +73,35 @@ options path handler = regMethodHandler methodOptions path handler
 class Typeable h => RequestHandler h where
   toDynController :: h -> DynController
   toDynController = undefined
+  typeOfController :: h -> [TypeRep]
+  typeOfController f = getArgs' $ typeRepArgs $ typeOf f
+    where getArgs' :: [TypeRep] -> [TypeRep]
+          getArgs' [a, b] = a : (getArgs' $ typeRepArgs b)
+          getArgs' _      = []
 
-instance (Typeable s, Typeable m, Typeable a)
-  => RequestHandler (Controller s m a)
+instance (Typeable s, Typeable m, Typeable x)
+  => RequestHandler (Controller s m x)
 
-instance (Parseable a, Typeable a, Typeable s, Typeable m, Typeable b)
-  => RequestHandler (a -> Controller s m b)
+instance (Parseable a, Typeable a, Typeable s, Typeable m, Typeable x)
+  => RequestHandler (a -> Controller s m x)
+instance (Parseable a, Typeable a, Parseable b, Typeable b,
+          Typeable s, Typeable m, Typeable x)
+  => RequestHandler (a -> b -> Controller s m x)
+instance (Parseable a, Typeable a, Parseable b, Typeable b, Parseable c, Typeable c,
+          Typeable s, Typeable m, Typeable x)
+  => RequestHandler (a -> b -> c -> Controller s m x)
+instance (Parseable a, Typeable a, Parseable b, Typeable b, Parseable c, Typeable c,
+          Parseable d, Typeable d,
+          Typeable s, Typeable m, Typeable x)
+  => RequestHandler (a -> b -> c -> d -> Controller s m x)
+instance (Parseable a, Typeable a, Parseable b, Typeable b, Parseable c, Typeable c,
+          Parseable d, Typeable d, Parseable e, Typeable e,
+          Typeable s, Typeable m, Typeable x)
+  => RequestHandler (a -> b -> c -> d -> e -> Controller s m x)
+instance (Parseable a, Typeable a, Parseable b, Typeable b, Parseable c, Typeable c,
+          Parseable d, Typeable d, Parseable e, Typeable e, Parseable f, Typeable f,
+          Typeable s, Typeable m, Typeable x)
+  => RequestHandler (a -> b -> c -> d -> e -> f -> Controller s m x)
 
 regMethodHandler :: RequestHandler h => Method -> Text -> h -> FrankieConfig ()
 regMethodHandler method path0 handler = do
@@ -181,3 +204,14 @@ nullServerCfg = ServerConfig {
 
 
 type DynController = IO ()
+
+-- XXX remove:
+
+nullCtrl0 :: DCController ()
+nullCtrl0 = return ()
+
+nullCtrl1 :: Int -> DCController ()
+nullCtrl1 _ = return ()
+
+nullCtrl2 :: Int -> String -> DCController ()
+nullCtrl2 _ _ = return ()

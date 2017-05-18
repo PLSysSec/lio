@@ -9,6 +9,9 @@ import Control.Monad
 import LIO.HTTP.Server.Frankie
 import qualified Data.Map as Map
 
+-- XXX remove this after
+import Data.Dynamic
+
 main = defaultMain tests
 
 tests = [ 
@@ -25,6 +28,9 @@ tests = [
     testCase "cant get add same route" test_runFrankieConfig5,
     testCase "get and put on same path" test_runFrankieConfig6,
     testCase "get on diff path ok" test_runFrankieConfig7
+  ],
+  testGroup "Frankie.typeOfController" [
+    testCase "number of controller args correct" test_typeOfController
   ]
   ]
 
@@ -67,7 +73,7 @@ test_runFrankieConfig3 = do
 test_runFrankieConfig4 = do
   cfg <- runFrankieConfig $ do
     host "127.0.0.1" ; port 3030
-    get "/x/:y" nullCtrl1
+    get "/x/:y" nullCtrl0
   let map = cfgDispatchMap cfg
   segs <- toPathSegments "/x/:yo"
   Map.keys map @?= [(methodGet, segs)]
@@ -76,16 +82,16 @@ test_runFrankieConfig5 = do
   (void . runFrankieConfig $ do
     port 3030
     host "*"
-    get "/x/:y" nullCtrl1
-    get "/x/:yoyo" nullCtrl1
+    get "/x/:y" nullCtrl0
+    get "/x/:yoyo" nullCtrl0
     )
    `catch` (\(e :: InvalidConfigException) -> return ())
 
 test_runFrankieConfig6 = do
   cfg <- runFrankieConfig $ do
     host "127.0.0.1" ; port 3030
-    get "/x/:y" nullCtrl1
-    put "/x/:y" nullCtrl1
+    get "/x/:y" nullCtrl0
+    put "/x/:y" nullCtrl0
   let map = cfgDispatchMap cfg
   segs <- toPathSegments "/x/:yo"
   Map.keys map @?= [(methodGet, segs), (methodPut, segs)]
@@ -93,12 +99,19 @@ test_runFrankieConfig6 = do
 test_runFrankieConfig7 = do
   cfg <- runFrankieConfig $ do
     host "127.0.0.1" ; port 3030
-    get "/x/:y" nullCtrl1
-    get "/y/:x" nullCtrl1
+    get "/x/:y" nullCtrl0
+    get "/y/:x" nullCtrl0
   let map = cfgDispatchMap cfg
   segs1 <- toPathSegments "/x/:yo"
   segs2 <- toPathSegments "/y/:yo"
   Map.keys map @?= [(methodGet, segs1), (methodGet, segs2)]
 
-nullCtrl1 :: DCController ()
-nullCtrl1 = return ()
+test_typeOfController = do
+  putStrLn $ getTypeOfArgs nullCtrl0
+  putStrLn $ getTypeOfArgs nullCtrl1
+
+nullCtrl0 :: DCController ()
+nullCtrl0 = return ()
+
+nullCtrl1 :: Int -> DCController ()
+nullCtrl1 _ = return ()

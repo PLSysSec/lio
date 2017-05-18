@@ -194,7 +194,7 @@ class Typeable a => Parseable a where
 instance Parseable Strict.ByteString where
   parseBS   = Just
   parseText = Just . Text.encodeUtf8
-instance Parseable String where
+instance {-# INCOHERENT #-} Parseable String where
   parseBS   = Just . Char8.unpack
   parseText = Just . Text.unpack
 instance Parseable Text where
