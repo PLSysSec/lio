@@ -3,7 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module LIO.HTTP.Server.Frankie {-(
+module LIO.HTTP.Server.Frankie (
   -- * Top-level interface
   FrankieConfig(..), runFrankieConfig,
   host, port,
@@ -19,7 +19,10 @@ module LIO.HTTP.Server.Frankie {-(
   -- * Re-export LIO server
   module LIO.HTTP.Server,
   module LIO.HTTP.Server.Controller
-) -}where
+  , nullCtrl0
+  , nullCtrl1
+  , nullCtrl2
+) where
 import Prelude hiding (head)
 import LIO.HTTP.Server
 import LIO.HTTP.Server.Controller
@@ -29,6 +32,7 @@ import Control.Monad.State hiding (get, put)
 import qualified Control.Monad.State as State
 
 
+import GHC.Fingerprint.Type
 import Data.Dynamic
 import Data.Maybe
 import Data.Map (Map)
@@ -73,15 +77,14 @@ options path handler = regMethodHandler methodOptions path handler
 class Typeable h => RequestHandler h where
   toDynController :: h -> DynController
   toDynController = undefined
-  typeOfController :: h -> [TypeRep]
-  typeOfController f = getArgs' $ typeRepArgs $ typeOf f
+  fingerprintArgs :: h -> [Fingerprint]
+  fingerprintArgs f = map typeRepFingerprint $ getArgs' $ typeRepArgs $ typeOf f
     where getArgs' :: [TypeRep] -> [TypeRep]
           getArgs' [a, b] = a : (getArgs' $ typeRepArgs b)
           getArgs' _      = []
 
 instance (Typeable s, Typeable m, Typeable x)
   => RequestHandler (Controller s m x)
-
 instance (Parseable a, Typeable a, Typeable s, Typeable m, Typeable x)
   => RequestHandler (a -> Controller s m x)
 instance (Parseable a, Typeable a, Parseable b, Typeable b,

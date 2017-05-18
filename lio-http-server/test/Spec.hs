@@ -10,7 +10,7 @@ import LIO.HTTP.Server.Frankie
 import qualified Data.Map as Map
 
 -- XXX remove this after
-import Data.Dynamic
+import Data.Typeable
 
 main = defaultMain tests
 
@@ -30,7 +30,7 @@ tests = [
     testCase "get on diff path ok" test_runFrankieConfig7
   ],
   testGroup "Frankie.typeOfController" [
-    testCase "number of controller args correct" test_typeOfController
+    testCase "number of controller args correct" test_typeOfControllerArgs
   ]
   ]
 
@@ -106,12 +106,17 @@ test_runFrankieConfig7 = do
   segs2 <- toPathSegments "/y/:yo"
   Map.keys map @?= [(methodGet, segs1), (methodGet, segs2)]
 
-test_typeOfController = do
-  putStrLn $ getTypeOfArgs nullCtrl0
-  putStrLn $ getTypeOfArgs nullCtrl1
+test_typeOfControllerArgs = do
+  putStrLn $ "0: " ++ (show $ typeOfControllerArgs nullCtrl0)
+  putStrLn $ "1: " ++ (show $ typeOfControllerArgs nullCtrl1)
+  putStrLn $ "2: " ++ (show $ typeOfControllerArgs nullCtrl2)
+  return ()
 
 nullCtrl0 :: DCController ()
 nullCtrl0 = return ()
 
 nullCtrl1 :: Int -> DCController ()
 nullCtrl1 _ = return ()
+
+nullCtrl2 :: Int -> String -> DCController ()
+nullCtrl2 _ _ = return ()

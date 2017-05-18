@@ -202,7 +202,7 @@ instance Parseable Text where
                   Left _  -> Nothing        
                   Right t -> Just t
   parseText = Just
-instance (Read a, Typeable a) => Parseable a where
+instance {-# OVERLAPPABLE #-} (Read a, Typeable a) => Parseable a where
   parseBS   = readMaybe . Char8.unpack
   parseText = readMaybe . Text.unpack
 
