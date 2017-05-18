@@ -48,8 +48,10 @@ import Control.Monad
 import Control.Monad.Reader.Class
 import Control.Monad.State.Class
 import Control.Monad.Trans.Class
+
 import Data.Maybe
 import Data.Text (Text)
+import Data.Typeable
 import Text.Read (readMaybe)
 import qualified Data.ByteString as Strict
 import qualified Data.ByteString.Char8 as Char8
@@ -79,7 +81,7 @@ instance Functor ControllerStatus where
 -- short-circuited by 'respond'ing with a 'Response'.
 data Controller s m a = Controller {
  runController :: s -> Request m -> m (ControllerStatus a, s)
-}
+} deriving (Typeable)
 
 instance Functor m => Functor (Controller s m) where
   fmap f (Controller act) = Controller $ \s0 req -> 
@@ -179,7 +181,7 @@ queryParams varName = do
 -- | The class of types into which query parameters and path parts may
 -- be converted. We provide definitions for both parse functions in
 -- terms of the other, so only one definition is necessary.
-class Parseable a where
+class Typeable a => Parseable a where
   -- | Try parsing 'Strict.ByteString' as @a@.
   parseBS   :: Strict.ByteString -> Maybe a
   parseBS bs  = case Text.decodeUtf8' bs of
@@ -200,7 +202,7 @@ instance Parseable Text where
                   Left _  -> Nothing        
                   Right t -> Just t
   parseText = Just
-instance Read a => Parseable a where
+instance (Read a, Typeable a) => Parseable a where
   parseBS   = readMaybe . Char8.unpack
   parseText = readMaybe . Text.unpack
 

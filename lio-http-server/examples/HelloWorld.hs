@@ -16,7 +16,7 @@ run nr = server 3000 "127.0.0.1" $ case nr of
           2 -> app2
           _ -> app1
 
-dcPutStrLn :: String -> DCController ()
+dcPutStrLn :: String -> DCController s
 dcPutStrLn str = lift . ioTCB $ putStrLn str
 
 app5 :: DCApplication
