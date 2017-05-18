@@ -3,13 +3,31 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-module LIO.HTTP.Server.Frankie where
+module LIO.HTTP.Server.Frankie (
+  -- * Top-level interface
+  FrankieConfig(..), runFrankieConfig,
+  host, port,
+  get, post, put, patch, delete,
+  head, trace, connect, options,
+  -- * Internal
+  RequestHandler(..),
+  regMethodHandler,
+  ServerConfig(..), nullServerCfg,
+  InvalidConfigException(..), 
+  -- ** Path segment related
+  PathSegment(..), toPathSegments,
+  -- * Re-export LIO server
+  module LIO.HTTP.Server,
+  module LIO.HTTP.Server.Controller
+) where
+import Prelude hiding (head)
 import LIO.HTTP.Server
 import LIO.HTTP.Server.Controller
 
-import Control.Monad.Identity
+import Control.Exception
 import Control.Monad.State hiding (get, put)
 import qualified Control.Monad.State as State
+
 
 import Data.Dynamic
 import Data.Maybe
@@ -20,6 +38,37 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Map as Map
 
+get :: RequestHandler h => Text -> h -> FrankieConfig ()
+get path handler = regMethodHandler methodGet path handler
+
+post :: RequestHandler h => Text -> h -> FrankieConfig ()
+post path handler = regMethodHandler methodPost path handler
+
+put :: RequestHandler h => Text -> h -> FrankieConfig ()
+put path handler = regMethodHandler methodPut path handler
+
+patch :: RequestHandler h => Text -> h -> FrankieConfig ()
+patch path handler = regMethodHandler methodPatch path handler
+
+delete :: RequestHandler h => Text -> h -> FrankieConfig ()
+delete path handler = regMethodHandler methodDelete path handler
+
+head :: RequestHandler h => Text -> h -> FrankieConfig ()
+head path handler = regMethodHandler methodHead path handler
+
+trace :: RequestHandler h => Text -> h -> FrankieConfig ()
+trace path handler = regMethodHandler methodTrace path handler
+
+connect :: RequestHandler h => Text -> h -> FrankieConfig ()
+connect path handler = regMethodHandler methodConnect path handler
+
+options :: RequestHandler h => Text -> h -> FrankieConfig ()
+options path handler = regMethodHandler methodOptions path handler
+
+
+--
+-- Underlying implementation of the methods
+--
 
 class Typeable h => RequestHandler h where
   toDynController :: h -> DynController
@@ -30,18 +79,6 @@ instance (Typeable s, Typeable m, Typeable a)
 
 instance (Parseable a, Typeable a, Typeable s, Typeable m, Typeable b)
   => RequestHandler (a -> Controller s m b)
--- instance (Parseable a, Typeable a,
---           Parseable b, Typeable b)
---   => RequestHandler (a -> b -> Controller s m ())
--- instance (Parseable a, Typeable a, Typeable c,
---           Parseable b, Typeable b, Typeable c)
---   => RequestHandler (a -> b -> c -> Controller s m ())
--- instance (Parseable a, Typeable a, Typeable c, Typeable d,
---           Parseable b, Typeable b, Typeable c, Typeable d)
---   => RequestHandler (a -> b -> c -> d -> Controller s m ())
-
-get :: RequestHandler h => Text -> h -> FrankieConfig ()
-get path handler = regMethodHandler methodGet path handler
 
 regMethodHandler :: RequestHandler h => Method -> Text -> h -> FrankieConfig ()
 regMethodHandler method path0 handler = do
@@ -51,7 +88,7 @@ regMethodHandler method path0 handler = do
       key = (method, segments)
       dynHandler = toDynController handler
   when (isJust $ Map.lookup key map0) $
-    fail $ "Already have handler for: " ++ show (method, segments)
+    cfgFail $ "Already have handler for: " ++ show (method, segments)
   State.put $ cfg { cfgDispatchMap = Map.insert key dynHandler map0 }
 
 toPathSegments :: Monad m => Text -> m [PathSegment]
@@ -85,12 +122,62 @@ instance Ord PathSegment where
   compare (Var _) (Dir _) = GT
   compare (Var _) (Var _) = EQ
 
-type FrankieConfig a = StateT ServerConfig Identity a
+-- | Set the app port.
+port :: Port -> FrankieConfig ()
+port p = do
+  cfg <- State.get
+  -- XXX can we use liquid types instead?
+  when (isJust $ cfgPort cfg) $ cfgFail "port already set"
+  State.put $ cfg { cfgPort = Just p }
+
+-- | Set the app host preference.
+host :: HostPreference -> FrankieConfig ()
+host pref = do
+  cfg <- State.get
+  -- XXX can we use liquid types instead?
+  when (isJust $ cfgHostPref cfg) $ cfgFail "host already set"
+  State.put $ cfg { cfgHostPref = Just pref }
+
+-- | Type used to encode a Frankie server configuration
+newtype FrankieConfig a = FrankieConfig {
+  unFrankieConfig :: StateT ServerConfig IO a
+} deriving (Functor, Applicative, Monad, MonadState ServerConfig)
+
+runFrankieConfig :: FrankieConfig () -> IO ServerConfig
+runFrankieConfig (FrankieConfig act) = do
+  (_, cfg) <- runStateT act nullServerCfg
+  -- TODO: sanity check cfg
+  return cfg
 
 data ServerConfig = ServerConfig {
-  cfgPort        :: Port,
-  cfgHostPref    :: HostPreference,
+  cfgPort        :: Maybe Port,
+  cfgHostPref    :: Maybe HostPreference,
   cfgDispatchMap :: Map (Method, [PathSegment]) DynController
 }
+
+instance Show ServerConfig where
+  show cfg =
+    "ServerConfig {"
+    ++ "cfgPort = " ++ (show . cfgPort $ cfg)
+    ++ ",cfgHostPref = " ++ (show . cfgHostPref $ cfg)
+    ++ ",cfgDispatchMap = " ++ (show . Map.keys . cfgDispatchMap $ cfg)
+    ++ "}"
+
+-- | Configuration errors
+data InvalidConfigException = InvalidConfig String
+  deriving (Show, Typeable)
+instance Exception InvalidConfigException
+
+-- | Throw 'InvalidConfigException' error
+cfgFail :: String -> FrankieConfig a
+cfgFail msg = FrankieConfig $ lift . throwIO $ InvalidConfig msg
+
+nullServerCfg :: ServerConfig
+nullServerCfg = ServerConfig {
+  cfgPort = Nothing,
+  cfgHostPref = Nothing,
+  cfgDispatchMap = Map.empty
+}
+
 
 type DynController = IO ()
