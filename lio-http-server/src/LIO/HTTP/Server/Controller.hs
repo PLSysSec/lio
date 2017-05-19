@@ -128,7 +128,7 @@ request = ask
 -- action wins and the remainder of the controller will not execute.
 --
 -- @respond r >>= f === respond r@
-respond :: Monad m => Response -> Controller s m ()
+respond :: Monad m => Response -> Controller s m a
 respond resp = Controller $ \s _ -> return (Done resp, s)
 
 -- | Extract the application-specific state.

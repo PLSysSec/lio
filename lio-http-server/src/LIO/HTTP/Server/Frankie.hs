@@ -3,7 +3,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 module LIO.HTTP.Server.Frankie (
   -- * Top-level interface
   FrankieConfig(..), runFrankieConfig,
@@ -15,7 +16,6 @@ module LIO.HTTP.Server.Frankie (
   regMethodHandler,
   ServerConfig(..), nullServerCfg,
   InvalidConfigException(..), 
-  VarParser(..), DynController(..),
   -- ** Path segment related
   PathSegment(..), toPathSegments,
   isVar,
@@ -28,6 +28,7 @@ module LIO.HTTP.Server.Frankie (
 ) where
 import Prelude hiding (head)
 import LIO.HTTP.Server
+import LIO.HTTP.Server.Responses
 import LIO.HTTP.Server.Controller
 
 import Control.Exception
@@ -35,7 +36,6 @@ import Control.Monad.State hiding (get, put)
 import qualified Control.Monad.State as State
 
 
-import GHC.Fingerprint.Type
 import Data.Dynamic
 import Data.Maybe
 import Data.Map (Map)
@@ -45,31 +45,31 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Map as Map
 
-get :: RequestHandler h => Text -> h -> FrankieConfig ()
+get :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
 get path handler = regMethodHandler methodGet path handler
 
-post :: RequestHandler h => Text -> h -> FrankieConfig ()
+post :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
 post path handler = regMethodHandler methodPost path handler
 
-put :: RequestHandler h => Text -> h -> FrankieConfig ()
+put :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
 put path handler = regMethodHandler methodPut path handler
 
-patch :: RequestHandler h => Text -> h -> FrankieConfig ()
+patch :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
 patch path handler = regMethodHandler methodPatch path handler
 
-delete :: RequestHandler h => Text -> h -> FrankieConfig ()
+delete :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
 delete path handler = regMethodHandler methodDelete path handler
 
-head :: RequestHandler h => Text -> h -> FrankieConfig ()
+head :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
 head path handler = regMethodHandler methodHead path handler
 
-trace :: RequestHandler h => Text -> h -> FrankieConfig ()
+trace :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
 trace path handler = regMethodHandler methodTrace path handler
 
-connect :: RequestHandler h => Text -> h -> FrankieConfig ()
+connect :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
 connect path handler = regMethodHandler methodConnect path handler
 
-options :: RequestHandler h => Text -> h -> FrankieConfig ()
+options :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
 options path handler = regMethodHandler methodOptions path handler
 
 
@@ -77,163 +77,185 @@ options path handler = regMethodHandler methodOptions path handler
 -- Underlying implementation of the methods
 --
 
--- | Dynamic controller
-newtype DynController = DynController Dynamic
-newtype VarParser = VarParser Dynamic
+parseFailed :: Monad m => Controller s m a
+parseFailed = respond badRequest
 
-class Typeable h => RequestHandler h where
-  -- | The argument, variable parsers
-  varParser :: h -> [VarParser]
-  varParser _ = []
+invalidArgs :: Monad m => Controller s m ()
+invalidArgs = respond $ serverError "BUG: controller called with invalid args"
 
-  -- | Convert request handler to a 'Dynamic' controller
-  toDynController :: h -> DynController
-  toDynController = DynController . toDyn
+-- | Get the path variable or fail with parser error
+pathVarOrFail :: (WebMonad m, Parseable a)
+              => PathSegment -- ^ Parameter name
+              -> Controller s m a
+pathVarOrFail ps = do
+  pathInfo <- liftM reqPathInfo request
+  case ps of
+    (Var _ idx) | idx < length pathInfo -> 
+      case parseText (pathInfo!!idx) of
+        Just x -> return x
+        _ -> parseFailed
+    _ -> parseFailed
 
-  -- | The number of arguments the request handler expects
-  reqHandlerNrArgs :: h -> Int
-  reqHandlerNrArgs f = length $ fingerprintArgs f
 
-  -- | The fingerprint of all the arguments
-  fingerprintArgs :: h -> [Fingerprint]
-  fingerprintArgs f = map typeRepFingerprint $ getArgs' $ typeRepArgs $ typeOf f
+class (Monad m, Typeable h) => RequestHandler h s m | h -> s m where
+  -- | Apply the request handler, parsing the supplied list of
+  -- variables. The returned controller will respond with a
+  -- 'parseFailed' error if parsing fails.
+  handlerToController :: [PathSegment] -> h -> Controller s m ()
+
+  -- | The types for the arugments the handler takes
+  reqHandlerArgTy :: h -> FrankieConfig s m [TypeRep]
+  reqHandlerArgTy f = return . getArgs' .  typeRepArgs $ typeOf f
     where getArgs' :: [TypeRep] -> [TypeRep]
           getArgs' [a, b] = a : (getArgs' $ typeRepArgs b)
           getArgs' _      = []
 
-instance (Typeable s, Typeable m, Typeable x)
-  => RequestHandler (Controller s m x)
-instance (Parseable a, Typeable a, Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> Controller s m x) where
-  varParser _ = let pTa :: Text -> Maybe a
-                    pTa = parseText
-                in map VarParser [toDyn pTa]
+instance (Typeable s, WebMonad m, Typeable m)
+  => RequestHandler (Controller s m ()) s m where
+  handlerToController [] ctrl = ctrl
+  handlerToController _ _ = invalidArgs
+
+instance (Parseable a, Typeable a, Typeable s, WebMonad m, Typeable m)
+  => RequestHandler (a -> Controller s m ()) s m where
+  handlerToController [ta] ctrl = do
+    a <- pathVarOrFail ta
+    ctrl a
+  handlerToController _ _ = invalidArgs
+
 instance (Parseable a, Typeable a, Parseable b, Typeable b,
-          Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> Controller s m x) where
-  varParser _ = let pTa :: Text -> Maybe a
-                    pTa = parseText
-                    pTb :: Text -> Maybe b
-                    pTb = parseText
-                in map VarParser [toDyn pTa, toDyn pTb]
+          Typeable s, WebMonad m, Typeable m)
+  => RequestHandler (a -> b -> Controller s m ()) s m where
+  handlerToController [ta, tb] ctrl = do
+    a <- pathVarOrFail ta
+    b <- pathVarOrFail tb
+    ctrl a b
+  handlerToController _ _ = invalidArgs
+
 instance (Parseable a, Typeable a, Parseable b, Typeable b, 
           Parseable c, Typeable c,
-          Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> c -> Controller s m x) where
-  varParser _ = let pTa :: Text -> Maybe a
-                    pTa = parseText
-                    pTb :: Text -> Maybe b
-                    pTb = parseText
-                    pTc :: Text -> Maybe c
-                    pTc = parseText
-                in map VarParser [toDyn pTa, toDyn pTb, toDyn pTc]
+          Typeable s, WebMonad m, Typeable m)
+  => RequestHandler (a -> b -> c -> Controller s m ()) s m where
+  handlerToController [ta, tb, tc] ctrl = do
+    a <- pathVarOrFail ta
+    b <- pathVarOrFail tb
+    c <- pathVarOrFail tc
+    ctrl a b c
+  handlerToController _ _ = invalidArgs
 instance (Parseable a, Typeable a, Parseable b, Typeable b, 
           Parseable c, Typeable c, Parseable d, Typeable d,
-          Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> c -> d -> Controller s m x) where
-  varParser _ = let pTa :: Text -> Maybe a
-                    pTa = parseText
-                    pTb :: Text -> Maybe b
-                    pTb = parseText
-                    pTc :: Text -> Maybe c
-                    pTc = parseText
-                    pTd :: Text -> Maybe d
-                    pTd = parseText
-                in map VarParser [toDyn pTa, toDyn pTb, toDyn pTc, toDyn pTd]
+          Typeable s, WebMonad m, Typeable m)
+  => RequestHandler (a -> b -> c -> d -> Controller s m ()) s m where
+  handlerToController [ta, tb, tc, td] ctrl = do
+    a <- pathVarOrFail ta
+    b <- pathVarOrFail tb
+    c <- pathVarOrFail tc
+    d <- pathVarOrFail td
+    ctrl a b c d
+  handlerToController _ _ = invalidArgs
 instance (Parseable a, Typeable a, Parseable b, Typeable b, 
           Parseable c, Typeable c, Parseable d, Typeable d, 
           Parseable e, Typeable e,
-          Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> c -> d -> e -> Controller s m x) where
-  varParser _ = let pTa :: Text -> Maybe a
-                    pTa = parseText
-                    pTb :: Text -> Maybe b
-                    pTb = parseText
-                    pTc :: Text -> Maybe c
-                    pTc = parseText
-                    pTd :: Text -> Maybe d
-                    pTd = parseText
-                    pTe :: Text -> Maybe e
-                    pTe = parseText
-                in map VarParser [toDyn pTa, toDyn pTb, toDyn pTc
-                                 , toDyn pTd, toDyn pTe]
+          Typeable s, WebMonad m, Typeable m)
+  => RequestHandler (a -> b -> c -> d -> e -> Controller s m ()) s m where
+  handlerToController [ta, tb, tc, td, te] ctrl = do
+    a <- pathVarOrFail ta
+    b <- pathVarOrFail tb
+    c <- pathVarOrFail tc
+    d <- pathVarOrFail td
+    e <- pathVarOrFail te
+    ctrl a b c d e
+  handlerToController _ _ = invalidArgs
 instance (Parseable a, Typeable a, Parseable b, Typeable b, 
           Parseable c, Typeable c, Parseable d, Typeable d, 
           Parseable e, Typeable e, Parseable f, Typeable f,
-          Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> c -> d -> e -> f -> Controller s m x) where
-  varParser _ = let pTa :: Text -> Maybe a
-                    pTa = parseText
-                    pTb :: Text -> Maybe b
-                    pTb = parseText
-                    pTc :: Text -> Maybe c
-                    pTc = parseText
-                    pTd :: Text -> Maybe d
-                    pTd = parseText
-                    pTe :: Text -> Maybe e
-                    pTe = parseText
-                    pTf :: Text -> Maybe f
-                    pTf = parseText
-                in map VarParser [toDyn pTa, toDyn pTb, toDyn pTc
-                                 , toDyn pTd, toDyn pTe, toDyn pTf]
+          Typeable s, WebMonad m, Typeable m)
+  => RequestHandler (a -> b -> c -> d -> e -> f -> Controller s m ()) s m where
+  handlerToController [ta, tb, tc, td, te, tf] ctrl = do
+    a <- pathVarOrFail ta
+    b <- pathVarOrFail tb
+    c <- pathVarOrFail tc
+    d <- pathVarOrFail td
+    e <- pathVarOrFail te
+    f <- pathVarOrFail tf
+    ctrl a b c d e f
+  handlerToController _ _ = invalidArgs
 
-regMethodHandler :: RequestHandler h => Method -> Text -> h -> FrankieConfig ()
+regMethodHandler :: RequestHandler h s m 
+                 => Method -> Text -> h -> FrankieConfig s m ()
 regMethodHandler method path handler = do
   cfg <- State.get
   segments <- toPathSegments path
   let map0 = cfgDispatchMap cfg
-      key = (method, segments)
+      key0 = (method, segments)
   -- Make sure the controller is not already registered (liquid?)
-  when (isJust $ Map.lookup key map0) $
+  when (isJust $ Map.lookup key0 map0) $
     cfgFail $ "Already have handler for: " ++ show (method, segments)
   -- Make sure that the controller and number of vars match (liquid?)
-  let nrVars = length $ filter isVar segments
-      nrArgs = reqHandlerNrArgs handler
+  args <- reqHandlerArgTy handler
+  let vars   = filter isVar segments
+      nrVars = length vars
+      nrArgs = length args
   when (nrVars /= nrArgs) $
     cfgFail $ "Unexpected number of variables (" ++ show nrVars ++ 
               ") for handler (expected " ++ show nrArgs ++ ")"
-  let varParsers = varParser handler
-      dynHandler = toDynController handler
+  -- Update the variable sin the segments with types
+  let key1 = (method, fixSegments segments args)
   State.put $ cfg { cfgDispatchMap = 
-    Map.insert key (varParsers, dynHandler) map0 }
+    Map.insert key1 (handlerToController vars handler) map0 }
 
+-- | Given path segments broken down by 'toPathSegments' and a list of variable
+-- types, rename the variables in the segments to add the type info. Assuming
+-- types are sorted according to the variables the represent.  Called by
+-- regMethodHandler. Usage outside this is discouraged.
+fixSegments :: [PathSegment]
+            -> [TypeRep]
+            -> [PathSegment]
+fixSegments (Var n0 i0 : ss) (ty : ts) = 
+  let n0' = n0 `Text.append` (Text.pack $ '@' : show ty)
+  in (Var n0' i0) : fixSegments ss ts
+fixSegments ((Dir d) : ss) ts = (Dir d) : fixSegments ss ts
+fixSegments [] [] = []
+fixSegments _ _ = error "BUG: fixSegments called incorrectly"
+
+-- | Convert a path to its corresponding segments
 toPathSegments :: Monad m => Text -> m [PathSegment]
 toPathSegments path = do
   -- TODO: decodePathSegments assumes valid path. We should make sure that
   -- the path is to spec <https://tools.ietf.org/html/rfc3986#section-3.3>
   let segments = decodePathSegments (Text.encodeUtf8 path)
-  return $ map toPathSegment segments
-    where toPathSegment seg = if ":" `Text.isPrefixOf` seg
-                                then Var seg else Dir seg
+  return . snd $ foldr (\seg (idx, ps) ->
+    (idx - 1, toPathSegment seg idx : ps)) (length segments - 1,[]) segments
+  where toPathSegment seg idx = if ":" `Text.isPrefixOf` seg
+                                  then Var seg idx else Dir seg
 
 -- | A path segment is a simple directory or a variable. Variables are always
 -- prefixed by @:@ and considered the same (equal).
-data PathSegment = Dir Text | Var Text
+data PathSegment = Dir Text | Var Text Int
 
 isVar :: PathSegment -> Bool
-isVar (Var _) = True
-isVar _       = False
+isVar (Var _ _) = True
+isVar _         = False
 
 instance Show PathSegment where
-  show (Dir s) = Text.unpack s
-  show (Var s) = Text.unpack s
+  show (Dir s)   = Text.unpack s
+  show (Var s _) = Text.unpack s -- ++ "@" ++ show i
 
 instance {-# INCOHERENT #-} Show [PathSegment] where
   show ps = "/" ++ (intercalate "/" $ map show ps) ++ "/"
 
 instance Eq PathSegment where
   (Dir x) == (Dir y) = x == y
-  (Var _) == (Var _) = True
+  (Var _ _) == (Var _ _) = True
   _ == _ = False
 
 instance Ord PathSegment where
   compare (Dir x) (Dir y) = compare x y
-  compare (Dir _) (Var _) = LT
-  compare (Var _) (Dir _) = GT
-  compare (Var _) (Var _) = EQ
+  compare (Dir _) (Var _ _) = LT
+  compare (Var _ _) (Dir _) = GT
+  compare (Var _ _) (Var _ _) = EQ
 
 -- | Set the app port.
-port :: Port -> FrankieConfig ()
+port :: Port -> FrankieConfig s m ()
 port p = do
   cfg <- State.get
   -- XXX can we use liquid types instead?
@@ -241,7 +263,7 @@ port p = do
   State.put $ cfg { cfgPort = Just p }
 
 -- | Set the app host preference.
-host :: HostPreference -> FrankieConfig ()
+host :: HostPreference -> FrankieConfig s m ()
 host pref = do
   cfg <- State.get
   -- XXX can we use liquid types instead?
@@ -249,12 +271,12 @@ host pref = do
   State.put $ cfg { cfgHostPref = Just pref }
 
 -- | Type used to encode a Frankie server configuration
-newtype FrankieConfig a = FrankieConfig {
-  unFrankieConfig :: StateT ServerConfig IO a
-} deriving (Functor, Applicative, Monad, MonadState ServerConfig)
+newtype FrankieConfig s m a = FrankieConfig {
+  unFrankieConfig :: StateT (ServerConfig s m) IO a
+} deriving (Functor, Applicative, Monad, MonadState (ServerConfig s m))
 
 -- | Run a config action to produce a server configuration
-runFrankieConfig :: FrankieConfig () -> IO ServerConfig
+runFrankieConfig :: FrankieConfig s m () -> IO (ServerConfig s m)
 runFrankieConfig (FrankieConfig act) = do
   (_, cfg) <- runStateT act nullServerCfg
   -- TODO: sanity check cfg
@@ -263,13 +285,13 @@ runFrankieConfig (FrankieConfig act) = do
 -- | A server configuration containts the port and host to run the server on.
 -- It also contains the dispatch table.
 -- TODO: add support for error handlers, loggers, dev vs. prod, etc.
-data ServerConfig = ServerConfig {
+data ServerConfig s m = ServerConfig {
   cfgPort        :: Maybe Port,
   cfgHostPref    :: Maybe HostPreference,
-  cfgDispatchMap :: Map (Method, [PathSegment]) ([VarParser], DynController)
+  cfgDispatchMap :: Map (Method, [PathSegment]) (Controller s m ())
 }
 
-instance Show ServerConfig where
+instance Show (ServerConfig s m) where
   show cfg =
     "ServerConfig {"
     ++ "cfgPort = " ++ (show . cfgPort $ cfg)
@@ -283,10 +305,10 @@ data InvalidConfigException = InvalidConfig String
 instance Exception InvalidConfigException
 
 -- | Throw 'InvalidConfigException' error
-cfgFail :: String -> FrankieConfig a
+cfgFail :: String -> FrankieConfig s m a
 cfgFail msg = FrankieConfig $ lift . throwIO $ InvalidConfig msg
 
-nullServerCfg :: ServerConfig
+nullServerCfg :: ServerConfig s m
 nullServerCfg = ServerConfig {
   cfgPort = Nothing,
   cfgHostPref = Nothing,
@@ -295,12 +317,11 @@ nullServerCfg = ServerConfig {
 
 
 -- XXX remove:
-
-nullCtrl0 :: DCController ()
-nullCtrl0 = return ()
-
-nullCtrl1 :: Int -> DCController ()
-nullCtrl1 _ = return ()
-
-nullCtrl2 :: Int -> String -> DCController ()
-nullCtrl2 _ _ = return ()
+-- nullCtrl0 :: DCController ()
+-- nullCtrl0 = return ()
+--
+-- nullCtrl1 :: Int -> DCController ()
+-- nullCtrl1 _ = return ()
+--
+-- nullCtrl2 :: Int -> String -> DCController ()
+-- nullCtrl2 _ _ = return ()
