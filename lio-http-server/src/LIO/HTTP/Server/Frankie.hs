@@ -15,6 +15,7 @@ module LIO.HTTP.Server.Frankie (
   regMethodHandler,
   ServerConfig(..), nullServerCfg,
   InvalidConfigException(..), 
+  VarParser(..), DynController(..),
   -- ** Path segment related
   PathSegment(..), toPathSegments,
   isVar,
@@ -177,12 +178,11 @@ instance (Parseable a, Typeable a, Parseable b, Typeable b,
                                  , toDyn pTd, toDyn pTe, toDyn pTf]
 
 regMethodHandler :: RequestHandler h => Method -> Text -> h -> FrankieConfig ()
-regMethodHandler method path0 handler = do
+regMethodHandler method path handler = do
   cfg <- State.get
-  segments <- toPathSegments path0
+  segments <- toPathSegments path
   let map0 = cfgDispatchMap cfg
       key = (method, segments)
-      dynHandler = toDynController handler
   -- Make sure the controller is not already registered (liquid?)
   when (isJust $ Map.lookup key map0) $
     cfgFail $ "Already have handler for: " ++ show (method, segments)
@@ -192,7 +192,10 @@ regMethodHandler method path0 handler = do
   when (nrVars /= nrArgs) $
     cfgFail $ "Unexpected number of variables (" ++ show nrVars ++ 
               ") for handler (expected " ++ show nrArgs ++ ")"
-  State.put $ cfg { cfgDispatchMap = Map.insert key dynHandler map0 }
+  let varParsers = varParser handler
+      dynHandler = toDynController handler
+  State.put $ cfg { cfgDispatchMap = 
+    Map.insert key (varParsers, dynHandler) map0 }
 
 toPathSegments :: Monad m => Text -> m [PathSegment]
 toPathSegments path = do
@@ -263,7 +266,7 @@ runFrankieConfig (FrankieConfig act) = do
 data ServerConfig = ServerConfig {
   cfgPort        :: Maybe Port,
   cfgHostPref    :: Maybe HostPreference,
-  cfgDispatchMap :: Map (Method, [PathSegment]) DynController
+  cfgDispatchMap :: Map (Method, [PathSegment]) ([VarParser], DynController)
 }
 
 instance Show ServerConfig where

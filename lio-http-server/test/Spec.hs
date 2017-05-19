@@ -9,8 +9,8 @@ import Control.Monad
 import LIO.HTTP.Server.Frankie
 import qualified Data.Map as Map
 
--- XXX remove this after
-import Data.Typeable
+import Data.Text (Text)
+import Data.Dynamic
 
 main = defaultMain tests
 
@@ -33,6 +33,11 @@ tests = [
     testCase "number of controller args correct" test_fingerprintArgs,
     testCase "number of controller args too few" test_mismatchRouteAndController1,
     testCase "number of controller args too many" test_mismatchRouteAndController2
+  ],
+  testGroup "Frankie:var-parser" [
+    testCase "int parser ok" test_VarParser1,
+    testCase "int parser fail" test_VarParser2,
+    testCase "int and string parser ok" test_VarParser3
   ]
   ]
 
@@ -130,6 +135,47 @@ test_mismatchRouteAndController2 = do
     get "/x/:y" nullCtrl2
     )
    `catch` (\(e :: InvalidConfigException) -> return ())
+
+test_VarParser1 = do
+  let parsers = varParser nullCtrl1
+  length parsers @?= 1
+  let [(VarParser parser)] = parsers
+      mact = do
+        dynInt <- dynApply parser (toDyn ("33" :: Text))
+        mI <- fromDynamic dynInt
+        mI
+  case mact of
+    Nothing -> assertFailure "expected an int"
+    Just i -> i @?= (33 :: Int)
+
+test_VarParser2 = do
+  let parsers = varParser nullCtrl1
+  length parsers @?= 1
+  let [(VarParser parser)] = parsers
+      mact = do
+        dynInt <- dynApply parser (toDyn ("not3" :: Text))
+        mI <- fromDynamic dynInt
+        mI
+  mact @?= (Nothing :: Maybe Int)
+
+test_VarParser3 = do
+  let parsers = varParser nullCtrl2
+  length parsers @?= 2
+  let [(VarParser parserI), (VarParser parserS)] = parsers
+      mact = do
+        dynStr <- dynApply parserS (toDyn ("yoyo" :: Text))
+        mS <- fromDynamic dynStr
+        s <- mS
+
+        dynI <- dynApply parserI (toDyn ("-33" :: Text))
+        mI <- fromDynamic dynI
+        i <- mI
+        return (i, s)
+  case mact of
+    Nothing -> assertFailure "expected int and string"
+    Just (i, s) -> do
+      i @?= (-33 :: Int)
+      s @?= ("yoyo" :: String)
 
 nullCtrl0 :: DCController ()
 nullCtrl0 = return ()
