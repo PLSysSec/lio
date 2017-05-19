@@ -19,9 +19,9 @@ module LIO.HTTP.Server.Frankie (
   -- * Re-export LIO server
   module LIO.HTTP.Server,
   module LIO.HTTP.Server.Controller
-  , nullCtrl0
-  , nullCtrl1
-  , nullCtrl2
+  -- , nullCtrl0
+  -- , nullCtrl1
+  -- , nullCtrl2
 ) where
 import Prelude hiding (head)
 import LIO.HTTP.Server

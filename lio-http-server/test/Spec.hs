@@ -30,7 +30,7 @@ tests = [
     testCase "get on diff path ok" test_runFrankieConfig7
   ],
   testGroup "Frankie.typeOfController" [
-    testCase "number of controller args correct" test_typeOfControllerArgs
+    testCase "number of controller args correct" test_fingerprintArgs
   ]
   ]
 
@@ -106,11 +106,13 @@ test_runFrankieConfig7 = do
   segs2 <- toPathSegments "/y/:yo"
   Map.keys map @?= [(methodGet, segs1), (methodGet, segs2)]
 
-test_typeOfControllerArgs = do
-  putStrLn $ "0: " ++ (show $ typeOfControllerArgs nullCtrl0)
-  putStrLn $ "1: " ++ (show $ typeOfControllerArgs nullCtrl1)
-  putStrLn $ "2: " ++ (show $ typeOfControllerArgs nullCtrl2)
-  return ()
+test_fingerprintArgs = do
+  let iF = typeRepFingerprint $ typeOf (undefined :: Int)
+      sF = typeRepFingerprint $ typeOf (undefined :: String)
+
+  fingerprintArgs nullCtrl0 @?= []
+  fingerprintArgs nullCtrl1 @?= [ iF ]
+  fingerprintArgs nullCtrl2 @?= [ iF, sF ]
 
 nullCtrl0 :: DCController ()
 nullCtrl0 = return ()
