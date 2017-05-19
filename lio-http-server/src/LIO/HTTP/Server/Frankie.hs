@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module LIO.HTTP.Server.Frankie (
   -- * Top-level interface
   FrankieConfig(..), runFrankieConfig,
@@ -16,6 +17,7 @@ module LIO.HTTP.Server.Frankie (
   InvalidConfigException(..), 
   -- ** Path segment related
   PathSegment(..), toPathSegments,
+  isVar,
   -- * Re-export LIO server
   module LIO.HTTP.Server,
   module LIO.HTTP.Server.Controller
@@ -74,9 +76,24 @@ options path handler = regMethodHandler methodOptions path handler
 -- Underlying implementation of the methods
 --
 
+-- | Dynamic controller
+newtype DynController = DynController Dynamic
+newtype VarParser = VarParser Dynamic
+
 class Typeable h => RequestHandler h where
+  -- | The argument, variable parsers
+  varParser :: h -> [VarParser]
+  varParser _ = []
+
+  -- | Convert request handler to a 'Dynamic' controller
   toDynController :: h -> DynController
-  toDynController = undefined
+  toDynController = DynController . toDyn
+
+  -- | The number of arguments the request handler expects
+  reqHandlerNrArgs :: h -> Int
+  reqHandlerNrArgs f = length $ fingerprintArgs f
+
+  -- | The fingerprint of all the arguments
   fingerprintArgs :: h -> [Fingerprint]
   fingerprintArgs f = map typeRepFingerprint $ getArgs' $ typeRepArgs $ typeOf f
     where getArgs' :: [TypeRep] -> [TypeRep]
@@ -86,25 +103,78 @@ class Typeable h => RequestHandler h where
 instance (Typeable s, Typeable m, Typeable x)
   => RequestHandler (Controller s m x)
 instance (Parseable a, Typeable a, Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> Controller s m x)
+  => RequestHandler (a -> Controller s m x) where
+  varParser _ = let pTa :: Text -> Maybe a
+                    pTa = parseText
+                in map VarParser [toDyn pTa]
 instance (Parseable a, Typeable a, Parseable b, Typeable b,
           Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> Controller s m x)
-instance (Parseable a, Typeable a, Parseable b, Typeable b, Parseable c, Typeable c,
+  => RequestHandler (a -> b -> Controller s m x) where
+  varParser _ = let pTa :: Text -> Maybe a
+                    pTa = parseText
+                    pTb :: Text -> Maybe b
+                    pTb = parseText
+                in map VarParser [toDyn pTa, toDyn pTb]
+instance (Parseable a, Typeable a, Parseable b, Typeable b, 
+          Parseable c, Typeable c,
           Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> c -> Controller s m x)
-instance (Parseable a, Typeable a, Parseable b, Typeable b, Parseable c, Typeable c,
-          Parseable d, Typeable d,
+  => RequestHandler (a -> b -> c -> Controller s m x) where
+  varParser _ = let pTa :: Text -> Maybe a
+                    pTa = parseText
+                    pTb :: Text -> Maybe b
+                    pTb = parseText
+                    pTc :: Text -> Maybe c
+                    pTc = parseText
+                in map VarParser [toDyn pTa, toDyn pTb, toDyn pTc]
+instance (Parseable a, Typeable a, Parseable b, Typeable b, 
+          Parseable c, Typeable c, Parseable d, Typeable d,
           Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> c -> d -> Controller s m x)
-instance (Parseable a, Typeable a, Parseable b, Typeable b, Parseable c, Typeable c,
-          Parseable d, Typeable d, Parseable e, Typeable e,
+  => RequestHandler (a -> b -> c -> d -> Controller s m x) where
+  varParser _ = let pTa :: Text -> Maybe a
+                    pTa = parseText
+                    pTb :: Text -> Maybe b
+                    pTb = parseText
+                    pTc :: Text -> Maybe c
+                    pTc = parseText
+                    pTd :: Text -> Maybe d
+                    pTd = parseText
+                in map VarParser [toDyn pTa, toDyn pTb, toDyn pTc, toDyn pTd]
+instance (Parseable a, Typeable a, Parseable b, Typeable b, 
+          Parseable c, Typeable c, Parseable d, Typeable d, 
+          Parseable e, Typeable e,
           Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> c -> d -> e -> Controller s m x)
-instance (Parseable a, Typeable a, Parseable b, Typeable b, Parseable c, Typeable c,
-          Parseable d, Typeable d, Parseable e, Typeable e, Parseable f, Typeable f,
+  => RequestHandler (a -> b -> c -> d -> e -> Controller s m x) where
+  varParser _ = let pTa :: Text -> Maybe a
+                    pTa = parseText
+                    pTb :: Text -> Maybe b
+                    pTb = parseText
+                    pTc :: Text -> Maybe c
+                    pTc = parseText
+                    pTd :: Text -> Maybe d
+                    pTd = parseText
+                    pTe :: Text -> Maybe e
+                    pTe = parseText
+                in map VarParser [toDyn pTa, toDyn pTb, toDyn pTc
+                                 , toDyn pTd, toDyn pTe]
+instance (Parseable a, Typeable a, Parseable b, Typeable b, 
+          Parseable c, Typeable c, Parseable d, Typeable d, 
+          Parseable e, Typeable e, Parseable f, Typeable f,
           Typeable s, Typeable m, Typeable x)
-  => RequestHandler (a -> b -> c -> d -> e -> f -> Controller s m x)
+  => RequestHandler (a -> b -> c -> d -> e -> f -> Controller s m x) where
+  varParser _ = let pTa :: Text -> Maybe a
+                    pTa = parseText
+                    pTb :: Text -> Maybe b
+                    pTb = parseText
+                    pTc :: Text -> Maybe c
+                    pTc = parseText
+                    pTd :: Text -> Maybe d
+                    pTd = parseText
+                    pTe :: Text -> Maybe e
+                    pTe = parseText
+                    pTf :: Text -> Maybe f
+                    pTf = parseText
+                in map VarParser [toDyn pTa, toDyn pTb, toDyn pTc
+                                 , toDyn pTd, toDyn pTe, toDyn pTf]
 
 regMethodHandler :: RequestHandler h => Method -> Text -> h -> FrankieConfig ()
 regMethodHandler method path0 handler = do
@@ -113,8 +183,15 @@ regMethodHandler method path0 handler = do
   let map0 = cfgDispatchMap cfg
       key = (method, segments)
       dynHandler = toDynController handler
+  -- Make sure the controller is not already registered (liquid?)
   when (isJust $ Map.lookup key map0) $
     cfgFail $ "Already have handler for: " ++ show (method, segments)
+  -- Make sure that the controller and number of vars match (liquid?)
+  let nrVars = length $ filter isVar segments
+      nrArgs = reqHandlerNrArgs handler
+  when (nrVars /= nrArgs) $
+    cfgFail $ "Unexpected number of variables (" ++ show nrVars ++ 
+              ") for handler (expected " ++ show nrArgs ++ ")"
   State.put $ cfg { cfgDispatchMap = Map.insert key dynHandler map0 }
 
 toPathSegments :: Monad m => Text -> m [PathSegment]
@@ -129,6 +206,10 @@ toPathSegments path = do
 -- | A path segment is a simple directory or a variable. Variables are always
 -- prefixed by @:@ and considered the same (equal).
 data PathSegment = Dir Text | Var Text
+
+isVar :: PathSegment -> Bool
+isVar (Var _) = True
+isVar _       = False
 
 instance Show PathSegment where
   show (Dir s) = Text.unpack s
@@ -169,12 +250,16 @@ newtype FrankieConfig a = FrankieConfig {
   unFrankieConfig :: StateT ServerConfig IO a
 } deriving (Functor, Applicative, Monad, MonadState ServerConfig)
 
+-- | Run a config action to produce a server configuration
 runFrankieConfig :: FrankieConfig () -> IO ServerConfig
 runFrankieConfig (FrankieConfig act) = do
   (_, cfg) <- runStateT act nullServerCfg
   -- TODO: sanity check cfg
   return cfg
 
+-- | A server configuration containts the port and host to run the server on.
+-- It also contains the dispatch table.
+-- TODO: add support for error handlers, loggers, dev vs. prod, etc.
 data ServerConfig = ServerConfig {
   cfgPort        :: Maybe Port,
   cfgHostPref    :: Maybe HostPreference,
@@ -205,8 +290,6 @@ nullServerCfg = ServerConfig {
   cfgDispatchMap = Map.empty
 }
 
-
-type DynController = IO ()
 
 -- XXX remove:
 
