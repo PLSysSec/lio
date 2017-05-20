@@ -18,9 +18,10 @@ module LIO.HTTP.Server.Frankie (
   InvalidConfigException(..), 
   -- ** Path segment related
   PathSegment(..), toPathSegments,
-  isVar,
+  isVar, matchPath,
   -- * Re-export LIO server
   module LIO.HTTP.Server,
+  module LIO.HTTP.Server.Responses,
   module LIO.HTTP.Server.Controller
 ) where
 import Prelude hiding (head)
@@ -31,7 +32,6 @@ import LIO.HTTP.Server.Controller
 import Control.Exception
 import Control.Monad.State hiding (get, put)
 import qualified Control.Monad.State as State
-
 
 import Data.Dynamic
 import Data.Maybe
@@ -315,6 +315,9 @@ mainFrankieController cfg = do
                            _ -> respond notFound
   controller
 
+-- | Match a path segment with the path request info. We only need
+-- to make sure that the number of directories are the same and
+-- that non-variables match exactly.
 matchPath :: [PathSegment] -> [Text] -> Bool
 matchPath (Dir p:ps)   (t:ts) = p == t && matchPath ps ts
 matchPath (Var _ _:ps) (_:ts) = matchPath ps ts

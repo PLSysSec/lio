@@ -33,7 +33,16 @@ tests = [
   testGroup "Frankie:controller-related" [
     testCase "number of controller args too few" test_mismatchRouteAndController1,
     testCase "number of controller args too many" test_mismatchRouteAndController2
-  ]
+  ],
+  testGroup "Frankie:match-path" [
+    testCase "match path no vars" test_matchPath1,
+    testCase "match path with vars" test_matchPath2,
+    testCase "dont match path no vars" test_matchPath3,
+    testCase "dont match path vars" test_matchPath4,
+    testCase "match empty" test_matchPath5,
+    testCase "dont match nonempty route with empty req" test_matchPath6,
+    testCase "dont match empty route with nonempty req" test_matchPath7
+    ]
   ]
 
 
@@ -133,6 +142,28 @@ test_mismatchRouteAndController2 = do
     get "/x/:y" nullCtrl2
     )
    `catch` (\(e :: InvalidConfigException) -> return ())
+
+
+test_matchPath1 = do
+  matchPath [Dir "a", Dir "b", Dir "c"] ["a", "b", "c"] @?= True
+
+test_matchPath2 = do
+  matchPath [Dir "a", Var ":b" 1, Dir "c"] ["a", "x", "c"] @?= True
+
+test_matchPath3 = do
+  matchPath [Dir "a", Dir "b", Dir "c"] ["a", "x", "c"] @?= False
+
+test_matchPath4 = do
+  matchPath [Dir "a", Var ":b" 1, Dir "c"] ["a", ":b", "x"] @?= False
+
+test_matchPath5 = do
+  matchPath [] [] @?= True
+
+test_matchPath6 = do
+  matchPath [Var ":x" 0] [] @?= False
+
+test_matchPath7 = do
+  matchPath [] ["a"] @?= False
 
 nullCtrl0 :: DCController ()
 nullCtrl0 = return ()
