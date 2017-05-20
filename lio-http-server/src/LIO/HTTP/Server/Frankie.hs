@@ -7,15 +7,20 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module LIO.HTTP.Server.Frankie (
   -- * Top-level interface
-  FrankieConfig(..), runFrankieConfig, runFrankieServer,
+  FrankieConfig(..), FrankieConfigDispatch(..),
+  runFrankieServer,
   host, port, appState,
+  -- ** Dispatch-table
+  dispatch,
   get, post, put, patch, delete,
   head, trace, connect, options,
   -- * Internal
-  RequestHandler(..),
-  regMethodHandler,
+  -- ** Configuration related
+  runFrankieConfig,
   ServerConfig(..), nullServerCfg,
   InvalidConfigException(..), 
+  -- ** Request handler related
+  RequestHandler(..), regMethodHandler,
   -- ** Path segment related
   PathSegment(..), toPathSegments,
   isVar, matchPath,
@@ -42,32 +47,39 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Map as Map
 
-get :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
-get path handler = regMethodHandler methodGet path handler
+get :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+get path handler = FrankieConfigDispatch $ regMethodHandler methodGet path handler
 
-post :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
-post path handler = regMethodHandler methodPost path handler
+post :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+post path handler = FrankieConfigDispatch $ regMethodHandler methodPost path handler
 
-put :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
-put path handler = regMethodHandler methodPut path handler
+put :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+put path handler = FrankieConfigDispatch $ regMethodHandler methodPut path handler
 
-patch :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
-patch path handler = regMethodHandler methodPatch path handler
+patch :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+patch path handler = FrankieConfigDispatch $ regMethodHandler methodPatch path handler
 
-delete :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
-delete path handler = regMethodHandler methodDelete path handler
+delete :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+delete path handler = FrankieConfigDispatch $ regMethodHandler methodDelete path handler
 
-head :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
-head path handler = regMethodHandler methodHead path handler
+head :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+head path handler = FrankieConfigDispatch $ regMethodHandler methodHead path handler
 
-trace :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
-trace path handler = regMethodHandler methodTrace path handler
+trace :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+trace path handler = FrankieConfigDispatch $ regMethodHandler methodTrace path handler
 
-connect :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
-connect path handler = regMethodHandler methodConnect path handler
+connect :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+connect path handler = FrankieConfigDispatch $ regMethodHandler methodConnect path handler
 
-options :: RequestHandler h s m => Text -> h -> FrankieConfig s m ()
-options path handler = regMethodHandler methodOptions path handler
+options :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+options path handler = FrankieConfigDispatch $ regMethodHandler methodOptions path handler
+
+--
+-- Configure dispatch table
+--
+
+dispatch :: FrankieConfigDispatch s m () -> FrankieConfig s m ()
+dispatch (FrankieConfigDispatch act) = act
 
 
 --
@@ -279,6 +291,12 @@ appState s = do
 newtype FrankieConfig s m a = FrankieConfig {
   unFrankieConfig :: StateT (ServerConfig s m) IO a
 } deriving (Functor, Applicative, Monad, MonadState (ServerConfig s m))
+
+-- | Simple wrapper around 'FrankieConfig' to separate the dispatch-table
+-- portions of the configuration from the rest.
+newtype FrankieConfigDispatch s m a = FrankieConfigDispatch (FrankieConfig s m a)
+  deriving (Functor, Applicative, Monad)
+
 
 -- | Run a config action to produce a server configuration
 runFrankieConfig :: FrankieConfig s m () -> IO (ServerConfig s m)

@@ -9,10 +9,11 @@ main = runFrankieServer $ do
   port 3000
   appState ()
   --
-  get "/" top
-  get "/a/b" top
-  get "/users/:uid" showUser
-  get "/users/:uid/posts/:pid" showUserPost
+  dispatch $ do
+    get "/" top
+    get "/a/b" top
+    get "/users/:uid" showUser
+    get "/users/:uid/posts/:pid" showUserPost
 
   -- TODO:
   -- onError onErr

@@ -102,7 +102,8 @@ test_runFrankieConfig3 = do
 test_runFrankieConfig4 = do
   cfg <- runFrankieConfig $ do
     host "127.0.0.1" ; port 3030 ; appState ()
-    get "/x/:y" nullCtrl1
+    dispatch $ do
+      get "/x/:y" nullCtrl1
   let map = cfgDispatchMap cfg
   segs <- toPathSegments "/x/:yo"
   Map.keys map @?= [(methodGet, segs)]
@@ -110,16 +111,18 @@ test_runFrankieConfig4 = do
 test_runFrankieConfig5 = do
   (void . runFrankieConfig $ do
     host "127.0.0.1" ; port 3030 ; appState ()
-    get "/x/:y" nullCtrl1
-    get "/x/:yoyo" nullCtrl1
+    dispatch $ do
+      get "/x/:y" nullCtrl1
+      get "/x/:yoyo" nullCtrl1
     )
    `catch` (\(e :: InvalidConfigException) -> return ())
 
 test_runFrankieConfig6 = do
   cfg <- runFrankieConfig $ do
     host "127.0.0.1" ; port 3030 ; appState ()
-    get "/x/:y" nullCtrl1
-    put "/x/:y" nullCtrl1
+    dispatch $ do
+      get "/x/:y" nullCtrl1
+      put "/x/:y" nullCtrl1
   let map = cfgDispatchMap cfg
   segs <- toPathSegments "/x/:yo"
   Map.keys map @?= [(methodGet, segs), (methodPut, segs)]
@@ -127,8 +130,9 @@ test_runFrankieConfig6 = do
 test_runFrankieConfig7 = do
   cfg <- runFrankieConfig $ do
     host "127.0.0.1" ; port 3030 ; appState ()
-    get "/x/:y" nullCtrl1
-    get "/y/:x" nullCtrl1
+    dispatch $ do
+      get "/x/:y" nullCtrl1
+      get "/y/:x" nullCtrl1
   let map = cfgDispatchMap cfg
   segs1 <- toPathSegments "/x/:yo"
   segs2 <- toPathSegments "/y/:yo"
@@ -137,14 +141,16 @@ test_runFrankieConfig7 = do
 test_mismatchRouteAndController1 = do
   (void . runFrankieConfig $ do
     host "127.0.0.1" ; port 3030 ; appState ()
-    get "/x/:y" nullCtrl0
+    dispatch $ do
+      get "/x/:y" nullCtrl0
     )
    `catch` (\(e :: InvalidConfigException) -> return ())
 
 test_mismatchRouteAndController2 = do
   (void . runFrankieConfig $ do
     host "127.0.0.1" ; port 3030 ; appState ()
-    get "/x/:y" nullCtrl2
+    dispatch $ do
+      get "/x/:y" nullCtrl2
     )
    `catch` (\(e :: InvalidConfigException) -> return ())
 
