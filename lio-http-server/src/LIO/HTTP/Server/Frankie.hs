@@ -279,8 +279,22 @@ newtype FrankieConfig s m a = FrankieConfig {
 runFrankieConfig :: FrankieConfig s m () -> IO (ServerConfig s m)
 runFrankieConfig (FrankieConfig act) = do
   (_, cfg) <- runStateT act nullServerCfg
-  -- TODO: sanity check cfg
+  -- XXX can we use liquid types instead?
+  when (isNothing $ cfgPort cfg) $ throwIO $ InvalidConfig "missing port"
+  when (isNothing $ cfgHostPref cfg) $ throwIO $ InvalidConfig "missing host"
+  when (isNothing $ cfgAppState cfg) $ throwIO $ InvalidConfig "missing state"
   return cfg
+
+-- | Run the Frankie server
+runFrankieServer :: WebMonad m 
+                 => FrankieConfig s m ()
+                 -> IO ()
+runFrankieServer frankieAct = do
+  cfg <- frankieAct
+  let port  = fromJust . cfgPort $ cfg
+      host  = fromJust . cfgHostPref $ cfg
+      state = fromJust . cfgAppState $ cfg
+  server port host (toApp mainController state)
 
 -- | A server configuration containts the port and host to run the server on.
 -- It also contains the dispatch table.
@@ -288,6 +302,7 @@ runFrankieConfig (FrankieConfig act) = do
 data ServerConfig s m = ServerConfig {
   cfgPort        :: Maybe Port,
   cfgHostPref    :: Maybe HostPreference,
+  cfgAppState    :: Maybe s,
   cfgDispatchMap :: Map (Method, [PathSegment]) (Controller s m ())
 }
 
@@ -304,7 +319,7 @@ data InvalidConfigException = InvalidConfig String
   deriving (Show, Typeable)
 instance Exception InvalidConfigException
 
--- | Throw 'InvalidConfigException' error
+-- | Throw 'InvalidConfigException' error to indicate bad configuration.
 cfgFail :: String -> FrankieConfig s m a
 cfgFail msg = FrankieConfig $ lift . throwIO $ InvalidConfig msg
 
