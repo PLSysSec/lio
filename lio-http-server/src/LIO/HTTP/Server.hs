@@ -41,6 +41,7 @@ module LIO.HTTP.Server (
   ) where
 import Network.HTTP.Types
 import Data.Text (Text)
+import qualified Data.Text as Text
 import LIO.DCLabel
 import LIO.TCB (ioTCB)
 import Network.Wai.Handler.Warp (Port, HostPreference)
@@ -58,7 +59,8 @@ class Monad m => WebMonad m where
   reqMethod      :: Request m -> Method            
   -- | HTTP version.
   reqHttpVersion :: Request m -> HttpVersion
-  -- | Path info, i.e., the URL pieces after the scheme, host, port, not including the query string.
+  -- | Path info, i.e., the URL pieces after the scheme, host, port, not
+  -- including the query string. Trailing slashes are ignored.
   reqPathInfo    :: Request m -> [Text]
   -- | Parsed query string.
   reqQueryString :: Request m -> Query
@@ -132,9 +134,13 @@ type DCMiddleware = Middleware DC
 -- | Internal function for converting a DCApplication to a Wai Application
 toWaiApplication :: DCApplication -> Wai.Application
 toWaiApplication dcApp wReq wRespond = do
-  resp <- evalDC $ dcApp $ fromWaiRequest wReq
+  resp <- evalDC $ dcApp $ req
   wRespond $ toWaiResponse resp
-    where fromWaiRequest :: Wai.Request -> Request DC
-          fromWaiRequest = RequestTCB
+    where req :: Request DC
+          req = let pI0 = Wai.pathInfo wReq
+                    pI1 = if (not . null $ pI0) && (last pI0 == Text.empty)
+                            then init pI0
+                            else pI0
+                in RequestTCB $ wReq { Wai.pathInfo = pI1 }
           toWaiResponse :: Response -> Wai.Response
           toWaiResponse (Response status headers body) = Wai.responseLBS status headers body
