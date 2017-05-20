@@ -7,8 +7,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 module LIO.HTTP.Server.Frankie (
   -- * Top-level interface
-  FrankieConfig(..), runFrankieConfig,
-  host, port,
+  FrankieConfig(..), runFrankieConfig, runFrankieServer,
+  host, port, appState,
   get, post, put, patch, delete,
   head, trace, connect, options,
   -- * Internal
@@ -22,9 +22,6 @@ module LIO.HTTP.Server.Frankie (
   -- * Re-export LIO server
   module LIO.HTTP.Server,
   module LIO.HTTP.Server.Controller
-  -- , nullCtrl0
-  -- , nullCtrl1
-  -- , nullCtrl2
 ) where
 import Prelude hiding (head)
 import LIO.HTTP.Server
@@ -270,6 +267,14 @@ host pref = do
   when (isJust $ cfgHostPref cfg) $ cfgFail "host already set"
   State.put $ cfg { cfgHostPref = Just pref }
 
+-- | Set the app host preference.
+appState :: s -> FrankieConfig s m ()
+appState s = do
+  cfg <- State.get
+  -- XXX can we use liquid types instead?
+  when (isJust $ cfgAppState cfg) $ cfgFail "state already set"
+  State.put $ cfg { cfgAppState = Just s }
+
 -- | Type used to encode a Frankie server configuration
 newtype FrankieConfig s m a = FrankieConfig {
   unFrankieConfig :: StateT (ServerConfig s m) IO a
@@ -290,11 +295,32 @@ runFrankieServer :: WebMonad m
                  => FrankieConfig s m ()
                  -> IO ()
 runFrankieServer frankieAct = do
-  cfg <- frankieAct
-  let port  = fromJust . cfgPort $ cfg
-      host  = fromJust . cfgHostPref $ cfg
-      state = fromJust . cfgAppState $ cfg
-  server port host (toApp mainController state)
+  cfg <- runFrankieConfig frankieAct
+  let cPort  = fromJust . cfgPort $ cfg
+      cHost  = fromJust . cfgHostPref $ cfg
+      cState = fromJust . cfgAppState $ cfg
+  server cPort cHost (toApp (mainFrankieController cfg) cState)
+
+-- | The main controller that dispatches requests to corresponding controllers.
+mainFrankieController :: WebMonad m => ServerConfig s m -> Controller s m ()
+mainFrankieController cfg = do
+  req <- request
+  let method   = reqMethod req
+      pathInfo = reqPathInfo req
+  let cs = Map.toList $ 
+            Map.filterWithKey (\(m, ps) _ -> m == method && matchPath ps pathInfo) $
+            cfgDispatchMap cfg
+  controller <- return $ case cs of
+                           [(_, controller)] -> controller
+                           _ -> respond notFound
+  controller
+
+matchPath :: [PathSegment] -> [Text] -> Bool
+matchPath (Dir p:ps)   (t:ts) = p == t && matchPath ps ts
+matchPath (Var _ _:ps) (_:ts) = matchPath ps ts
+matchPath []           []     = True
+matchPath _            _      = False
+
 
 -- | A server configuration containts the port and host to run the server on.
 -- It also contains the dispatch table.
@@ -306,11 +332,12 @@ data ServerConfig s m = ServerConfig {
   cfgDispatchMap :: Map (Method, [PathSegment]) (Controller s m ())
 }
 
-instance Show (ServerConfig s m) where
+instance Show s  => Show (ServerConfig s m) where
   show cfg =
     "ServerConfig {"
     ++ "cfgPort = " ++ (show . cfgPort $ cfg)
     ++ ",cfgHostPref = " ++ (show . cfgHostPref $ cfg)
+    ++ ",cfgAppState = " ++ (show . cfgAppState $ cfg)
     ++ ",cfgDispatchMap = " ++ (show . Map.keys . cfgDispatchMap $ cfg)
     ++ "}"
 
@@ -327,16 +354,6 @@ nullServerCfg :: ServerConfig s m
 nullServerCfg = ServerConfig {
   cfgPort = Nothing,
   cfgHostPref = Nothing,
+  cfgAppState =  Nothing,
   cfgDispatchMap = Map.empty
 }
-
-
--- XXX remove:
--- nullCtrl0 :: DCController ()
--- nullCtrl0 = return ()
---
--- nullCtrl1 :: Int -> DCController ()
--- nullCtrl1 _ = return ()
---
--- nullCtrl2 :: Int -> String -> DCController ()
--- nullCtrl2 _ _ = return ()

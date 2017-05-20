@@ -24,6 +24,7 @@ tests = [
     testCase "port and host set" test_runFrankieConfig1,
     testCase "cannot set port 2x" test_runFrankieConfig2,
     testCase "cannot set host 2x" test_runFrankieConfig3,
+    testCase "cannot set state 2x" test_runFrankieConfig2a,
     testCase "get adds route" test_runFrankieConfig4,
     testCase "cannot get add same route" test_runFrankieConfig5,
     testCase "get and put on same path" test_runFrankieConfig6,
@@ -54,26 +55,39 @@ test_runFrankieConfig1 = do
   cfg <- runFrankieConfig $ do
           port 3030
           host "*"
+          appState ()
   cfgPort cfg @?= Just 3030
   cfgHostPref cfg @?= Just "*"
+  cfgAppState cfg @?= Just ()
 
 test_runFrankieConfig2 = do
   (void . runFrankieConfig $ do
     port 3030
     host "*"
+    appState ()
     port 3030)
+   `catch` (\(e :: InvalidConfigException) -> return ())
+
+test_runFrankieConfig2a = do
+  (void . runFrankieConfig $ do
+    port 3030
+    host "*"
+    appState ()
+    appState ()
+    )
    `catch` (\(e :: InvalidConfigException) -> return ())
 
 test_runFrankieConfig3 = do
   (void . runFrankieConfig $ do
     port 3030
     host "*"
+    appState ()
     host "*")
    `catch` (\(e :: InvalidConfigException) -> return ())
 
 test_runFrankieConfig4 = do
   cfg <- runFrankieConfig $ do
-    host "127.0.0.1" ; port 3030
+    host "127.0.0.1" ; port 3030 ; appState ()
     get "/x/:y" nullCtrl1
   let map = cfgDispatchMap cfg
   segs <- toPathSegments "/x/:yo"
@@ -81,8 +95,7 @@ test_runFrankieConfig4 = do
 
 test_runFrankieConfig5 = do
   (void . runFrankieConfig $ do
-    port 3030
-    host "*"
+    host "127.0.0.1" ; port 3030 ; appState ()
     get "/x/:y" nullCtrl1
     get "/x/:yoyo" nullCtrl1
     )
@@ -90,7 +103,7 @@ test_runFrankieConfig5 = do
 
 test_runFrankieConfig6 = do
   cfg <- runFrankieConfig $ do
-    host "127.0.0.1" ; port 3030
+    host "127.0.0.1" ; port 3030 ; appState ()
     get "/x/:y" nullCtrl1
     put "/x/:y" nullCtrl1
   let map = cfgDispatchMap cfg
@@ -99,7 +112,7 @@ test_runFrankieConfig6 = do
 
 test_runFrankieConfig7 = do
   cfg <- runFrankieConfig $ do
-    host "127.0.0.1" ; port 3030
+    host "127.0.0.1" ; port 3030 ; appState ()
     get "/x/:y" nullCtrl1
     get "/y/:x" nullCtrl1
   let map = cfgDispatchMap cfg
@@ -109,16 +122,14 @@ test_runFrankieConfig7 = do
 
 test_mismatchRouteAndController1 = do
   (void . runFrankieConfig $ do
-    port 3030
-    host "*"
+    host "127.0.0.1" ; port 3030 ; appState ()
     get "/x/:y" nullCtrl0
     )
    `catch` (\(e :: InvalidConfigException) -> return ())
 
 test_mismatchRouteAndController2 = do
   (void . runFrankieConfig $ do
-    port 3030
-    host "*"
+    host "127.0.0.1" ; port 3030 ; appState ()
     get "/x/:y" nullCtrl2
     )
    `catch` (\(e :: InvalidConfigException) -> return ())
