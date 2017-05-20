@@ -173,5 +173,3 @@ serverError message = mkHtmlResponse status500 [] html
               \<H1>Internal Server Error</H1>\n\
               \<P>", message,
               "</P></BODY></HTML>\n"]
-
-
