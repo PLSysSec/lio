@@ -14,7 +14,7 @@ import Data.Dynamic
 
 main = defaultMain tests
 
-tests = [ 
+tests = [
   testGroup "Frankie:toPathSegment " [
     testCase "produces expected list" test_toPathSegments1,
     testCase "paths equal up to alpha" test_toPathSegments2,
@@ -38,7 +38,7 @@ tests = [
     testCase "match path no vars" test_matchPath1,
     testCase "match path with vars" test_matchPath2,
     testCase "dont match path no vars" test_matchPath3,
-    testCase "dont match path vars" test_matchPath4,
+    testCase "trailing / should not matter" test_matchPath4,
     testCase "match empty" test_matchPath5,
     testCase "dont match nonempty route with empty req" test_matchPath6,
     testCase "dont match empty route with nonempty req" test_matchPath7
@@ -51,14 +51,19 @@ test_toPathSegments1 = do
   segs @?= [Dir "a", Var ":b" 1, Dir "c", Var ":d" 3]
 
 test_toPathSegments2 = do
-  seg1 <- toPathSegments "/a/:b/c/:d" 
+  seg1 <- toPathSegments "/a/:b/c/:d"
   seg2 <- toPathSegments "/a/:boo/c/:dood"
   seg1 @?= seg2
 
 test_toPathSegments3 = do
-  seg1 <- toPathSegments "/a/:b/c/:d" 
+  seg1 <- toPathSegments "/a/:b/c/:d"
   seg2 <- toPathSegments "/a/:b/x/:d"
   seg1 == seg2 @?= False
+
+test_toPathSegments4 = do
+  seg1 <- toPathSegments "/a/:b/c/:d"
+  seg2 <- toPathSegments "/a/:b/c/:d/"
+  seg1 == seg2 @?= True
 
 test_runFrankieConfig1 = do
   cfg <- runFrankieConfig $ do

@@ -1,7 +1,37 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE OverloadedStrings #-}
 
--- Taken from Simple 
+{-
+
+This file is copied from the simple framework, which borrows large portions
+from the hails framework. The two files are here:
+- http://hackage.haskell.org/package/simple-0.11.2/docs/Web-Simple-Responses.html
+- http://hackage.haskell.org/package/hails-0.11.2.1/docs/Hails-Web-Responses.html
+
+Below is the MIT copyright notice. Received explicit permission from Amit Levy
+to use this file in this framework.
+
+Copyright 2017 Amit Levy, Daniel B. Giffin
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies
+of the Software, and to permit persons to whom the Software is furnished to do
+so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-}
+
 -- | This module defines some convenience functions for creating responses.
 module LIO.HTTP.Server.Responses
   ( ok, okHtml, okJson, okXml
