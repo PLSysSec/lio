@@ -47,33 +47,6 @@ import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text
 import qualified Data.Map as Map
 
-get :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
-get path handler = FrankieConfigDispatch $ regMethodHandler methodGet path handler
-
-post :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
-post path handler = FrankieConfigDispatch $ regMethodHandler methodPost path handler
-
-put :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
-put path handler = FrankieConfigDispatch $ regMethodHandler methodPut path handler
-
-patch :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
-patch path handler = FrankieConfigDispatch $ regMethodHandler methodPatch path handler
-
-delete :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
-delete path handler = FrankieConfigDispatch $ regMethodHandler methodDelete path handler
-
-head :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
-head path handler = FrankieConfigDispatch $ regMethodHandler methodHead path handler
-
-trace :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
-trace path handler = FrankieConfigDispatch $ regMethodHandler methodTrace path handler
-
-connect :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
-connect path handler = FrankieConfigDispatch $ regMethodHandler methodConnect path handler
-
-options :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
-options path handler = FrankieConfigDispatch $ regMethodHandler methodOptions path handler
-
 --
 -- Configure dispatch table
 --
@@ -82,13 +55,53 @@ dispatch :: FrankieConfigDispatch s m () -> FrankieConfig s m ()
 dispatch (FrankieConfigDispatch act) = act
 
 
+-- | Matches the GET method on the given URL pattern
+get :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+get path handler = FrankieConfigDispatch $ regMethodHandler methodGet path handler
+
+-- | Matches the POST method on the given URL pattern
+post :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+post path handler = FrankieConfigDispatch $ regMethodHandler methodPost path handler
+
+-- | Matches the PUT method on the given URL pattern
+put :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+put path handler = FrankieConfigDispatch $ regMethodHandler methodPut path handler
+
+-- | Matches the PATCH method on the given URL pattern
+patch :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+patch path handler = FrankieConfigDispatch $ regMethodHandler methodPatch path handler
+
+-- | Matches the PATCH method on the given URL pattern
+delete :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+delete path handler = FrankieConfigDispatch $ regMethodHandler methodDelete path handler
+
+-- | Matches the HEAD method on the given URL pattern
+head :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+head path handler = FrankieConfigDispatch $ regMethodHandler methodHead path handler
+
+-- | Matches the TRACE method on the given URL pattern
+trace :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+trace path handler = FrankieConfigDispatch $ regMethodHandler methodTrace path handler
+
+-- | Matches the CONNECT method on the given URL pattern
+connect :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+connect path handler = FrankieConfigDispatch $ regMethodHandler methodConnect path handler
+
+-- | Matches the OPTIONS method on the given URL pattern
+options :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
+options path handler = FrankieConfigDispatch $ regMethodHandler methodOptions path handler
+
+
 --
 -- Underlying implementation of the methods
 --
 
+-- | On parse failure, respond with 400, bad request.
 parseFailed :: Monad m => Controller s m a
 parseFailed = respond badRequest
 
+-- | This action produces a server error response. This response indicates a
+-- bug in this server implementation.
 invalidArgs :: Monad m => Controller s m ()
 invalidArgs = respond $ serverError "BUG: controller called with invalid args"
 
@@ -263,6 +276,10 @@ instance Ord PathSegment where
   compare (Var _ _) (Dir _) = GT
   compare (Var _ _) (Var _ _) = EQ
 
+--
+-- Top-level configuration options
+--
+
 -- | Set the app port.
 port :: Port -> FrankieConfig s m ()
 port p = do
@@ -287,6 +304,10 @@ appState s = do
   when (isJust $ cfgAppState cfg) $ cfgFail "state already set"
   State.put $ cfg { cfgAppState = Just s }
 
+--
+--
+--
+
 -- | Type used to encode a Frankie server configuration
 newtype FrankieConfig s m a = FrankieConfig {
   unFrankieConfig :: StateT (ServerConfig s m) IO a
@@ -296,7 +317,6 @@ newtype FrankieConfig s m a = FrankieConfig {
 -- portions of the configuration from the rest.
 newtype FrankieConfigDispatch s m a = FrankieConfigDispatch (FrankieConfig s m a)
   deriving (Functor, Applicative, Monad)
-
 
 -- | Run a config action to produce a server configuration
 runFrankieConfig :: FrankieConfig s m () -> IO (ServerConfig s m)
@@ -371,6 +391,7 @@ instance Exception InvalidConfigException
 cfgFail :: String -> FrankieConfig s m a
 cfgFail msg = FrankieConfig $ lift . throwIO $ InvalidConfig msg
 
+-- | Initial emtpy configuration
 nullServerCfg :: ServerConfig s m
 nullServerCfg = ServerConfig {
   cfgPort = Nothing,
