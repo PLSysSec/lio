@@ -38,7 +38,7 @@ library
   build-depends:
       base < 6
     , bytestring
-    , conduit
+    , conduit            < 1.1.*
     , filepath
     , lio                >= 0.11.4
     , simple             == 0.9.*
