@@ -4,10 +4,15 @@ import LIO.TCB (ioTCB)
 import Control.Monad.Trans.Class (lift)
 
 main :: IO ()
-main = runFrankieServer $ do
-  host "127.0.0.1"
-  port 3000
-  appState ()
+main = runFrankieServer "prod" $ do
+  mode "production" $ do
+    host "*"
+    port 3030
+    appState ()
+  mode "dev" $ do
+    host "127.0.0.1"
+    port 3000
+    appState ()
   --
   dispatch $ do
     get "/" top

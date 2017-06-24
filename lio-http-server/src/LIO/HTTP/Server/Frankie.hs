@@ -5,11 +5,13 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
 module LIO.HTTP.Server.Frankie (
   -- * Top-level interface
   FrankieConfig(..), FrankieConfigDispatch(..),
   runFrankieServer,
-  host, port, appState,
+  -- ** Configuration modes
+  mode, port, host, appState,
   -- ** Dispatch-table
   dispatch,
   get, post, put, patch, delete,
@@ -19,6 +21,8 @@ module LIO.HTTP.Server.Frankie (
   runFrankieConfig,
   ServerConfig(..), nullServerCfg,
   InvalidConfigException(..), 
+  -- ** Configuration mode related
+  ModeConfig(..), Mode, nullModeCfg,
   -- ** Request handler related
   RequestHandler(..), regMethodHandler,
   -- ** Path segment related
@@ -36,6 +40,7 @@ import LIO.HTTP.Server.Controller
 
 import Control.Exception
 import Control.Monad.State hiding (get, put)
+import Control.Monad.Reader
 import qualified Control.Monad.State as State
 
 import Data.Dynamic
@@ -281,28 +286,61 @@ instance Ord PathSegment where
 --
 
 -- | Set the app port.
-port :: Port -> FrankieConfig s m ()
+port :: Port -> FrankieConfigMode s m ()
 port p = do
-  cfg <- State.get
-  -- XXX can we use liquid types instead?
+  cfg <- getModeConfig
   when (isJust $ cfgPort cfg) $ cfgFail "port already set"
-  State.put $ cfg { cfgPort = Just p }
+  setModeConfig $ cfg {cfgPort = Just p }
 
 -- | Set the app host preference.
-host :: HostPreference -> FrankieConfig s m ()
+host :: HostPreference -> FrankieConfigMode s m ()
 host pref = do
-  cfg <- State.get
+  cfg <- getModeConfig
   -- XXX can we use liquid types instead?
   when (isJust $ cfgHostPref cfg) $ cfgFail "host already set"
-  State.put $ cfg { cfgHostPref = Just pref }
+  setModeConfig $ cfg { cfgHostPref = Just pref }
 
 -- | Set the app host preference.
-appState :: s -> FrankieConfig s m ()
+appState :: s -> FrankieConfigMode s m ()
 appState s = do
-  cfg <- State.get
+  cfg <- getModeConfig
   -- XXX can we use liquid types instead?
   when (isJust $ cfgAppState cfg) $ cfgFail "state already set"
-  State.put $ cfg { cfgAppState = Just s }
+  setModeConfig $ cfg { cfgAppState = Just s }
+
+
+-- | Helper function for getting the mode configuration corresponding to the
+-- current mode
+getModeConfig :: FrankieConfigMode s m (ModeConfig s)
+getModeConfig = do
+  mode0 <- ask
+  cfg <- State.get
+  let modeMap = cfgModes cfg
+  -- XXX liquid types instead of these checks?
+  case Map.lookup mode0 modeMap of
+    Nothing      -> cfgFail "BUG: should have mode"
+    Just modeCfg -> return modeCfg
+
+-- | Helper function for updating the mode configuration corresponding to the
+-- current mode
+setModeConfig :: ModeConfig s -> FrankieConfigMode s m ()
+setModeConfig modeCfg = do
+  mode0 <- ask
+  cfg <- State.get
+  let modeMap = cfgModes cfg
+  State.put $ cfg { cfgModes = Map.insert mode0 modeCfg modeMap }
+
+-- | Helper function for creating a new config mode.
+newModeConfig :: FrankieConfigMode s m ()
+newModeConfig = do
+  mode0 <- ask
+  cfg <- State.get
+  let modeMap = cfgModes cfg
+  -- XXX liquid types instead of these checks?
+  case Map.lookup mode0 modeMap of
+    Just _       -> cfgFail "mode already defined"
+    _            -> State.put $ cfg { cfgModes = Map.insert mode0 nullModeCfg modeMap }
+
 
 --
 --
@@ -313,31 +351,58 @@ newtype FrankieConfig s m a = FrankieConfig {
   unFrankieConfig :: StateT (ServerConfig s m) IO a
 } deriving (Functor, Applicative, Monad, MonadState (ServerConfig s m))
 
+class FrankieConfigMonad k where
+  liftFrankie :: forall s m a. FrankieConfig s m a -> k s m a
+
+instance FrankieConfigMonad FrankieConfig where
+  liftFrankie = id
+
 -- | Simple wrapper around 'FrankieConfig' to separate the dispatch-table
 -- portions of the configuration from the rest.
 newtype FrankieConfigDispatch s m a = FrankieConfigDispatch (FrankieConfig s m a)
-  deriving (Functor, Applicative, Monad)
+  deriving (Functor, Applicative, Monad )
+
+instance FrankieConfigMonad FrankieConfigDispatch where
+  liftFrankie = FrankieConfigDispatch 
+
+-- | Simple wrapper around 'FrankieConfig' to separate the different mode
+-- portions of the configuration from the rest of the configurations.
+newtype FrankieConfigMode s m a = FrankieConfigMode (ReaderT Mode (FrankieConfig s m) a)
+  deriving (Functor, Applicative, Monad, MonadReader Mode, MonadState (ServerConfig s m))
+
+instance FrankieConfigMonad FrankieConfigMode where
+  liftFrankie act = FrankieConfigMode $ lift act
+
+-- | Configure a particular mode.
+mode :: Mode -> FrankieConfigMode s m a -> FrankieConfig s m a
+mode modeName act =
+  let (FrankieConfigMode rModeCfg) = newModeConfig >> act
+  in runReaderT rModeCfg modeName
 
 -- | Run a config action to produce a server configuration
 runFrankieConfig :: FrankieConfig s m () -> IO (ServerConfig s m)
 runFrankieConfig (FrankieConfig act) = do
   (_, cfg) <- runStateT act nullServerCfg
   -- XXX can we use liquid types instead?
-  when (isNothing $ cfgPort cfg) $ throwIO $ InvalidConfig "missing port"
-  when (isNothing $ cfgHostPref cfg) $ throwIO $ InvalidConfig "missing host"
-  when (isNothing $ cfgAppState cfg) $ throwIO $ InvalidConfig "missing state"
   return cfg
 
 -- | Run the Frankie server
 runFrankieServer :: WebMonad m 
-                 => FrankieConfig s m ()
+                 => Mode
+                 -> FrankieConfig s m ()
                  -> IO ()
-runFrankieServer frankieAct = do
+runFrankieServer mode0 frankieAct = do
   cfg <- runFrankieConfig frankieAct
-  let cPort  = fromJust . cfgPort $ cfg
-      cHost  = fromJust . cfgHostPref $ cfg
-      cState = fromJust . cfgAppState $ cfg
-  server cPort cHost (toApp (mainFrankieController cfg) cState)
+  case (Map.lookup mode0 $ cfgModes cfg) of
+    Nothing -> throwIO $ InvalidConfig "invalid mode "
+    Just modeCfg -> do
+      when (isNothing $ cfgPort modeCfg) $ throwIO $ InvalidConfig "missing port"
+      when (isNothing $ cfgHostPref modeCfg) $ throwIO $ InvalidConfig "missing host"
+      when (isNothing $ cfgAppState modeCfg) $ throwIO $ InvalidConfig "missing state"
+      let cPort  = fromJust . cfgPort $ modeCfg
+          cHost  = fromJust . cfgHostPref $ modeCfg
+          cState = fromJust . cfgAppState $ modeCfg
+      server cPort cHost (toApp (mainFrankieController cfg) cState)
 
 -- | The main controller that dispatches requests to corresponding controllers.
 mainFrankieController :: WebMonad m => ServerConfig s m -> Controller s m ()
@@ -367,18 +432,14 @@ matchPath _            _      = False
 -- It also contains the dispatch table.
 -- TODO: add support for error handlers, loggers, dev vs. prod, etc.
 data ServerConfig s m = ServerConfig {
-  cfgPort        :: Maybe Port,
-  cfgHostPref    :: Maybe HostPreference,
-  cfgAppState    :: Maybe s,
+  cfgModes       :: Map Mode (ModeConfig s),
   cfgDispatchMap :: Map (Method, [PathSegment]) (Controller s m ())
 }
 
 instance Show s  => Show (ServerConfig s m) where
   show cfg =
     "ServerConfig {"
-    ++ "cfgPort = " ++ (show . cfgPort $ cfg)
-    ++ ",cfgHostPref = " ++ (show . cfgHostPref $ cfg)
-    ++ ",cfgAppState = " ++ (show . cfgAppState $ cfg)
+    ++ "cfgModes = " ++ (show . cfgModes $ cfg)
     ++ ",cfgDispatchMap = " ++ (show . Map.keys . cfgDispatchMap $ cfg)
     ++ "}"
 
@@ -388,14 +449,31 @@ data InvalidConfigException = InvalidConfig String
 instance Exception InvalidConfigException
 
 -- | Throw 'InvalidConfigException' error to indicate bad configuration.
-cfgFail :: String -> FrankieConfig s m a
-cfgFail msg = FrankieConfig $ lift . throwIO $ InvalidConfig msg
+cfgFail :: FrankieConfigMonad k => String -> k s m a
+cfgFail msg = liftFrankie . FrankieConfig $ lift . throwIO $ InvalidConfig msg
 
--- | Initial emtpy configuration
+-- | Initial emtpy server configuration
 nullServerCfg :: ServerConfig s m
 nullServerCfg = ServerConfig {
-  cfgPort = Nothing,
-  cfgHostPref = Nothing,
-  cfgAppState =  Nothing,
+  cfgModes       = Map.empty,
   cfgDispatchMap = Map.empty
 }
+
+-- | Modes are described by strings.
+type Mode = String
+
+-- | Mode configuration. For example, production or development.
+data ModeConfig s = ModeConfig {
+  cfgPort        :: Maybe Port,
+  cfgHostPref    :: Maybe HostPreference,
+  cfgAppState    :: Maybe s
+  } deriving (Show)
+
+-- | Empty mode configuration.
+nullModeCfg :: ModeConfig s
+nullModeCfg =  ModeConfig {
+  cfgPort        = Nothing,
+  cfgHostPref    = Nothing,
+  cfgAppState    = Nothing
+}
+  
