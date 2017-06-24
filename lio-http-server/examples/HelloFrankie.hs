@@ -5,7 +5,7 @@ import Control.Monad.Trans.Class (lift)
 
 main :: IO ()
 main = runFrankieServer "prod" $ do
-  mode "production" $ do
+  mode "prod" $ do
     host "*"
     port 3030
     appState ()
