@@ -35,14 +35,18 @@ showUser uid = do
   dcPutStrLn $ "uid = " ++ show uid
   respond $ okHtml "showUser done!"
 
--- newtype PostId = PostId Int
---   deriving (Eq)
--- instance Show PostId where
---   show (PostId i) = show i
--- instance Read PostId where
---  read s = PostId $ read s
+newtype PostId = PostId Int
+   deriving Eq
 
-showUserPost :: Int -> String -> DCController ()
+instance Show PostId where
+   show (PostId i) = show i
+
+instance Parseable PostId where
+  parseText t = case parseText t of
+                  Just i | i > 0 -> Just (PostId i)
+                  _ -> Nothing
+
+showUserPost :: Int -> PostId -> DCController ()
 showUserPost uid pid = do
   dcPutStrLn $ "uid = " ++ show uid
   dcPutStrLn $ "pid = " ++ show pid
