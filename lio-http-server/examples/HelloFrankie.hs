@@ -19,10 +19,13 @@ main = runFrankieServer "prod" $ do
     get "/a/b" top
     get "/users/:uid" showUser
     get "/users/:uid/posts/:pid" showUserPost
+    fallback $ do
+      -- log, not found!
+      respond $ notFound
+
 
   -- TODO:
   -- onError onErr
-  -- onDispatchError onDispatchErr
 
 top :: DCController s
 top = respond $ okHtml "Woot"

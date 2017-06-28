@@ -16,11 +16,12 @@ module LIO.HTTP.Server.Frankie (
   dispatch,
   get, post, put, patch, delete,
   head, trace, connect, options,
+  fallback,
   -- * Internal
   -- ** Configuration related
   runFrankieConfig,
   ServerConfig(..), nullServerCfg,
-  InvalidConfigException(..), 
+  InvalidConfigException(..),
   -- ** Configuration mode related
   ModeConfig(..), Mode, nullModeCfg,
   -- ** Request handler related
@@ -96,6 +97,15 @@ connect path handler = FrankieConfigDispatch $ regMethodHandler methodConnect pa
 options :: RequestHandler h s m => Text -> h -> FrankieConfigDispatch s m ()
 options path handler = FrankieConfigDispatch $ regMethodHandler methodOptions path handler
 
+-- | Fallback controller called if nothing else matched
+fallback :: Monad m => Controller s m () -> FrankieConfigDispatch s m ()
+fallback controller = FrankieConfigDispatch $ do
+  cfg <- State.get
+  -- XXX liquid types
+  when (isJust $ cfgDispatchFallback cfg) $
+    cfgFail "fallback handler already set"
+  State.put $ cfg { cfgDispatchFallback = Just controller }
+
 
 --
 -- Underlying implementation of the methods
@@ -117,7 +127,7 @@ pathVarOrFail :: (WebMonad m, Parseable a)
 pathVarOrFail ps = do
   pathInfo <- liftM reqPathInfo request
   case ps of
-    (Var _ idx) | idx < length pathInfo -> 
+    (Var _ idx) | idx < length pathInfo ->
       case parseText (pathInfo!!idx) of
         Just x -> return x
         _ -> parseFailed
@@ -158,7 +168,7 @@ instance (Parseable a, Typeable a, Parseable b, Typeable b,
     ctrl a b
   handlerToController _ _ = invalidArgs
 
-instance (Parseable a, Typeable a, Parseable b, Typeable b, 
+instance (Parseable a, Typeable a, Parseable b, Typeable b,
           Parseable c, Typeable c,
           Typeable s, WebMonad m, Typeable m)
   => RequestHandler (a -> b -> c -> Controller s m ()) s m where
@@ -168,7 +178,7 @@ instance (Parseable a, Typeable a, Parseable b, Typeable b,
     c <- pathVarOrFail tc
     ctrl a b c
   handlerToController _ _ = invalidArgs
-instance (Parseable a, Typeable a, Parseable b, Typeable b, 
+instance (Parseable a, Typeable a, Parseable b, Typeable b,
           Parseable c, Typeable c, Parseable d, Typeable d,
           Typeable s, WebMonad m, Typeable m)
   => RequestHandler (a -> b -> c -> d -> Controller s m ()) s m where
@@ -179,8 +189,8 @@ instance (Parseable a, Typeable a, Parseable b, Typeable b,
     d <- pathVarOrFail td
     ctrl a b c d
   handlerToController _ _ = invalidArgs
-instance (Parseable a, Typeable a, Parseable b, Typeable b, 
-          Parseable c, Typeable c, Parseable d, Typeable d, 
+instance (Parseable a, Typeable a, Parseable b, Typeable b,
+          Parseable c, Typeable c, Parseable d, Typeable d,
           Parseable e, Typeable e,
           Typeable s, WebMonad m, Typeable m)
   => RequestHandler (a -> b -> c -> d -> e -> Controller s m ()) s m where
@@ -192,8 +202,8 @@ instance (Parseable a, Typeable a, Parseable b, Typeable b,
     e <- pathVarOrFail te
     ctrl a b c d e
   handlerToController _ _ = invalidArgs
-instance (Parseable a, Typeable a, Parseable b, Typeable b, 
-          Parseable c, Typeable c, Parseable d, Typeable d, 
+instance (Parseable a, Typeable a, Parseable b, Typeable b,
+          Parseable c, Typeable c, Parseable d, Typeable d,
           Parseable e, Typeable e, Parseable f, Typeable f,
           Typeable s, WebMonad m, Typeable m)
   => RequestHandler (a -> b -> c -> d -> e -> f -> Controller s m ()) s m where
@@ -207,7 +217,10 @@ instance (Parseable a, Typeable a, Parseable b, Typeable b,
     ctrl a b c d e f
   handlerToController _ _ = invalidArgs
 
-regMethodHandler :: RequestHandler h s m 
+
+
+-- | Register a handler for the particular method and path.
+regMethodHandler :: RequestHandler h s m
                  => Method -> Text -> h -> FrankieConfig s m ()
 regMethodHandler method path handler = do
   cfg <- State.get
@@ -223,11 +236,11 @@ regMethodHandler method path handler = do
       nrVars = length vars
       nrArgs = length args
   when (nrVars /= nrArgs) $
-    cfgFail $ "Unexpected number of variables (" ++ show nrVars ++ 
+    cfgFail $ "Unexpected number of variables (" ++ show nrVars ++
               ") for handler (expected " ++ show nrArgs ++ ")"
   -- Update the variable sin the segments with types
   let key1 = (method, fixSegments segments args)
-  State.put $ cfg { cfgDispatchMap = 
+  State.put $ cfg { cfgDispatchMap =
     Map.insert key1 (handlerToController vars handler) map0 }
 
 -- | Given path segments broken down by 'toPathSegments' and a list of variable
@@ -237,7 +250,7 @@ regMethodHandler method path handler = do
 fixSegments :: [PathSegment]
             -> [TypeRep]
             -> [PathSegment]
-fixSegments (Var n0 i0 : ss) (ty : ts) = 
+fixSegments (Var n0 i0 : ss) (ty : ts) =
   let n0' = n0 `Text.append` (Text.pack $ '@' : show ty)
   in (Var n0' i0) : fixSegments ss ts
 fixSegments ((Dir d) : ss) ts = (Dir d) : fixSegments ss ts
@@ -363,7 +376,7 @@ newtype FrankieConfigDispatch s m a = FrankieConfigDispatch (FrankieConfig s m a
   deriving (Functor, Applicative, Monad )
 
 instance FrankieConfigMonad FrankieConfigDispatch where
-  liftFrankie = FrankieConfigDispatch 
+  liftFrankie = FrankieConfigDispatch
 
 -- | Simple wrapper around 'FrankieConfig' to separate the different mode
 -- portions of the configuration from the rest of the configurations.
@@ -387,7 +400,7 @@ runFrankieConfig (FrankieConfig act) = do
   return cfg
 
 -- | Run the Frankie server
-runFrankieServer :: WebMonad m 
+runFrankieServer :: WebMonad m
                  => Mode
                  -> FrankieConfig s m ()
                  -> IO ()
@@ -410,12 +423,16 @@ mainFrankieController cfg = do
   req <- request
   let method   = reqMethod req
       pathInfo = reqPathInfo req
-  let cs = Map.toList $ 
+  let cs = Map.toList $
             Map.filterWithKey (\(m, ps) _ -> m == method && matchPath ps pathInfo) $
             cfgDispatchMap cfg
   controller <- return $ case cs of
-                           [(_, controller)] -> controller
-                           _ -> respond notFound
+    [(_, controller)] -> controller
+    -- didn't match anything in the dispatch table, fallback?
+    _ | (isJust $ cfgDispatchFallback cfg) -> fromJust $ cfgDispatchFallback cfg
+    -- nope, just respond with 404
+    _ -> respond notFound
+  -- wrap this in try-catch
   controller
 
 -- | Match a path segment with the path request info. We only need
@@ -433,7 +450,11 @@ matchPath _            _      = False
 -- TODO: add support for error handlers, loggers, dev vs. prod, etc.
 data ServerConfig s m = ServerConfig {
   cfgModes       :: Map Mode (ModeConfig s),
-  cfgDispatchMap :: Map (Method, [PathSegment]) (Controller s m ())
+  -- ^ Configuration modes
+  cfgDispatchMap :: Map (Method, [PathSegment]) (Controller s m ()),
+  -- ^ Dispatch table
+  cfgDispatchFallback :: Maybe (Controller s m ())
+  -- ^ Dispatch fallback handler
 }
 
 instance Show s  => Show (ServerConfig s m) where
@@ -455,8 +476,9 @@ cfgFail msg = liftFrankie . FrankieConfig $ lift . throwIO $ InvalidConfig msg
 -- | Initial emtpy server configuration
 nullServerCfg :: ServerConfig s m
 nullServerCfg = ServerConfig {
-  cfgModes       = Map.empty,
-  cfgDispatchMap = Map.empty
+  cfgModes            = Map.empty,
+  cfgDispatchMap      = Map.empty,
+  cfgDispatchFallback = Nothing
 }
 
 -- | Modes are described by strings.
@@ -476,4 +498,3 @@ nullModeCfg =  ModeConfig {
   cfgHostPref    = Nothing,
   cfgAppState    = Nothing
 }
-  
