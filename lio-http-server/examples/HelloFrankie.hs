@@ -17,15 +17,17 @@ main = runFrankieServer "prod" $ do
   dispatch $ do
     get "/" top
     get "/a/b" top
+    get "/fail" doFail
     get "/users/:uid" showUser
     get "/users/:uid/posts/:pid" showUserPost
     fallback $ do
-      -- log, not found!
+      req <- request
+      dcPutStrLn $ "Not sure how to handle: " ++ show req
       respond $ notFound
-
-
-  -- TODO:
-  -- onError onErr
+  --
+  onError $ \err -> do
+    dcPutStrLn $ "Controller failed with " ++ displayException err
+    respond $ serverError "bad bad nab"
 
 top :: DCController s
 top = respond $ okHtml "Woot"
@@ -51,6 +53,12 @@ showUserPost uid pid = do
   dcPutStrLn $ "uid = " ++ show uid
   dcPutStrLn $ "pid = " ++ show pid
   respond $ okHtml "showUserPost done!"
+
+doFail :: DCController ()
+doFail = do
+  dcPutStrLn "about to throw an exception"
+  fail "w00t"
+
 
 dcPutStrLn :: String -> DCController ()
 dcPutStrLn str = lift . ioTCB $ putStrLn str

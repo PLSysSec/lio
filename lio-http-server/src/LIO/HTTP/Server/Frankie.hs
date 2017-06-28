@@ -18,6 +18,8 @@ module LIO.HTTP.Server.Frankie (
   get, post, put, patch, delete,
   head, trace, connect, options,
   fallback,
+  -- ** Error-handling related
+  onError, Exception(..),
   -- * Internal
   -- ** Configuration related
   runFrankieConfig,
@@ -335,6 +337,17 @@ mode modeName act =
   let (FrankieConfigMode rModeCfg) = newModeConfig >> act
   in runReaderT rModeCfg modeName
 
+-- | Register a controller to be called when other normal controllers raise
+-- exceptions. If this controller throws an exception, a default error response
+-- is produced.
+onError :: (SomeException -> Controller s m ()) -> FrankieConfig s m ()
+onError handler = do
+  cfg <- State.get
+  when (isJust $ cfgOnErrorHandler cfg) $
+    cfgFail "onError handler already registered"
+  State.put $ cfg { cfgOnErrorHandler = Just handler }
+
+
 -- | Run a config action to produce a server configuration
 runFrankieConfig :: FrankieConfig s m () -> IO (ServerConfig s m)
 runFrankieConfig (FrankieConfig act) = do
@@ -369,14 +382,31 @@ mainFrankieController cfg = do
   let cs = Map.toList $
             Map.filterWithKey (\(m, ps) _ -> m == method && matchPath ps pathInfo) $
             cfgDispatchMap cfg
+  -- create controller action to execute
   controller <- return $ case cs of
     [(_, controller)] -> controller
     -- didn't match anything in the dispatch table, fallback?
     _ | (isJust $ cfgDispatchFallback cfg) -> fromJust $ cfgDispatchFallback cfg
     -- nope, just respond with 404
     _ -> respond notFound
-  -- wrap this in try-catch
-  controller
+  -- execute the controller action
+  er <- tryController controller
+  case er of
+    Right r  -> return r
+    -- controller raised exception
+    Left err ->
+      case cfgOnErrorHandler cfg of
+        -- have user-define handler
+        Just handler -> do
+          -- execute user-defined handler
+          er' <- tryController $ handler err
+          case er' of
+            -- handler produced response
+            Right r -> return r
+            -- handler throw exception
+            _       -> respond $ serverError "Something went wrong"
+        -- no user-defined handler
+        _            -> respond $ serverError "Something went wrong"
 
 -- | Match a path segment with the path request info. We only need
 -- to make sure that the number of directories are the same and
@@ -396,8 +426,10 @@ data ServerConfig s m = ServerConfig {
   -- ^ Configuration modes
   cfgDispatchMap :: Map (Method, [PathSegment]) (Controller s m ()),
   -- ^ Dispatch table
-  cfgDispatchFallback :: Maybe (Controller s m ())
+  cfgDispatchFallback :: Maybe (Controller s m ()),
   -- ^ Dispatch fallback handler
+  cfgOnErrorHandler  :: Maybe (SomeException -> Controller s m ())
+  -- ^ Exception handler
 }
 
 instance Show s  => Show (ServerConfig s m) where
@@ -421,7 +453,8 @@ nullServerCfg :: ServerConfig s m
 nullServerCfg = ServerConfig {
   cfgModes            = Map.empty,
   cfgDispatchMap      = Map.empty,
-  cfgDispatchFallback = Nothing
+  cfgDispatchFallback = Nothing,
+  cfgOnErrorHandler   = Nothing
 }
 
 -- | Modes are described by strings.

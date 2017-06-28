@@ -35,11 +35,13 @@ module LIO.HTTP.Server.Controller (
   fromApp, toApp,
   Controller(..),
   ControllerStatus(..),
+  tryController,
   -- * DC Label specific type alias
   DCController
   ) where
 
 import LIO.DCLabel
+import LIO.Exception
 import LIO.HTTP.Server
 import LIO.HTTP.Server.Responses
 
@@ -84,7 +86,7 @@ data Controller s m a = Controller {
 } deriving (Typeable)
 
 instance Functor m => Functor (Controller s m) where
-  fmap f (Controller act) = Controller $ \s0 req -> 
+  fmap f (Controller act) = Controller $ \s0 req ->
     go `fmap` act s0 req
     where go (cs, st) = (f `fmap` cs, st)
 
@@ -112,6 +114,20 @@ instance Monad m => MonadReader (Request m) (Controller s m) where
 
 instance MonadTrans (Controller s) where
   lift act = Controller $ \st _ -> act >>= \r -> return (Working r, st)
+
+-- | Try executing the controller action, returning the result or raised
+-- exception. Note that exceptions restore the state.
+tryController :: WebMonad m
+              => Controller s m a
+              -> Controller s m (Either SomeException a)
+tryController ctrl = Controller $ \s0 req -> do
+  eres <- tryWeb $ runController ctrl s0 req
+  case eres of
+   Left err -> return (Working (Left err), s0)
+   Right (stat, s1) ->
+    case stat of
+      Working a -> return (Working (Right a), s1)
+      Done r    -> return (Done r, s1)
 
 -- | DC-labeled controller
 type DCController s = Controller s DC ()
@@ -174,7 +190,7 @@ queryParams :: (WebMonad m, Parseable a)
 queryParams varName = do
   query <- liftM reqQueryString request
   return $ mapMaybe go query
-    where go (name, mparam) = if name == varName 
+    where go (name, mparam) = if name == varName
                                 then mparam >>= parseBS
                                 else Nothing
 
@@ -185,7 +201,7 @@ class Typeable a => Parseable a where
   -- | Try parsing 'Strict.ByteString' as @a@.
   parseBS   :: Strict.ByteString -> Maybe a
   parseBS bs  = case Text.decodeUtf8' bs of
-                  Left _  -> Nothing        
+                  Left _  -> Nothing
                   Right t -> parseText t
   -- | Try parsing 'Text' as @a@.
   parseText :: Text -> Maybe a
@@ -199,7 +215,7 @@ instance {-# INCOHERENT #-} Parseable String where
   parseText = Just . Text.unpack
 instance Parseable Text where
   parseBS bs  = case Text.decodeUtf8' bs of
-                  Left _  -> Nothing        
+                  Left _  -> Nothing
                   Right t -> Just t
   parseText = Just
 instance {-# OVERLAPPABLE #-} (Read a, Typeable a) => Parseable a where

@@ -44,6 +44,7 @@ import Data.Text (Text)
 import qualified Data.Text as Text
 import LIO.DCLabel
 import LIO.TCB (ioTCB)
+import LIO.Exception
 import Network.Wai.Handler.Warp (Port, HostPreference)
 import qualified Network.Wai as Wai
 import qualified Network.Wai.Handler.Warp as Wai
@@ -68,6 +69,8 @@ class Monad m => WebMonad m where
   reqHeaders     :: Request m -> [Header]
   -- | HTTP request body.
   reqBody        :: Request m -> m Lazy.ByteString
+  -- | Execute action and catch any exception.
+  tryWeb         :: m a -> m (Either SomeException a)
   -- | Function for running the application on specified port and host info.
   server         :: Port -> HostPreference -> Application m -> IO ()
 
@@ -117,6 +120,10 @@ instance WebMonad DC where
   reqQueryString = Wai.queryString . unRequestTCB
   reqHeaders     = Wai.requestHeaders . unRequestTCB
   reqBody        = ioTCB . Wai.strictRequestBody . unRequestTCB
+  tryWeb act     = do er <- try act
+                      case er of
+                        Left e -> return . Left . toException $ e
+                        r -> return r
   server port hostPref app = 
     let settings = Wai.setHost hostPref $ Wai.setPort port $ 
                    Wai.setServerName "lio-http-server" $ Wai.defaultSettings
