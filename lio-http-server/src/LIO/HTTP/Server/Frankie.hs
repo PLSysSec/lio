@@ -6,6 +6,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE UndecidableInstances #-}
 module LIO.HTTP.Server.Frankie (
   -- * Top-level interface
   FrankieConfig(..), FrankieConfigDispatch(..),
@@ -152,69 +153,11 @@ instance (Typeable s, WebMonad m, Typeable m)
   handlerToController [] ctrl = ctrl
   handlerToController _ _ = invalidArgs
 
-instance (Parseable a, Typeable a, Typeable s, WebMonad m, Typeable m)
-  => RequestHandler (a -> Controller s m ()) s m where
-  handlerToController [ta] ctrl = do
+instance (Parseable a, Typeable a, RequestHandler c s m, WebMonad m)
+  => RequestHandler (a -> c) s m where
+  handlerToController (ta:ts) ctrl = do
     a <- pathVarOrFail ta
-    ctrl a
-  handlerToController _ _ = invalidArgs
-
-instance (Parseable a, Typeable a, Parseable b, Typeable b,
-          Typeable s, WebMonad m, Typeable m)
-  => RequestHandler (a -> b -> Controller s m ()) s m where
-  handlerToController [ta, tb] ctrl = do
-    a <- pathVarOrFail ta
-    b <- pathVarOrFail tb
-    ctrl a b
-  handlerToController _ _ = invalidArgs
-
-instance (Parseable a, Typeable a, Parseable b, Typeable b,
-          Parseable c, Typeable c,
-          Typeable s, WebMonad m, Typeable m)
-  => RequestHandler (a -> b -> c -> Controller s m ()) s m where
-  handlerToController [ta, tb, tc] ctrl = do
-    a <- pathVarOrFail ta
-    b <- pathVarOrFail tb
-    c <- pathVarOrFail tc
-    ctrl a b c
-  handlerToController _ _ = invalidArgs
-instance (Parseable a, Typeable a, Parseable b, Typeable b,
-          Parseable c, Typeable c, Parseable d, Typeable d,
-          Typeable s, WebMonad m, Typeable m)
-  => RequestHandler (a -> b -> c -> d -> Controller s m ()) s m where
-  handlerToController [ta, tb, tc, td] ctrl = do
-    a <- pathVarOrFail ta
-    b <- pathVarOrFail tb
-    c <- pathVarOrFail tc
-    d <- pathVarOrFail td
-    ctrl a b c d
-  handlerToController _ _ = invalidArgs
-instance (Parseable a, Typeable a, Parseable b, Typeable b,
-          Parseable c, Typeable c, Parseable d, Typeable d,
-          Parseable e, Typeable e,
-          Typeable s, WebMonad m, Typeable m)
-  => RequestHandler (a -> b -> c -> d -> e -> Controller s m ()) s m where
-  handlerToController [ta, tb, tc, td, te] ctrl = do
-    a <- pathVarOrFail ta
-    b <- pathVarOrFail tb
-    c <- pathVarOrFail tc
-    d <- pathVarOrFail td
-    e <- pathVarOrFail te
-    ctrl a b c d e
-  handlerToController _ _ = invalidArgs
-instance (Parseable a, Typeable a, Parseable b, Typeable b,
-          Parseable c, Typeable c, Parseable d, Typeable d,
-          Parseable e, Typeable e, Parseable f, Typeable f,
-          Typeable s, WebMonad m, Typeable m)
-  => RequestHandler (a -> b -> c -> d -> e -> f -> Controller s m ()) s m where
-  handlerToController [ta, tb, tc, td, te, tf] ctrl = do
-    a <- pathVarOrFail ta
-    b <- pathVarOrFail tb
-    c <- pathVarOrFail tc
-    d <- pathVarOrFail td
-    e <- pathVarOrFail te
-    f <- pathVarOrFail tf
-    ctrl a b c d e f
+    handlerToController ts (ctrl a)
   handlerToController _ _ = invalidArgs
 
 
