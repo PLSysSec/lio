@@ -12,7 +12,7 @@ module LIO.HTTP.Server.Frankie (
   FrankieConfig(..), FrankieConfigDispatch(..),
   runFrankieServer,
   -- ** Configuration modes
-  mode, port, host, appState,
+  mode, port, host, appState, logger,
   -- ** Dispatch-table
   dispatch,
   get, post, put, patch, delete,
@@ -25,6 +25,7 @@ module LIO.HTTP.Server.Frankie (
   runFrankieConfig,
   ServerConfig(..), nullServerCfg,
   InvalidConfigException(..),
+  FrankieConfigMonad(..),
   -- ** Configuration mode related
   ModeConfig(..), Mode, nullModeCfg,
   -- ** Request handler related
@@ -266,10 +267,21 @@ appState s = do
   when (isJust $ cfgAppState cfg) $ cfgFail "state already set"
   setModeConfig $ cfg { cfgAppState = Just s }
 
+-- | Register a logger with the app.
+logger :: Monad m => LogLevel -> Logger m -> FrankieConfigMode s m ()
+logger level (Logger lgr0) = do
+  cfg <- getModeConfig
+  -- create logger that only logs things as sever as level
+  let lgr1 l s = when (l <= level) $ lgr0 l s 
+      newLogger = case cfgLogger cfg of
+                    Just (Logger lgrC) -> \l s -> lgrC l s >> lgr1 l s
+                    Nothing -> lgr1
+  setModeConfig $ cfg { cfgLogger = Just (Logger newLogger)}
+
 
 -- | Helper function for getting the mode configuration corresponding to the
 -- current mode
-getModeConfig :: FrankieConfigMode s m (ModeConfig s)
+getModeConfig :: FrankieConfigMode s m (ModeConfig s m)
 getModeConfig = do
   mode0 <- ask
   cfg <- State.get
@@ -281,7 +293,7 @@ getModeConfig = do
 
 -- | Helper function for updating the mode configuration corresponding to the
 -- current mode
-setModeConfig :: ModeConfig s -> FrankieConfigMode s m ()
+setModeConfig :: ModeConfig s m -> FrankieConfigMode s m ()
 setModeConfig modeCfg = do
   mode0 <- ask
   cfg <- State.get
@@ -371,7 +383,12 @@ runFrankieServer mode0 frankieAct = do
       let cPort  = fromJust . cfgPort $ modeCfg
           cHost  = fromJust . cfgHostPref $ modeCfg
           cState = fromJust . cfgAppState $ modeCfg
-      server cPort cHost (toApp (mainFrankieController cfg) cState)
+          -- if not logger define, just provide a nop
+          lgr = case cfgLogger modeCfg of
+                  Just l -> l
+                  _      -> Logger $ \_ _ -> return ()
+
+      server cPort cHost (toApp (mainFrankieController cfg) cState lgr)
 
 -- | The main controller that dispatches requests to corresponding controllers.
 mainFrankieController :: WebMonad m => ServerConfig s m -> Controller s m ()
@@ -422,7 +439,7 @@ matchPath _            _      = False
 -- It also contains the dispatch table.
 -- TODO: add support for error handlers, loggers, dev vs. prod, etc.
 data ServerConfig s m = ServerConfig {
-  cfgModes       :: Map Mode (ModeConfig s),
+  cfgModes       :: Map Mode (ModeConfig s m),
   -- ^ Configuration modes
   cfgDispatchMap :: Map (Method, [PathSegment]) (Controller s m ()),
   -- ^ Dispatch table
@@ -461,16 +478,23 @@ nullServerCfg = ServerConfig {
 type Mode = String
 
 -- | Mode configuration. For example, production or development.
-data ModeConfig s = ModeConfig {
+data ModeConfig s m = ModeConfig {
   cfgPort        :: Maybe Port,
   cfgHostPref    :: Maybe HostPreference,
-  cfgAppState    :: Maybe s
-  } deriving (Show)
+  cfgAppState    :: Maybe s,
+  cfgLogger      :: Maybe (Logger m)
+  }
+
+instance Show (ModeConfig s m) where
+  show cfg = (show . cfgHostPref $ cfg) ++ ":" ++
+             (show . cfgHostPref $ cfg)
+
 
 -- | Empty mode configuration.
-nullModeCfg :: ModeConfig s
+nullModeCfg :: ModeConfig s m
 nullModeCfg =  ModeConfig {
   cfgPort        = Nothing,
   cfgHostPref    = Nothing,
-  cfgAppState    = Nothing
+  cfgAppState    = Nothing,
+  cfgLogger      = Nothing
 }

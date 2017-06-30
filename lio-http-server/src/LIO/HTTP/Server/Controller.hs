@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeFamilies #-}
 
 {- | 'Controller' provides a convenient syntax for writting
    'Application' code as a Monadic action with access to an HTTP
@@ -29,6 +30,9 @@ module LIO.HTTP.Server.Controller (
   respond,
   redirectBack,
   redirectBackOr,
+  -- * App-specific logging
+  log,
+  Logger(..), LogLevel(..),
   -- * App-specific state accessors
   getAppState, putAppState,
   -- * Internal controller monad
@@ -40,6 +44,7 @@ module LIO.HTTP.Server.Controller (
   DCController
   ) where
 
+import Prelude hiding (log)
 import LIO.DCLabel
 import LIO.Exception
 import LIO.HTTP.Server
@@ -82,12 +87,12 @@ instance Functor ControllerStatus where
 -- Within the Controller monad, the remainder of the computation can be
 -- short-circuited by 'respond'ing with a 'Response'.
 data Controller s m a = Controller {
- runController :: s -> Request m -> m (ControllerStatus a, s)
+ runController :: s -> Logger m -> Request m -> m (ControllerStatus a, s)
 } deriving (Typeable)
 
 instance Functor m => Functor (Controller s m) where
-  fmap f (Controller act) = Controller $ \s0 req ->
-    go `fmap` act s0 req
+  fmap f (Controller act) = Controller $ \s0 logger req ->
+    go `fmap` act s0 logger req
     where go (cs, st) = (f `fmap` cs, st)
 
 instance (Monad m, Functor m) => Applicative (Controller s m) where
@@ -95,33 +100,33 @@ instance (Monad m, Functor m) => Applicative (Controller s m) where
   (<*>) = ap
 
 instance Monad m => Monad (Controller s m) where
-  return a = Controller $ \st _ -> return $ (Working a, st)
-  (Controller act0) >>= fn = Controller $ \st0 req -> do
-    (cs, st1) <- act0 st0 req
+  return a = Controller $ \st _ _ -> return $ (Working a, st)
+  (Controller act0) >>= fn = Controller $ \st0 logger req -> do
+    (cs, st1) <- act0 st0 logger req
     case cs of
       Done resp -> return (Done resp, st1)
       Working v -> do
         let (Controller act1) = fn v
-        act1 st1 req
+        act1 st1 logger req
 
 instance Monad m => MonadState s (Controller s m) where
-  get   = Controller $ \s _ -> return (Working s, s)
-  put s = Controller $ \_ _ -> return (Working (), s)
+  get   = Controller $ \s _ _ -> return (Working s, s)
+  put s = Controller $ \_ _ _ -> return (Working (), s)
 
 instance Monad m => MonadReader (Request m) (Controller s m) where
-  ask = Controller $ \st req -> return (Working req, st)
-  local f (Controller act) = Controller $ \st req -> act st (f req)
+  ask = Controller $ \st _ req -> return (Working req, st)
+  local f (Controller act) = Controller $ \st logger req -> act st logger (f req)
 
 instance MonadTrans (Controller s) where
-  lift act = Controller $ \st _ -> act >>= \r -> return (Working r, st)
+  lift act = Controller $ \st _ _ -> act >>= \r -> return (Working r, st)
 
 -- | Try executing the controller action, returning the result or raised
 -- exception. Note that exceptions restore the state.
 tryController :: WebMonad m
               => Controller s m a
               -> Controller s m (Either SomeException a)
-tryController ctrl = Controller $ \s0 req -> do
-  eres <- tryWeb $ runController ctrl s0 req
+tryController ctrl = Controller $ \s0 logger req -> do
+  eres <- tryWeb $ runController ctrl s0 logger req
   case eres of
    Left err -> return (Working (Left err), s0)
    Right (stat, s1) ->
@@ -145,7 +150,7 @@ request = ask
 --
 -- @respond r >>= f === respond r@
 respond :: Monad m => Response -> Controller s m a
-respond resp = Controller $ \s _ -> return (Done resp, s)
+respond resp = Controller $ \s _ _ -> return (Done resp, s)
 
 -- | Extract the application-specific state.
 getAppState :: Monad m => Controller s m s
@@ -165,9 +170,9 @@ fromApp app = do
 
 -- | Convert the controller into an 'Application'. This can be used to
 -- directly run the controller with 'server', for example.
-toApp :: WebMonad m => Controller s m () -> s -> Application m
-toApp ctrl s0 req = do
-  (cs, _) <- runController ctrl s0 req
+toApp :: WebMonad m => Controller s m () -> s -> Logger m -> Application m
+toApp ctrl s0 logger req = do
+  (cs, _) <- runController ctrl s0 logger req
   return $ case cs of
             Done resp -> resp
             _         -> notFound
@@ -243,3 +248,25 @@ redirectBackOr def = do
   case mrefr of
     Just refr -> respond $ redirectTo refr
     Nothing   -> respond def
+
+-- | Log text using app-specific logger.
+log :: WebMonad m => LogLevel -> String -> Controller s m ()
+log level str = Controller $ \s0 (Logger logger) _ -> do
+   logger level str
+   return (Working (), s0)
+
+-- | A logger is simply a function that takes the 'LogLevel' and string to
+-- write, and produces an action which when executed may log the string. What
+-- it means to log is by choice left up to the application.
+newtype Logger m = Logger (LogLevel -> String -> m ())
+
+-- | Severity of logging inforamation following RFC5424.
+data LogLevel = EMERGENCY
+              | ALERT
+              | CRITICAL
+              | ERROR
+              | WARNING
+              | NOTICE
+              | INFO
+              | DEBUG 
+              deriving (Show, Eq, Ord)

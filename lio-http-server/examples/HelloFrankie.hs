@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
+import Prelude hiding (log)
 import LIO.HTTP.Server.Frankie
-import LIO.TCB (ioTCB)
-import Control.Monad.Trans.Class (lift)
+import LIO.HTTP.Server.Frankie.Loggers
 
 main :: IO ()
 main = runFrankieServer "prod" $ do
@@ -9,6 +9,9 @@ main = runFrankieServer "prod" $ do
     host "*"
     port 3030
     appState ()
+    logger INFO colorStdErrLogger
+    openFileLogger "/tmp/wtf.log.0" >>= logger DEBUG
+      
   mode "dev" $ do
     host "127.0.0.1"
     port 3000
@@ -22,11 +25,11 @@ main = runFrankieServer "prod" $ do
     get "/users/:uid/posts/:pid" showUserPost
     fallback $ do
       req <- request
-      dcPutStrLn $ "Not sure how to handle: " ++ show req
+      log INFO $ "Not sure how to handle: " ++ show req
       respond $ notFound
   --
   onError $ \err -> do
-    dcPutStrLn $ "Controller failed with " ++ displayException err
+    log ERROR $ "Controller failed with " ++ displayException err
     respond $ serverError "bad bad nab"
 
 top :: DCController s
@@ -34,7 +37,7 @@ top = respond $ okHtml "Woot"
 
 showUser :: Int -> DCController ()
 showUser uid = do
-  dcPutStrLn $ "uid = " ++ show uid
+  log INFO $ "uid = " ++ show uid
   respond $ okHtml "showUser done!"
 
 newtype PostId = PostId Int
@@ -50,15 +53,11 @@ instance Parseable PostId where
 
 showUserPost :: Int -> PostId -> DCController ()
 showUserPost uid pid = do
-  dcPutStrLn $ "uid = " ++ show uid
-  dcPutStrLn $ "pid = " ++ show pid
+  log INFO $ "uid = " ++ show uid
+  log INFO $ "pid = " ++ show pid
   respond $ okHtml "showUserPost done!"
 
 doFail :: DCController ()
 doFail = do
-  dcPutStrLn "about to throw an exception"
+  log WARNING $ "about to throw an exception"
   fail "w00t"
-
-
-dcPutStrLn :: String -> DCController ()
-dcPutStrLn str = lift . ioTCB $ putStrLn str
