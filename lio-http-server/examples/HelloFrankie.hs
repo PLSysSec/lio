@@ -9,8 +9,8 @@ main = runFrankieServer "prod" $ do
     host "*"
     port 3030
     appState ()
-    logger INFO colorStdErrLogger
-    openFileLogger "/tmp/wtf.log.0" >>= logger DEBUG
+    logger DEBUG colorStdErrLogger
+    openFileLogger "/tmp/frankie.log.0" >>= logger INFO
       
   mode "dev" $ do
     host "127.0.0.1"
@@ -25,7 +25,7 @@ main = runFrankieServer "prod" $ do
     get "/users/:uid/posts/:pid" showUserPost
     fallback $ do
       req <- request
-      log INFO $ "Not sure how to handle: " ++ show req
+      log WARNING $ "Not sure how to handle: " ++ show req
       respond $ notFound
   --
   onError $ \err -> do
@@ -59,5 +59,5 @@ showUserPost uid pid = do
 
 doFail :: DCController ()
 doFail = do
-  log WARNING $ "about to throw an exception"
+  log DEBUG $ "about to throw an exception"
   fail "w00t"
