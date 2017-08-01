@@ -6,6 +6,7 @@
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE UndecidableInstances #-}
 module LIO.HTTP.Server.Frankie (
   -- * Top-level interface
@@ -50,6 +51,7 @@ import qualified Control.Monad.State as State
 
 import Data.Dynamic
 import Data.Maybe
+import Data.Monoid
 import Data.Map (Map)
 import Data.List (intercalate)
 import Data.Text (Text)
@@ -105,10 +107,7 @@ options path handler = FrankieConfigDispatch $ regMethodHandler methodOptions pa
 fallback :: Monad m => Controller s m () -> FrankieConfigDispatch s m ()
 fallback controller = FrankieConfigDispatch $ do
   cfg <- State.get
-  -- XXX liquid types
-  when (isJust $ cfgDispatchFallback cfg) $
-    cfgFail "fallback handler already set"
-  State.put $ cfg { cfgDispatchFallback = Just controller }
+  State.put $ cfg { cfgDispatchFallback = cfgDispatchFallback cfg <> pure controller }
 
 
 --
@@ -248,31 +247,26 @@ instance Ord PathSegment where
 port :: Port -> FrankieConfigMode s m ()
 port p = do
   cfg <- getModeConfig
-  when (isJust $ cfgPort cfg) $ cfgFail "port already set"
-  setModeConfig $ cfg {cfgPort = Just p }
+  setModeConfig $ cfg {cfgPort = cfgPort cfg <> pure p }
 
 -- | Set the app host preference.
 host :: HostPreference -> FrankieConfigMode s m ()
 host pref = do
   cfg <- getModeConfig
-  -- XXX can we use liquid types instead?
-  when (isJust $ cfgHostPref cfg) $ cfgFail "host already set"
-  setModeConfig $ cfg { cfgHostPref = Just pref }
+  setModeConfig $ cfg { cfgHostPref = cfgHostPref cfg <> pure pref }
 
 -- | Set the app host preference.
 appState :: s -> FrankieConfigMode s m ()
 appState s = do
   cfg <- getModeConfig
-  -- XXX can we use liquid types instead?
-  when (isJust $ cfgAppState cfg) $ cfgFail "state already set"
-  setModeConfig $ cfg { cfgAppState = Just s }
+  setModeConfig $ cfg { cfgAppState = cfgAppState cfg <> pure s }
 
 -- | Register a logger with the app.
 logger :: Monad m => LogLevel -> Logger m -> FrankieConfigMode s m ()
 logger level (Logger lgr0) = do
   cfg <- getModeConfig
   -- create logger that only logs things as sever as level
-  let lgr1 l s = when (l <= level) $ lgr0 l s 
+  let lgr1 l s = when (l <= level) $ lgr0 l s
       newLogger = case cfgLogger cfg of
                     Just (Logger lgrC) -> \l s -> lgrC l s >> lgr1 l s
                     Nothing -> lgr1
@@ -355,9 +349,7 @@ mode modeName act =
 onError :: (SomeException -> Controller s m ()) -> FrankieConfig s m ()
 onError handler = do
   cfg <- State.get
-  when (isJust $ cfgOnErrorHandler cfg) $
-    cfgFail "onError handler already registered"
-  State.put $ cfg { cfgOnErrorHandler = Just handler }
+  State.put $ cfg { cfgOnErrorHandler = cfgOnErrorHandler cfg <> pure handler }
 
 
 -- | Run a config action to produce a server configuration
@@ -377,12 +369,12 @@ runFrankieServer mode0 frankieAct = do
   case (Map.lookup mode0 $ cfgModes cfg) of
     Nothing -> throwIO $ InvalidConfig "invalid mode "
     Just modeCfg -> do
-      when (isNothing $ cfgPort modeCfg) $ throwIO $ InvalidConfig "missing port"
-      when (isNothing $ cfgHostPref modeCfg) $ throwIO $ InvalidConfig "missing host"
-      when (isNothing $ cfgAppState modeCfg) $ throwIO $ InvalidConfig "missing state"
-      let cPort  = fromJust . cfgPort $ modeCfg
-          cHost  = fromJust . cfgHostPref $ modeCfg
-          cState = fromJust . cfgAppState $ modeCfg
+      when (isNothing $ getFirst $ cfgPort     modeCfg) $ throwIO $ InvalidConfig "missing port"
+      when (isNothing $ getFirst $ cfgHostPref modeCfg) $ throwIO $ InvalidConfig "missing host"
+      when (isNothing $ getFirst $ cfgAppState modeCfg) $ throwIO $ InvalidConfig "missing state"
+      let cPort  = fromJust . getFirst . cfgPort $ modeCfg
+          cHost  = fromJust . getFirst . cfgHostPref $ modeCfg
+          cState = fromJust . getFirst . cfgAppState $ modeCfg
           -- if not logger define, just provide a nop
           lgr = case cfgLogger modeCfg of
                   Just l -> l
@@ -403,7 +395,8 @@ mainFrankieController cfg = do
   controller <- return $ case cs of
     [(_, controller)] -> controller
     -- didn't match anything in the dispatch table, fallback?
-    _ | (isJust $ cfgDispatchFallback cfg) -> fromJust $ cfgDispatchFallback cfg
+    _ | First (Just fb) <- cfgDispatchFallback cfg
+        -> fb
     -- nope, just respond with 404
     _ -> respond notFound
   -- execute the controller action
@@ -414,7 +407,7 @@ mainFrankieController cfg = do
     Left err ->
       case cfgOnErrorHandler cfg of
         -- have user-define handler
-        Just handler -> do
+        First (Just handler) -> do
           -- execute user-defined handler
           er' <- tryController $ handler err
           case er' of
@@ -443,9 +436,9 @@ data ServerConfig s m = ServerConfig {
   -- ^ Configuration modes
   cfgDispatchMap :: Map (Method, [PathSegment]) (Controller s m ()),
   -- ^ Dispatch table
-  cfgDispatchFallback :: Maybe (Controller s m ()),
+  cfgDispatchFallback :: First (Controller s m ()),
   -- ^ Dispatch fallback handler
-  cfgOnErrorHandler  :: Maybe (SomeException -> Controller s m ())
+  cfgOnErrorHandler  :: First (SomeException -> Controller s m ())
   -- ^ Exception handler
 }
 
@@ -470,8 +463,8 @@ nullServerCfg :: ServerConfig s m
 nullServerCfg = ServerConfig {
   cfgModes            = Map.empty,
   cfgDispatchMap      = Map.empty,
-  cfgDispatchFallback = Nothing,
-  cfgOnErrorHandler   = Nothing
+  cfgDispatchFallback = mempty,
+  cfgOnErrorHandler   = mempty
 }
 
 -- | Modes are described by strings.
@@ -479,9 +472,9 @@ type Mode = String
 
 -- | Mode configuration. For example, production or development.
 data ModeConfig s m = ModeConfig {
-  cfgPort        :: Maybe Port,
-  cfgHostPref    :: Maybe HostPreference,
-  cfgAppState    :: Maybe s,
+  cfgPort        :: First Port,
+  cfgHostPref    :: First HostPreference,
+  cfgAppState    :: First s,
   cfgLogger      :: Maybe (Logger m)
   }
 
@@ -493,8 +486,8 @@ instance Show (ModeConfig s m) where
 -- | Empty mode configuration.
 nullModeCfg :: ModeConfig s m
 nullModeCfg =  ModeConfig {
-  cfgPort        = Nothing,
-  cfgHostPref    = Nothing,
-  cfgAppState    = Nothing,
+  cfgPort        = mempty,
+  cfgHostPref    = mempty,
+  cfgAppState    = mempty,
   cfgLogger      = Nothing
 }
