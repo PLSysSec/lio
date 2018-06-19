@@ -90,7 +90,7 @@ movedTo url = mkHtmlResponse status301 [(hLocation, S8.pack url)] html
                   <TITLE>301 Moved Permanently</TITLE>
                   </HEAD><BODY>
                   <H1>Moved Permanently</H1>
-                  <P>The document has moved <A HREF="{{url}}">here</A>
+                  <P>The document has moved <A HREF="{{url}}">here</A></P>
                   </BODY></HTML>
                  |]
 
@@ -104,7 +104,7 @@ redirectTo url = mkHtmlResponse status303 [(hLocation, url)] html
                   <TITLE>303 See Other</TITLE>
                   </HEAD><BODY>
                   <H1>See Other</H1>
-                  <P>The document has moved <A HREF="{{url}}">here</A>
+                  <P>The document has moved <A HREF="{{url}}">here</A></P>
                   </BODY></HTML>
                  |]
 
@@ -175,6 +175,6 @@ serverError message = mkHtmlResponse status500 [] html
                   <TITLE>500 Internal Server Error</TITLE>
                   </HEAD><BODY>
                   <H1>Internal Server Error</H1>
-                  <P> {{message}}
-                  </P></BODY></HTML>
+                  <P> {{message}} </P>
+                  </BODY></HTML>
                  |]
