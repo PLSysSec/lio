@@ -1,4 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -71,12 +73,7 @@ import qualified Data.Text.Encoding as Text
 -- running and has an intermediate result encoded by 'Working'.
 data ControllerStatus a = Done Response
                         | Working a
-                        deriving (Eq)
-
-instance Functor ControllerStatus where
-  fmap f cs = case cs of
-    Working a -> Working $ f a
-    Done r    -> Done r
+                        deriving (Eq, Functor)
 
 -- | The Controller monad is used to encode stateful HTTP controller
 -- computations.  The monad is a reader monad that provides the current request
@@ -86,14 +83,9 @@ instance Functor ControllerStatus where
 --
 -- Within the Controller monad, the remainder of the computation can be
 -- short-circuited by 'respond'ing with a 'Response'.
-data Controller s m a = Controller {
+newtype Controller s m a = Controller {
  runController :: s -> Logger m -> Request m -> m (ControllerStatus a, s)
-} deriving (Typeable)
-
-instance Functor m => Functor (Controller s m) where
-  fmap f (Controller act) = Controller $ \s0 logger req ->
-    go `fmap` act s0 logger req
-    where go (cs, st) = (f `fmap` cs, st)
+} deriving (Typeable, Functor)
 
 instance (Monad m, Functor m) => Applicative (Controller s m) where
   pure = return
@@ -193,7 +185,7 @@ queryParams :: (WebMonad m, Parseable a)
             => Strict.ByteString -- ^ Parameter name
             -> Controller s m [a]
 queryParams varName = do
-  query <- liftM reqQueryString request
+  query <- reqQueryString <$> request
   return $ mapMaybe go query
     where go (name, mparam) = if name == varName
                                 then mparam >>= parseBS
@@ -204,7 +196,7 @@ queryParams varName = do
 -- terms of the other, so only one definition is necessary.
 class Typeable a => Parseable a where
   -- | Try parsing 'Strict.ByteString' as @a@.
-  parseBS   :: Strict.ByteString -> Maybe a
+  parseBS :: Strict.ByteString -> Maybe a
   parseBS bs  = case Text.decodeUtf8' bs of
                   Left _  -> Nothing
                   Right t -> parseText t
@@ -231,7 +223,7 @@ instance {-# OVERLAPPABLE #-} (Read a, Typeable a) => Parseable a where
 -- present in the HTTP request.
 requestHeader :: WebMonad m
               => HeaderName -> Controller s m (Maybe Strict.ByteString)
-requestHeader name = request >>= return . lookup name . reqHeaders
+requestHeader name = lookup name . reqHeaders <$> request
 
 -- | Redirect back to the referer. If the referer header is not present
 -- 'redirectTo' root (i.e., @\/@).
@@ -243,11 +235,8 @@ redirectBack = redirectBackOr (redirectTo "/")
 redirectBackOr :: WebMonad m
                => Response -- ^ Fallback response
                -> Controller s m ()
-redirectBackOr def = do
-  mrefr <- requestHeader "referer"
-  case mrefr of
-    Just refr -> respond $ redirectTo refr
-    Nothing   -> respond def
+redirectBackOr def =
+  requestHeader "referer" >>= respond . maybe def redirectTo
 
 -- | Log text using app-specific logger.
 log :: WebMonad m => LogLevel -> String -> Controller s m ()
@@ -268,5 +257,5 @@ data LogLevel = EMERGENCY
               | WARNING
               | NOTICE
               | INFO
-              | DEBUG 
+              | DEBUG
               deriving (Show, Eq, Ord)

@@ -1,5 +1,6 @@
 {-# LANGUAGE Trustworthy #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes,TemplateHaskell #-}
 
 {-
 
@@ -45,7 +46,8 @@ import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteString.Lazy.Char8 as L8
 
 import LIO.HTTP.Server
-
+import Text.Mustache
+import LIO.HTTP.Server.Frankie.Templates
 
 -- | Type alias for 'S8.ByteString'
 type ContentType = S8.ByteString
@@ -81,17 +83,16 @@ okXml = ok (S8.pack "application/xml")
 -- that URL.
 movedTo :: String -> Response
 movedTo url = mkHtmlResponse status301 [(hLocation, S8.pack url)] html
-  where html = L8.concat
-             [L8.pack
-              "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n\
-              \<HTML><HEAD>\n\
-              \<TITLE>301 Moved Permanently</TITLE>\n\
-              \</HEAD><BODY>\n\
-              \<H1>Moved Permanently</H1>\n\
-              \<P>The document has moved <A HREF=\""
-             , L8.pack url
-             , L8.pack "\">here</A>\n\
-                       \</BODY></HTML>\n"]
+  where html = applyTemplate ("url" ~> url)
+                 [mustache|
+                     <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+                     <HTML><HEAD>
+                     <TITLE>301 Moved Permanently</TITLE>
+                     </HEAD><BODY>
+                     <H1>Moved Permanently</H1>
+                     <P>The document has moved <A HREF="{{url}}">here</A>
+                     </BODY></HTML>
+                 |]
 
 -- | Given a URL returns a 303 (See Other) 'Response' redirecting to that URL.
 redirectTo :: S8.ByteString -> Response
