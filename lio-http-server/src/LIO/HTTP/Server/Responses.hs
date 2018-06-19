@@ -44,9 +44,9 @@ module LIO.HTTP.Server.Responses
 
 import qualified Data.ByteString.Char8 as S8
 import qualified Data.ByteString.Lazy.Char8 as L8
+import Text.Mustache
 
 import LIO.HTTP.Server
-import Text.Mustache
 import LIO.HTTP.Server.Frankie.Templates
 
 -- | Type alias for 'S8.ByteString'
