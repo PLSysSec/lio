@@ -85,92 +85,96 @@ movedTo :: String -> Response
 movedTo url = mkHtmlResponse status301 [(hLocation, S8.pack url)] html
   where html = applyTemplate ("url" ~> url)
                  [mustache|
-                     <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
-                     <HTML><HEAD>
-                     <TITLE>301 Moved Permanently</TITLE>
-                     </HEAD><BODY>
-                     <H1>Moved Permanently</H1>
-                     <P>The document has moved <A HREF="{{url}}">here</A>
-                     </BODY></HTML>
+                  <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+                  <HTML><HEAD>
+                  <TITLE>301 Moved Permanently</TITLE>
+                  </HEAD><BODY>
+                  <H1>Moved Permanently</H1>
+                  <P>The document has moved <A HREF="{{url}}">here</A>
+                  </BODY></HTML>
                  |]
 
 -- | Given a URL returns a 303 (See Other) 'Response' redirecting to that URL.
 redirectTo :: S8.ByteString -> Response
 redirectTo url = mkHtmlResponse status303 [(hLocation, url)] html
-  where html = L8.concat
-             [L8.pack
-              "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n\
-              \<HTML><HEAD>\n\
-              \<TITLE>303 See Other</TITLE>\n\
-              \</HEAD><BODY>\n\
-              \<H1>See Other</H1>\n\
-              \<P>The document has moved <A HREF=\""
-             , L8.fromChunks [url]
-             , L8.pack "\">here</A>\n\
-                       \</BODY></HTML>\n"]
+  where html = applyTemplate ("url" ~> S8.unpack url)
+                 [mustache|
+                  <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+                  <HTML><HEAD>
+                  <TITLE>303 See Other</TITLE>
+                  </HEAD><BODY>
+                  <H1>See Other</H1>
+                  <P>The document has moved <A HREF="{{url}}">here</A>
+                  </BODY></HTML>
+                 |]
 
 -- | Returns a 400 (Bad Request) 'Response'.
 badRequest :: Response
 badRequest = mkHtmlResponse status400 [] html
-  where html = L8.concat
-             [L8.pack
-              "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n\
-              \<HTML><HEAD>\n\
-              \<TITLE>400 Bad Request</TITLE>\n\
-              \</HEAD><BODY>\n\
-              \<H1>Bad Request</H1>\n\
-              \<P>Your request could not be understood.</P>\n\
-                       \</BODY></HTML>\n"]
+  where html = applyTemplate ()
+                 [mustache|
+                  <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+                  <HTML><HEAD>
+                  <TITLE>400 Bad Request</TITLE>
+                  </HEAD><BODY>
+                  <H1>Bad Request</H1>
+                  <P>Your request could not be understood.</P>
+                  </BODY></HTML>
+                 |]
 
 -- | Returns a 401 (Authorization Required) 'Response' requiring basic
 -- authentication in the given realm.
 requireBasicAuth :: String -> Response
 requireBasicAuth realm = mkHtmlResponse status401
   [("WWW-Authenticate", S8.concat ["Basic realm=", S8.pack . show $ realm])] html
-  where html = L8.concat
-             [L8.pack
-              "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n\
-              \<HTML><HEAD>\n\
-              \<TITLE>401 Authorization Required</TITLE>\n\
-              \</HEAD><BODY>\n\
-              \<H1>Authorization Required</H1>\n\
-                       \</BODY></HTML>\n"]
+  where html = applyTemplate ()
+                 [mustache|
+                  <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+                  <HTML><HEAD>
+                  <TITLE>401 Authorization Required</TITLE>
+                  </HEAD><BODY>
+                  <H1>Authorization Required</H1>
+                  </BODY></HTML>
+                 |]
 
 -- | Returns a 403 (Forbidden) 'Response'.
 forbidden :: Response
 forbidden = mkHtmlResponse status403 [] html
-  where html = L8.concat
-             [L8.pack
-              "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n\
-              \<HTML><HEAD>\n\
-              \<TITLE>403 Forbidden</TITLE>\n\
-              \</HEAD><BODY>\n\
-              \<H1>Forbidden</H1>\n\
-              \<P>You don't have permission to access this page.</P>\n\
-                       \</BODY></HTML>\n"]
+  where html = applyTemplate ()
+                 [mustache|
+                  <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+                  <HTML><HEAD>
+                  <TITLE>403 Forbidden</TITLE>
+                  </HEAD><BODY>
+                  <H1>Forbidden</H1>
+                  <P>You don't have permission to access this page.</P>
+                  </BODY></HTML>
+                 |]
 
 -- | Returns a 404 (Not Found) 'Response'.
 notFound :: Response
 notFound = mkHtmlResponse status404 [] html
-  where html = L8.concat
-             [L8.pack
-              "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n\
-              \<HTML><HEAD>\n\
-              \<TITLE>404 Not Found</TITLE>\n\
-              \</HEAD><BODY>\n\
-              \<H1>Not Found</H1>\n\
-              \<P>The requested URL was not found on this server.</P>\n\
-                       \</BODY></HTML>\n"]
+  where html = applyTemplate ()
+                 [mustache|
+                  <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+                  <HTML><HEAD>
+                  <TITLE>404 Not Found</TITLE>
+                  </HEAD><BODY>
+                  <H1>Not Found</H1>
+                  <P>The requested URL was not found on this server.</P>
+                  </BODY></HTML>
+                 |]
 
 -- | Returns a 500 (Server Error) 'Response'.
 serverError :: L8.ByteString -> Response
 serverError message = mkHtmlResponse status500 [] html
-  where html = L8.concat
-             [L8.pack
-              "<!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML 2.0//EN\">\n\
-              \<HTML><HEAD>\n\
-              \<TITLE>500 Internal Server Error</TITLE>\n\
-              \</HEAD><BODY>\n\
-              \<H1>Internal Server Error</H1>\n\
-              \<P>", message,
-              "</P></BODY></HTML>\n"]
+  where html = applyTemplate ("message" ~> L8.unpack message)
+                 [mustache|
+                  <!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML 2.0//EN">
+                  <HTML><HEAD>
+                  <TITLE>500 Internal Server Error</TITLE>
+                  </HEAD><BODY>
+                  <H1>Internal Server Error</H1>
+                  <P> {{message}}
+                  </P></BODY></HTML>
+                 |]
