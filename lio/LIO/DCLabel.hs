@@ -218,9 +218,11 @@ instance Read Disjunction where
                 next' = ((:) <$> readPrec) `ap` next
             dFromList <$> next'
 
+instance Semigroup Disjunction where
+  (<>) = dUnion
+
 instance Monoid Disjunction where
   mempty = dFalse
-  mappend = dUnion
 
 dFalse :: Disjunction
 dFalse = Disjunction Set.empty 0
@@ -276,9 +278,11 @@ instance Read CNF where
                 next' = ((:) <$> readPrec) `ap` next
             cFromList <$> next'
 
+instance Semigroup CNF where
+  (<>) = cUnion
+
 instance Monoid CNF where
   mempty = cTrue
-  mappend = cUnion
   
 -- | A 'CNF' that is always @True@--i.e., trivially satisfiable.  When
 -- @'dcSecrecy' = cTrue@, it means data is public.  When

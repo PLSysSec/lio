@@ -154,10 +154,11 @@ makeCatchable e@(SomeException einner) =
 -- before running your 'LIO' computation.
 newtype Priv a = PrivTCB a deriving (Show, Eq, Typeable)
 
+instance Semigroup p => Semigroup (Priv p) where
+  (PrivTCB m1) <> (PrivTCB m2) = PrivTCB $ m1 <> m2
+
 instance Monoid p => Monoid (Priv p) where
   mempty = PrivTCB mempty
-  {-# INLINE mappend #-}
-  mappend (PrivTCB m1) (PrivTCB m2) = PrivTCB $ m1 `mappend` m2
   {-# INLINE mconcat #-}
   mconcat ps = PrivTCB $ mconcat $ map (\(PrivTCB p) -> p) ps
 

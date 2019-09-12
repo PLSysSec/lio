@@ -267,11 +267,13 @@ instance SpeaksFor NoPrivs where speaksFor _ _ = True
 -- 'canFlowToP' 'NoPrivs' is the same as 'canFlowTo'.
 instance Label l => PrivDesc l NoPrivs where downgradeP _ l = l
 
+instance Semigroup NoPrivs where
+  _ <> _ = NoPrivs
+
 instance Monoid NoPrivs where
-  mempty      = NoPrivs
-  mappend _ _ = NoPrivs
+  mempty = NoPrivs
+
 
 -- | 'Priv' object corresponding to 'NoPrivs'.
 noPrivs :: Priv NoPrivs
 noPrivs = PrivTCB NoPrivs
-
