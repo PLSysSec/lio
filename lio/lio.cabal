@@ -1,6 +1,6 @@
 Name:           lio
 Version:        0.11.7.0
-Cabal-Version:  >= 1.12
+Cabal-Version:  1.12
 Build-type:     Simple
 License:        MIT
 License-File:   LICENSE
@@ -70,6 +70,8 @@ Library
    ,containers
    ,bytestring
    ,hashable
+
+  Default-Language: Haskell2010
 
   GHC-options: -Wall -fno-warn-orphans
   include-dirs: LIO/TCB
