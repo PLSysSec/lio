@@ -1,6 +1,8 @@
 resolver: lts-16.15
 packages:
 - '.'
+- ../lio
+- ../quickcheck-lio-instances
 extra-deps: []
 flags: {}
 extra-package-dbs: []

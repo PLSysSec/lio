@@ -4,8 +4,8 @@ Cabal-Version:  >= 1.8
 Build-type:     Simple
 License:        MIT
 License-File:   LICENSE
-Author:         HAILS team
-Maintainer:	HAILS team <hails at scs dot stanford dot edu>
+Author:         Hails team
+Maintainer:     Deian Stefan <deian at cs dot ucsd dot edu>
 Synopsis:       LIO Evaluation Suite
 Category:       Test
 Description:

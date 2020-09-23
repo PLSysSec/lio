@@ -65,6 +65,8 @@ instance Monad (LIO l) where
   (LIOTCB ma) >>= k = LIOTCB $ \s -> do
     a <- ma s
     case k a of LIOTCB mb -> mb s
+
+instance MonadFail (LIO l) where
   fail = LIOTCB . const . fail
 
 instance Functor (LIO l) where

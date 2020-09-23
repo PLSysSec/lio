@@ -36,33 +36,37 @@ formal modeling/proofs, are available here:
 *  Deian Stefan.
    _Principled and Practical Web Application Security._
    _Ph.D. Thesis, Stanford University. December, 2015._
-   [PDF](http://www.deian.org/pubs/stefan:2015:phdthesis.pdf)
+   [PDF](https://cseweb.ucsd.edu/~dstefan/pubs/stefan:2015:phdthesis.pdf)
+
+*  Deian Stefan, Alejandro Russo, David Mazieres, and John C. Mitchell.
+   _Flexible Dynamic Information Flow Control in the Presence of Exceptions._
+   _Journal of Functional Programming, Cambridge University Press. Volume27, 2017._
+   [PDF](https://cseweb.ucsd.edu/~dstefan/pubs/stefan:2017:flexible.pdf)
+
+* Daniel B. Giffin, Amit Levy, Deian Stefan, David Terei, David Mazières, John Mitchell, and Alejandro Russo.
+  _Hails: Protecting Data Privacy in Untrusted Web Applications._
+  _In Proceedings of Symposium on Operating Systems Design and Implementation (OSDI), USENIX. October, 2012._
+  [PDF](https://cseweb.ucsd.edu/~dstefan/pubs/giffin:2012:hails.pdf)
 
 *  Stefan Heule, Deian Stefan, Edward Z. Yang, John C. Mitchell, and Alejandro Russo.
    _IFC Inside: Retrofitting Languages with Dynamic Information Flow Control._
    _In Proceedings of Conference on Principles of Security and Trust (POST), Springer. April, 2015._
-   [PDF](http://www.deian.org/pubs/heule:2015:ifc-inside.pdf)
+   [PDF](https://cseweb.ucsd.edu/~dstefan/pubs/heule:2015:ifc-inside.pdf)
 
 *  Deian Stefan, Alejandro Russo, Pablo Buiras, Amit Levy, John C. Mitchell, David Mazieres.
    _Addressing Covert Termination and Timing Channels in Concurrent Information Flow Systems._
    _In Proceedings of The 17th ACM SIGPLAN International Conference on Functional Programming (ICFP), ACM, 2012._
-   [PDF](http://www.deian.org/pubs/stefan:2012:addressing.pdf)
-
-*  Deian Stefan, Alejandro Russo, David Mazieres, and John C. Mitchell.
-   _Flexible Dynamic Information Flow Control in the Presence of Exceptions._
-   _Journal of Functional Programming, Cambridge University Press. 2012. Under revision._
-   [PDF](http://www.deian.org/pubs/stefan:2012:flexible.pdf)
-
+   [PDF](https://cseweb.ucsd.edu/~dstefan/pubs/stefan:2012:addressing.pdf)
 
 *  Deian Stefan, Alejandro Russo, John C. Mitchell, and David Mazieres.
    _Flexible Dynamic Information Flow Control in Haskell._
    _In Proceedings of Haskell Symposium , ACM SIGPLAN . September 2011._
-   [PDF](http://www.deian.org/pubs/stefan:2011:flexible.pdf)
+   [PDF](https://cseweb.ucsd.edu/~dstefan/pubs/stefan:2011:flexible.pdf)
 
 *  Deian Stefan, Alejandro Russo, David Mazieres, and John C. Mitchell.
    _Disjunction Category Labels._
    _In Proceedings of 16th Nordic Conference on Security IT Systems, NordSec , Springer LNCS. October 2011._
-   [PDF](http://www.deian.org/pubs/stefan:2011:dclabels.pdf)
+   [PDF](https://cseweb.ucsd.edu/~dstefan/pubs/stefan:2011:dclabels.pdf)
 
 
 Structure of repository
@@ -79,6 +83,12 @@ This repository is divided into three packages:
 - `lio-eval`: Tests and benchmarks. This is a package solely because it
   depends on both `lio` and `quickcheck-lio-instances`. Having the
   tests and benchmarks in `lio` leads to a circular dependency.
+
+- `lio-http-server`: Simple HTTP server implementation. Forked into its own
+  project [Frankie](https://github.com/plsyssec/frankie/).
+
+- `lio-simple`: Slightly older simple HTTP server implementation atop
+  [Simple](https://hackage.haskell.org/package/simple).
 
 Acknowledgements
 =============
