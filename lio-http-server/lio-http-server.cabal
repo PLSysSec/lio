@@ -20,7 +20,8 @@ library
                        LIO.HTTP.Server.Responses,
                        LIO.HTTP.Server.Controller,
                        LIO.HTTP.Server.Frankie,
-                       LIO.HTTP.Server.Frankie.Loggers
+                       LIO.HTTP.Server.Frankie.Loggers,
+                       LIO.HTTP.Server.Frankie.Templates
   build-depends:       ansi-terminal >= 0.6.2.1,
                        base          >= 4.7 && < 6,
                        bytestring    >= 0.10,
@@ -32,7 +33,10 @@ library
                        warp          >= 3.2.11.1,
                        time          >= 1.6.0.1,
                        transformers  >= 0.5.2.0,
-                       mtl           >= 2.2.1
+                       mtl           >= 2.2.1,
+                       regex-tdfa    >= 1.2.0,
+                       mustache      >= 2.3.0,
+                       template-haskell
   default-language:    Haskell2010
   GHC-options: -Wall -fno-warn-orphans
 
